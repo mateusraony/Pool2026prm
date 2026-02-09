@@ -245,18 +245,27 @@ function getActionConfig(action: string) {
 }
 
 function renderDetails(action: string, details: Record<string, unknown>) {
+  const capitalUsd = details.capitalUsd as number | undefined;
+  const rangeType = details.rangeType as string | undefined;
+  const priceLower = details.priceLower as number | undefined;
+  const priceUpper = details.priceUpper as number | undefined;
+  const pnlUsd = details.pnlUsd as number | undefined;
+  const reason = details.reason as string | undefined;
+  const message = details.message as string | undefined;
+  const severity = details.severity as string | undefined;
+
   switch (action) {
     case 'ENTRY':
       return (
         <div className="space-y-1">
-          {details.capitalUsd && (
-            <p>Capital: ${Number(details.capitalUsd).toLocaleString()}</p>
+          {capitalUsd !== undefined && (
+            <p>Capital: ${Number(capitalUsd).toLocaleString()}</p>
           )}
-          {details.rangeType && <p>Range: {String(details.rangeType)}</p>}
-          {details.priceLower && details.priceUpper && (
+          {rangeType && <p>Range: {rangeType}</p>}
+          {priceLower !== undefined && priceUpper !== undefined && (
             <p>
-              Faixa: {Number(details.priceLower).toFixed(6)} -{' '}
-              {Number(details.priceUpper).toFixed(6)}
+              Faixa: {Number(priceLower).toFixed(6)} -{' '}
+              {Number(priceUpper).toFixed(6)}
             </p>
           )}
         </div>
@@ -264,24 +273,24 @@ function renderDetails(action: string, details: Record<string, unknown>) {
     case 'EXIT':
       return (
         <div className="space-y-1">
-          {details.pnlUsd !== undefined && (
+          {pnlUsd !== undefined && (
             <p
               className={
-                Number(details.pnlUsd) >= 0 ? 'text-success-400' : 'text-danger-400'
+                Number(pnlUsd) >= 0 ? 'text-success-400' : 'text-danger-400'
               }
             >
-              PnL: ${Number(details.pnlUsd).toFixed(2)}
+              PnL: ${Number(pnlUsd).toFixed(2)}
             </p>
           )}
-          {details.reason && <p>Motivo: {String(details.reason)}</p>}
+          {reason && <p>Motivo: {reason}</p>}
         </div>
       );
     case 'ALERT':
       return (
         <div className="space-y-1">
-          {details.message && <p>{String(details.message)}</p>}
-          {details.severity && (
-            <p className="text-xs">Severidade: {String(details.severity)}</p>
+          {message && <p>{message}</p>}
+          {severity && (
+            <p className="text-xs">Severidade: {severity}</p>
           )}
         </div>
       );

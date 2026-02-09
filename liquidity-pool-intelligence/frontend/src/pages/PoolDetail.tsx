@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   AlertTriangle,
   TrendingUp,
-  Clock,
   DollarSign,
   Activity,
   ExternalLink,

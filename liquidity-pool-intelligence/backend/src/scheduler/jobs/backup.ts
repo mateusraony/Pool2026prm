@@ -110,19 +110,22 @@ export async function runBackup(): Promise<{
   };
 }
 
-// Função para restaurar backup
-export async function restoreBackup(backupData: {
+// Interface para backup data
+interface BackupData {
   version: string;
   timestamp: string;
   data: {
-    settings: object | null;
-    pools: object[];
-    poolRanges: object[];
-    positions: object[];
-    history: object[];
-    alerts: object[];
+    settings: Record<string, unknown> | null;
+    pools: Record<string, unknown>[];
+    poolRanges: Record<string, unknown>[];
+    positions: Record<string, unknown>[];
+    history: Record<string, unknown>[];
+    alerts: Record<string, unknown>[];
   };
-}): Promise<void> {
+}
+
+// Função para restaurar backup
+export async function restoreBackup(backupData: BackupData): Promise<void> {
   log.info('Starting backup restoration', { timestamp: backupData.timestamp });
 
   // Nota: Esta é uma implementação simplificada
@@ -130,13 +133,14 @@ export async function restoreBackup(backupData: {
 
   // Restaura settings
   if (backupData.data.settings) {
+    const settingsData = backupData.data.settings;
     await prisma.settings.upsert({
       where: { id: 1 },
-      update: backupData.data.settings as Parameters<typeof prisma.settings.update>[0]['data'],
+      update: settingsData as any,
       create: {
         id: 1,
-        ...backupData.data.settings as object,
-      } as Parameters<typeof prisma.settings.create>[0]['data'],
+        ...settingsData,
+      } as any,
     });
   }
 

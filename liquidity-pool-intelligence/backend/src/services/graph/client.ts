@@ -21,8 +21,6 @@ export function getGraphClient(network: string): GraphQLClient {
     headers: {
       'Content-Type': 'application/json',
     },
-    // Timeout de 30 segundos
-    timeout: 30000,
   });
 
   clients.set(network, client);

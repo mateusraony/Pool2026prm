@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom';
 import {
   Filter,
   Search,
-  TrendingUp,
   AlertTriangle,
   ExternalLink,
 } from 'lucide-react';

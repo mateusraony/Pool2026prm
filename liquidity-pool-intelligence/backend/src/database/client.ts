@@ -1,4 +1,7 @@
-import { PrismaClient, RiskProfile } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
+
+// RiskProfile é gerado pelo Prisma, mas definimos aqui para evitar erros de compilação
+export type RiskProfile = 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE';
 import { config } from '../config/index.js';
 import { log } from '../utils/logger.js';
 

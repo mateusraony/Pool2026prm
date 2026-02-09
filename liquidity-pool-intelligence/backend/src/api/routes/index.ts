@@ -13,7 +13,7 @@ import { log } from '../../utils/logger.js';
 const router = Router();
 
 // Health check endpoint
-router.get('/health', async (req: Request, res: Response) => {
+router.get('/health', async (_req: Request, res: Response) => {
   const dbHealthy = await checkDatabaseHealth();
 
   res.json({
