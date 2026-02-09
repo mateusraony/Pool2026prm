@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Liquidity Pool Intelligence - Preview</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --dark-900: #0a0a0f;
+      --dark-800: #12121a;
+      --dark-700: #1a1a24;
+      --dark-600: #24242f;
+      --dark-500: #2e2e3a;
+      --dark-400: #6b7280;
+      --dark-300: #9ca3af;
+      --primary-500: #6366f1;
+      --primary-400: #818cf8;
+      --primary-600: #4f46e5;
+      --success-500: #10b981;
+      --success-400: #34d399;
+      --danger-500: #ef4444;
+      --danger-400: #f87171;
+      --warning-500: #f59e0b;
+      --warning-400: #fbbf24;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--dark-900);
+      color: #fff;
+      min-height: 100vh;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 240px;
+      height: 100vh;
+      background: var(--dark-800);
+      border-right: 1px solid var(--dark-600);
+      padding: 20px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 40px;
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .logo-text {
+      font-weight: 700;
+      font-size: 18px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      color: var(--dark-300);
+      margin-bottom: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .nav-item:hover {
+      background: var(--dark-700);
+      color: #fff;
+    }
+
+    .nav-item.active {
+      background: var(--primary-500);
+      color: #fff;
+    }
+
+    /* Main Content */
+    .main {
+      margin-left: 240px;
+      padding: 24px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .page-title {
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .network-badge {
+      background: var(--dark-700);
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .network-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--success-500);
+      border-radius: 50%;
+    }
+
+    /* Pool Header Card */
+    .pool-header {
+      background: var(--dark-800);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid var(--dark-600);
+    }
+
+    .pool-info {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .token-pair {
+      display: flex;
+      align-items: center;
+    }
+
+    .token-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--dark-600);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      border: 2px solid var(--dark-800);
+    }
+
+    .token-icon:nth-child(2) {
+      margin-left: -12px;
+    }
+
+    .token-icon.eth { background: #627eea; }
+    .token-icon.usdc { background: #2775ca; }
+
+    .pool-name {
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .fee-badge {
+      background: var(--primary-500);
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .pool-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+    }
+
+    .stat-item {
+      text-align: center;
+    }
+
+    .stat-label {
+      color: var(--dark-400);
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .stat-value.positive { color: var(--success-400); }
+
+    /* Grid Layout */
+    .content-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 24px;
+    }
+
+    /* Card */
+    .card {
+      background: var(--dark-800);
+      border-radius: 16px;
+      padding: 24px;
+      border: 1px solid var(--dark-600);
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: between;
+    }
+
+    /* Chart Container */
+    .chart-container {
+      position: relative;
+      height: 300px;
+      background: var(--dark-700);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+
+    .chart-bars {
+      position: absolute;
+      bottom: 40px;
+      left: 40px;
+      right: 40px;
+      height: 200px;
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+    }
+
+    .bar {
+      flex: 1;
+      background: var(--dark-500);
+      border-radius: 2px 2px 0 0;
+      transition: background 0.2s;
+    }
+
+    .bar.in-range {
+      background: var(--primary-500);
+    }
+
+    .bar.current {
+      background: var(--success-500);
+    }
+
+    /* Range Overlay */
+    .range-overlay {
+      position: absolute;
+      bottom: 40px;
+      height: 200px;
+      background: rgba(99, 102, 241, 0.15);
+      border-left: 3px solid var(--primary-400);
+      border-right: 3px solid var(--primary-400);
+    }
+
+    .range-handle {
+      position: absolute;
+      width: 12px;
+      height: 40px;
+      background: var(--primary-400);
+      border-radius: 4px;
+      cursor: ew-resize;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .range-handle.left { left: -6px; }
+    .range-handle.right { right: -6px; }
+
+    /* Current Price Line */
+    .current-price-line {
+      position: absolute;
+      bottom: 40px;
+      height: 200px;
+      width: 2px;
+      background: #fff;
+    }
+
+    .current-price-label {
+      position: absolute;
+      top: -24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--dark-600);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    /* X Axis */
+    .x-axis {
+      position: absolute;
+      bottom: 10px;
+      left: 40px;
+      right: 40px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--dark-400);
+    }
+
+    /* Range Controls */
+    .range-controls {
+      margin-bottom: 20px;
+    }
+
+    .preset-buttons {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .preset-btn {
+      flex: 1;
+      padding: 12px;
+      border: 1px solid var(--dark-600);
+      background: var(--dark-700);
+      color: #fff;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .preset-btn:hover {
+      border-color: var(--primary-500);
+    }
+
+    .preset-btn.active {
+      background: var(--primary-500);
+      border-color: var(--primary-500);
+    }
+
+    .preset-btn .label {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .preset-btn .range {
+      font-size: 12px;
+      color: var(--dark-300);
+    }
+
+    .preset-btn.active .range {
+      color: rgba(255,255,255,0.8);
+    }
+
+    .range-inputs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .input-group {
+      background: var(--dark-700);
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .input-label {
+      font-size: 12px;
+      color: var(--dark-400);
+      margin-bottom: 4px;
+    }
+
+    .input-value {
+      font-size: 18px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .input-value input {
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 18px;
+      font-weight: 600;
+      width: 100%;
+      outline: none;
+    }
+
+    /* Metrics Panel */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .metric-card {
+      background: var(--dark-700);
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .metric-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--dark-400);
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .metric-icon {
+      width: 16px;
+      height: 16px;
+    }
+
+    .metric-value {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .metric-value.positive { color: var(--success-400); }
+    .metric-value.negative { color: var(--danger-400); }
+
+    .metric-sub {
+      font-size: 12px;
+      color: var(--dark-400);
+    }
+
+    /* Net Return Card */
+    .net-return {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .net-return-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .net-return-label {
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .net-return-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--success-400);
+    }
+
+    .net-return-details {
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+      color: var(--dark-300);
+    }
+
+    /* Risk Badge */
+    .risk-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .risk-badge.low {
+      background: rgba(16, 185, 129, 0.2);
+      color: var(--success-400);
+    }
+
+    .risk-badge.medium {
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--warning-400);
+    }
+
+    .risk-badge.high {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--danger-400);
+    }
+
+    /* Formula */
+    .formula {
+      text-align: center;
+      font-size: 12px;
+      color: var(--dark-400);
+      padding-top: 12px;
+      border-top: 1px solid var(--dark-600);
+    }
+
+    /* Capital Input */
+    .capital-section {
+      margin-bottom: 20px;
+    }
+
+    .capital-input-wrapper {
+      display: flex;
+      align-items: center;
+      background: var(--dark-700);
+      border-radius: 8px;
+      padding: 12px 16px;
+    }
+
+    .capital-input-wrapper span {
+      color: var(--dark-400);
+      margin-right: 8px;
+    }
+
+    .capital-input-wrapper input {
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 24px;
+      font-weight: 700;
+      width: 100%;
+      outline: none;
+    }
+
+    /* Action Button */
+    .action-btn {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .action-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .sidebar {
+        display: none;
+      }
+      .main {
+        margin-left: 0;
+      }
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+      .pool-stats {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    /* Animation */
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--success-500);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    /* Drag instruction */
+    .drag-instruction {
+      text-align: center;
+      font-size: 12px;
+      color: var(--dark-400);
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-icon">💧</div>
+      <div class="logo-text">Pool Intel</div>
+    </div>
+
+    <nav>
+      <div class="nav-item">
+        <span>📊</span> Dashboard
+      </div>
+      <div class="nav-item active">
+        <span>🔍</span> Pools
+      </div>
+      <div class="nav-item">
+        <span>⭐</span> Recomendados
+      </div>
+      <div class="nav-item">
+        <span>📈</span> Minhas Posições
+      </div>
+      <div class="nav-item">
+        <span>🔔</span> Alertas
+      </div>
+      <div class="nav-item">
+        <span>📜</span> Histórico
+      </div>
+      <div class="nav-item">
+        <span>⚙️</span> Configurações
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main">
+    <!-- Header -->
+    <div class="header">
+      <h1 class="page-title">Análise de Pool</h1>
+      <div class="network-badge">
+        <span class="network-dot"></span>
+        Ethereum Mainnet
+      </div>
+    </div>
+
+    <!-- Pool Header -->
+    <div class="pool-header">
+      <div class="pool-info">
+        <div class="token-pair">
+          <div class="token-icon eth">ETH</div>
+          <div class="token-icon usdc">USDC</div>
+        </div>
+        <span class="pool-name">ETH / USDC</span>
+        <span class="fee-badge">0.30%</span>
+      </div>
+
+      <div class="pool-stats">
+        <div class="stat-item">
+          <div class="stat-label">TVL</div>
+          <div class="stat-value">$142.5M</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Volume 24h</div>
+          <div class="stat-value">$28.3M</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">APR Estimado</div>
+          <div class="stat-value positive">24.8%</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Preço Atual</div>
+          <div class="stat-value">$2,485.32</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content Grid -->
+    <div class="content-grid">
+      <!-- Left Column: Chart -->
+      <div class="card">
+        <div class="card-title">
+          <span>Selecione o Range de Liquidez</span>
+          <span class="risk-badge medium">Risco Médio</span>
+        </div>
+
+        <!-- Chart -->
+        <div class="chart-container">
+          <div class="chart-bars" id="chartBars">
+            <!-- Bars will be generated by JS -->
+          </div>
+
+          <!-- Range Overlay -->
+          <div class="range-overlay" id="rangeOverlay" style="left: 120px; width: 200px;">
+            <div class="range-handle left"></div>
+            <div class="range-handle right"></div>
+          </div>
+
+          <!-- Current Price Line -->
+          <div class="current-price-line" id="priceLine" style="left: 220px;">
+            <div class="current-price-label">$2,485.32</div>
+          </div>
+
+          <!-- X Axis -->
+          <div class="x-axis">
+            <span>$2,100</span>
+            <span>$2,250</span>
+            <span>$2,400</span>
+            <span>$2,550</span>
+            <span>$2,700</span>
+            <span>$2,850</span>
+          </div>
+        </div>
+
+        <div class="drag-instruction">
+          👆 Arraste as bordas azuis para ajustar o range ou arraste o centro para mover
+        </div>
+
+        <!-- Range Controls -->
+        <div class="range-controls">
+          <div class="preset-buttons">
+            <div class="preset-btn" onclick="selectPreset('defensive')">
+              <div class="label">🛡️ Defensivo</div>
+              <div class="range">±15% (~$2,112 - $2,858)</div>
+            </div>
+            <div class="preset-btn active" onclick="selectPreset('optimized')">
+              <div class="label">⚖️ Otimizado</div>
+              <div class="range">±10% (~$2,237 - $2,734)</div>
+            </div>
+            <div class="preset-btn" onclick="selectPreset('aggressive')">
+              <div class="label">🎯 Agressivo</div>
+              <div class="range">±5% (~$2,361 - $2,610)</div>
+            </div>
+          </div>
+
+          <div class="range-inputs">
+            <div class="input-group">
+              <div class="input-label">Preço Mínimo</div>
+              <div class="input-value">
+                $<input type="text" value="2,237.00" id="minPrice">
+              </div>
+            </div>
+            <div class="input-group">
+              <div class="input-label">Preço Máximo</div>
+              <div class="input-value">
+                $<input type="text" value="2,734.00" id="maxPrice">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Metrics -->
+      <div class="card">
+        <div class="card-title">
+          Projeção (7 dias)
+          <div class="live-dot"></div>
+        </div>
+
+        <!-- Capital Input -->
+        <div class="capital-section">
+          <div class="input-label">Capital a Investir</div>
+          <div class="capital-input-wrapper">
+            <span>$</span>
+            <input type="text" value="10,000" id="capitalInput">
+          </div>
+        </div>
+
+        <!-- Metrics Grid -->
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-header">
+              <span class="metric-icon">📈</span>
+              Fees Estimadas
+            </div>
+            <div class="metric-value positive">+1.82%</div>
+            <div class="metric-sub">~$182.00</div>
+          </div>
+
+          <div class="metric-card">
+            <div class="metric-header">
+              <span class="metric-icon">📉</span>
+              IL Estimada
+            </div>
+            <div class="metric-value negative">-0.45%</div>
+            <div class="metric-sub">~$45.00</div>
+          </div>
+
+          <div class="metric-card">
+            <div class="metric-header">
+              <span class="metric-icon">⏱️</span>
+              Tempo no Range
+            </div>
+            <div class="metric-value">87%</div>
+            <div class="metric-sub">do período</div>
+          </div>
+
+          <div class="metric-card">
+            <div class="metric-header">
+              <span class="metric-icon">⛽</span>
+              Custo de Gas
+            </div>
+            <div class="metric-value">~$12.50</div>
+            <div class="metric-sub">entrada + rebalance</div>
+          </div>
+        </div>
+
+        <!-- Net Return -->
+        <div class="net-return">
+          <div class="net-return-header">
+            <div class="net-return-label">
+              <span>💰</span>
+              Retorno Líquido (7d)
+            </div>
+            <div class="net-return-value">+1.25%</div>
+          </div>
+          <div class="net-return-details">
+            <span>Valor estimado: +$124.50</span>
+            <span>APR: ~65.2%</span>
+          </div>
+        </div>
+
+        <!-- Formula -->
+        <div class="formula">
+          Retorno = Fees (1.82%) - IL (0.45%) - Gas (0.12%)
+        </div>
+
+        <!-- Action Button -->
+        <button class="action-btn" style="margin-top: 20px;">
+          🚀 Simular Posição no Uniswap
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Generate chart bars
+    const chartBars = document.getElementById('chartBars');
+    const barHeights = [15, 25, 35, 45, 55, 70, 85, 95, 100, 95, 90, 100, 95, 85, 75, 65, 55, 45, 40, 35, 30, 25, 20, 15, 12, 10, 8, 6, 5, 4];
+
+    barHeights.forEach((height, index) => {
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+      bar.style.height = `${height}%`;
+
+      // Mark bars in range (indices 8-18 roughly)
+      if (index >= 8 && index <= 18) {
+        bar.classList.add('in-range');
+      }
+
+      // Mark current price bar
+      if (index === 13) {
+        bar.classList.add('current');
+      }
+
+      chartBars.appendChild(bar);
+    });
+
+    // Preset selection
+    function selectPreset(type) {
+      document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.closest('.preset-btn').classList.add('active');
+
+      const overlay = document.getElementById('rangeOverlay');
+      const minPrice = document.getElementById('minPrice');
+      const maxPrice = document.getElementById('maxPrice');
+
+      if (type === 'defensive') {
+        overlay.style.left = '80px';
+        overlay.style.width = '280px';
+        minPrice.value = '2,112.00';
+        maxPrice.value = '2,858.00';
+        document.querySelector('.risk-badge').className = 'risk-badge low';
+        document.querySelector('.risk-badge').textContent = 'Risco Baixo';
+      } else if (type === 'optimized') {
+        overlay.style.left = '120px';
+        overlay.style.width = '200px';
+        minPrice.value = '2,237.00';
+        maxPrice.value = '2,734.00';
+        document.querySelector('.risk-badge').className = 'risk-badge medium';
+        document.querySelector('.risk-badge').textContent = 'Risco Médio';
+      } else if (type === 'aggressive') {
+        overlay.style.left = '160px';
+        overlay.style.width = '120px';
+        minPrice.value = '2,361.00';
+        maxPrice.value = '2,610.00';
+        document.querySelector('.risk-badge').className = 'risk-badge high';
+        document.querySelector('.risk-badge').textContent = 'Risco Alto';
+      }
+
+      updateBars();
+    }
+
+    function updateBars() {
+      const overlay = document.getElementById('rangeOverlay');
+      const overlayLeft = parseInt(overlay.style.left);
+      const overlayWidth = parseInt(overlay.style.width);
+      const overlayRight = overlayLeft + overlayWidth;
+
+      const bars = document.querySelectorAll('.bar');
+      const barWidth = (chartBars.offsetWidth - 40) / bars.length;
+
+      bars.forEach((bar, index) => {
+        const barLeft = index * barWidth + 40;
+        const barRight = barLeft + barWidth;
+
+        bar.classList.remove('in-range');
+        if (barLeft >= overlayLeft && barRight <= overlayRight + 40) {
+          bar.classList.add('in-range');
+        }
+      });
+    }
+
+    // Make range draggable (simplified demo)
+    let isDragging = false;
+    let dragType = null;
+    let startX = 0;
+    let startLeft = 0;
+    let startWidth = 0;
+
+    const overlay = document.getElementById('rangeOverlay');
+
+    overlay.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      startX = e.clientX;
+      startLeft = parseInt(overlay.style.left);
+      startWidth = parseInt(overlay.style.width);
+
+      if (e.target.classList.contains('left')) {
+        dragType = 'left';
+      } else if (e.target.classList.contains('right')) {
+        dragType = 'right';
+      } else {
+        dragType = 'move';
+      }
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+
+      const dx = e.clientX - startX;
+
+      if (dragType === 'left') {
+        const newLeft = Math.max(40, startLeft + dx);
+        const newWidth = startWidth - dx;
+        if (newWidth > 60) {
+          overlay.style.left = newLeft + 'px';
+          overlay.style.width = newWidth + 'px';
+        }
+      } else if (dragType === 'right') {
+        const newWidth = Math.max(60, startWidth + dx);
+        overlay.style.width = newWidth + 'px';
+      } else if (dragType === 'move') {
+        const newLeft = Math.max(40, Math.min(400, startLeft + dx));
+        overlay.style.left = newLeft + 'px';
+      }
+
+      updateBars();
+    });
+
+    document.addEventListener('mouseup', () => {
+      isDragging = false;
+      dragType = null;
+    });
+
+    // Touch support for iPad
+    overlay.addEventListener('touchstart', (e) => {
+      isDragging = true;
+      startX = e.touches[0].clientX;
+      startLeft = parseInt(overlay.style.left);
+      startWidth = parseInt(overlay.style.width);
+
+      if (e.target.classList.contains('left')) {
+        dragType = 'left';
+      } else if (e.target.classList.contains('right')) {
+        dragType = 'right';
+      } else {
+        dragType = 'move';
+      }
+    });
+
+    document.addEventListener('touchmove', (e) => {
+      if (!isDragging) return;
+
+      const dx = e.touches[0].clientX - startX;
+
+      if (dragType === 'left') {
+        const newLeft = Math.max(40, startLeft + dx);
+        const newWidth = startWidth - dx;
+        if (newWidth > 60) {
+          overlay.style.left = newLeft + 'px';
+          overlay.style.width = newWidth + 'px';
+        }
+      } else if (dragType === 'right') {
+        const newWidth = Math.max(60, startWidth + dx);
+        overlay.style.width = newWidth + 'px';
+      } else if (dragType === 'move') {
+        const newLeft = Math.max(40, Math.min(400, startLeft + dx));
+        overlay.style.left = newLeft + 'px';
+      }
+
+      updateBars();
+    });
+
+    document.addEventListener('touchend', () => {
+      isDragging = false;
+      dragType = null;
+    });
+  </script>
+</body>
+</html>
