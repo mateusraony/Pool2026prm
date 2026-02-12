@@ -3,7 +3,7 @@ services:
   - type: web
     name: pool-intelligence-api
     runtime: node
-    region: ...
+    region: global
     plan: free
     buildCommand: cd backend && npm install && npx prisma generate && npm run build
     startCommand: cd backend && npm start
