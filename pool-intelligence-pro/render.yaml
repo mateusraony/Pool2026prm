@@ -23,9 +23,8 @@ services:
     autoDeploy: true
 
   # Frontend Static Site
-  - type: web
+  - type: static
     name: pool-intelligence-ui
-    runtime: static
     plan: free
     rootDir: pool-intelligence-pro/frontend
     buildCommand: npm install && npm run build
