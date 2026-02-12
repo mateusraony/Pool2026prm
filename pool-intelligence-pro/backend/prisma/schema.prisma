@@ -1,0 +1,429 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// CONFIGURAÇÕES E USUÁRIOS
+// ============================================
+
+model User {
+  id        String   @id @default(uuid())
+  telegramId String? @unique
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  watchlist    Watchlist[]
+  alerts       Alert[]
+  positions    Position[]
+}
+
+model Settings {
+  id    String @id @default("global")
+  
+  // Modo padrão: DEFENSIVE, NORMAL, AGGRESSIVE
+  defaultMode String @default("NORMAL")
+  
+  // Capital alocado padrão
+  defaultCapital Float @default(1000)
+  
+  // Pesos do Score (devem somar 100)
+  weightHealth  Float @default(40)  // 0-40
+  weightReturn  Float @default(35)  // 0-35
+  weightRisk    Float @default(25)  // 0-25
+  
+  // Limiares mínimos
+  minLiquidity    Float @default(100000)   // $100k
+  minVolume24h    Float @default(10000)    // $10k
+  minPoolAgeDays  Int   @default(7)
+  
+  // Tolerância de volatilidade por modo
+  volatilityDefensive Float @default(5)   // %
+  volatilityNormal    Float @default(15)  // %
+  volatilityAggressive Float @default(30) // %
+  
+  // Alertas
+  alertCooldownMinutes Int @default(60)
+  maxAlertsPerHour     Int @default(10)
+  
+  // TTLs de cache (segundos)
+  cacheTtlMacro     Int @default(3600)  // 1 hora
+  cacheTtlPrice     Int @default(60)    // 1 minuto
+  cacheTtlWatchlist Int @default(300)   // 5 minutos
+  
+  // Circuit breaker
+  circuitBreakerThreshold Int @default(5)   // falhas antes de abrir
+  circuitBreakerTimeout   Int @default(300) // 5 minutos
+  
+  // Chains ativas
+  activeChains Json @default("[\"ethereum\", \"arbitrum\", \"base\", \"polygon\"]")
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================
+// POOLS E DADOS
+// ============================================
+
+model Candidate {
+  id              String   @id @default(uuid())
+  externalId      String   @unique // ID da fonte (ex: pool address)
+  
+  chain           String
+  protocol        String   // uniswap_v3, sushiswap, etc
+  
+  token0Symbol    String
+  token0Address   String
+  token1Symbol    String
+  token1Address   String
+  
+  feeTier         Float?
+  
+  // Dados brutos da descoberta
+  tvl             Float?
+  volume24h       Float?
+  apr             Float?
+  
+  // Status
+  status          String   @default("NEW") // NEW, ANALYZED, WATCHLIST, REJECTED, SUSPECT
+  rejectReason    String?
+  
+  // Fontes
+  sourceProvider  String   // defillama, geckoterminal, dexscreener
+  sourceData      Json?
+  
+  discoveredAt    DateTime @default(now())
+  lastAnalyzedAt  DateTime?
+  
+  @@index([chain, status])
+  @@index([discoveredAt])
+}
+
+model PoolCurrent {
+  id              String   @id @default(uuid())
+  externalId      String   @unique
+  
+  chain           String
+  protocol        String
+  poolAddress     String
+  
+  token0Symbol    String
+  token0Address   String
+  token0Decimals  Int      @default(18)
+  token1Symbol    String
+  token1Address   String
+  token1Decimals  Int      @default(18)
+  
+  feeTier         Float?
+  
+  // Preços
+  price           Float?
+  priceToken0Usd  Float?
+  priceToken1Usd  Float?
+  
+  // Métricas
+  tvl             Float    @default(0)
+  volume24h       Float    @default(0)
+  volume7d        Float    @default(0)
+  fees24h         Float    @default(0)
+  fees7d          Float    @default(0)
+  
+  // Indicadores calculados
+  volatility24h   Float?
+  volatility7d    Float?
+  priceChange24h  Float?
+  priceChange7d   Float?
+  
+  // RSI/MACD (se disponível)
+  rsi14           Float?
+  macdLine        Float?
+  macdSignal      Float?
+  macdHistogram   Float?
+  
+  // Qualidade dos dados
+  dataQuality     String   @default("GOOD") // GOOD, STALE, SUSPECT, MISSING
+  lastUpdated     DateTime @default(now())
+  staleSince      DateTime?
+  
+  // Fontes usadas
+  primarySource   String
+  fallbackUsed    Boolean  @default(false)
+  sourcesAgreed   Boolean  @default(true)
+  divergencePercent Float? // divergência entre fontes
+  
+  createdAt       DateTime @default(now())
+  
+  // Relacionamentos
+  snapshots       PoolSnapshot[]
+  scores          Score[]
+  watchlistItems  Watchlist[]
+  alerts          Alert[]
+  
+  @@index([chain, protocol])
+  @@index([lastUpdated])
+}
+
+model PoolSnapshot {
+  id        String   @id @default(uuid())
+  poolId    String
+  pool      PoolCurrent @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  
+  price     Float?
+  tvl       Float
+  volume24h Float
+  fees24h   Float?
+  
+  // Snapshot compacto
+  timestamp DateTime @default(now())
+  
+  @@index([poolId, timestamp])
+}
+
+// ============================================
+// SCORE E RECOMENDAÇÕES
+// ============================================
+
+model Score {
+  id        String   @id @default(uuid())
+  poolId    String
+  pool      PoolCurrent @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  
+  // Score total (0-100)
+  totalScore Float
+  
+  // Breakdown
+  healthScore  Float  // 0-40
+  returnScore  Float  // 0-35
+  riskScore    Float  // 0-25 (penalidades)
+  
+  // Detalhes do breakdown (para explicação)
+  healthBreakdown Json // { liquidityStability, ageScore, volumeConsistency }
+  returnBreakdown Json // { volumeTvlRatio, feeEfficiency, aprEstimate }
+  riskBreakdown   Json // { volatilityPenalty, liquidityDropPenalty, inconsistencyPenalty }
+  
+  // Modo recomendado baseado no perfil
+  recommendedMode String // DEFENSIVE, NORMAL, AGGRESSIVE
+  
+  // Flags
+  isSuspect    Boolean @default(false)
+  suspectReason String?
+  
+  // Metadados
+  calculatedAt DateTime @default(now())
+  dataTimestamp DateTime // quando os dados usados foram coletados
+  
+  @@index([poolId, calculatedAt])
+  @@index([totalScore])
+}
+
+model AIRecommendation {
+  id        String   @id @default(uuid())
+  
+  // Rank (1, 2 ou 3)
+  rank      Int
+  
+  // Pool info (snapshot no momento)
+  poolExternalId String
+  poolName      String
+  chain         String
+  protocol      String
+  
+  // Score usado
+  score         Float
+  scoreBreakdown Json
+  
+  // Conteúdo gerado pela IA
+  commentary    String   @db.Text // Comentário institucional
+  probability   Float    // Probabilidade de acerto (0-100%)
+  
+  // Estimativas de ganho
+  estimatedGainPercent Float
+  estimatedGainUsd     Float
+  capitalUsed          Float
+  
+  // Condições
+  entryConditions  Json   // ["Preço acima de $X", "Volume estável"]
+  exitConditions   Json   // ["Queda de 20% no TVL", "RSI > 70"]
+  mainRisks        Json   // ["Alta volatilidade", "Pool nova"]
+  
+  // Modo da recomendação
+  mode          String   // DEFENSIVE, NORMAL, AGGRESSIVE
+  
+  // Auditoria
+  dataSnapshot  Json     // Todos os dados usados para gerar
+  dataTimestamp DateTime // Quando os dados foram coletados
+  
+  // Validade
+  validUntil    DateTime
+  isActive      Boolean  @default(true)
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([rank, isActive])
+  @@index([createdAt])
+}
+
+// ============================================
+// WATCHLIST E ALERTAS
+// ============================================
+
+model Watchlist {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  poolId    String
+  pool      PoolCurrent @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  
+  // Configurações personalizadas para esta pool
+  customAlerts Json?   // { priceAbove: 2000, priceBelow: 1800, rsiAbove: 70 }
+  notes        String?
+  
+  addedAt   DateTime @default(now())
+  
+  @@unique([userId, poolId])
+}
+
+model Alert {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  poolId    String?
+  pool      PoolCurrent? @relation(fields: [poolId], references: [id], onDelete: SetNull)
+  
+  // Tipo do alerta
+  type      String   // PRICE_ABOVE, PRICE_BELOW, RSI_CROSS, MACD_CROSS, VOLUME_DROP, LIQUIDITY_FLIGHT, VOLATILITY_SPIKE, RECOMMENDATION
+  
+  // Configuração
+  triggerValue Float?
+  triggerCondition Json?
+  
+  // Status
+  isActive  Boolean  @default(true)
+  
+  // Histórico de disparo
+  lastTriggeredAt DateTime?
+  triggerCount    Int      @default(0)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([userId, isActive])
+}
+
+model AlertLog {
+  id        String   @id @default(uuid())
+  
+  // Referências
+  alertId   String?
+  userId    String?
+  poolExternalId String?
+  poolName  String?
+  
+  // Detalhes
+  type      String
+  message   String   @db.Text
+  data      Json?    // Dados no momento do disparo
+  
+  // Status de envio
+  sentToTelegram Boolean @default(false)
+  telegramError  String?
+  
+  // Anti-ruído
+  wasFiltered    Boolean @default(false)
+  filterReason   String?
+  
+  createdAt DateTime @default(now())
+  
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+}
+
+// ============================================
+// POSIÇÕES (OPCIONAL)
+// ============================================
+
+model Position {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  poolExternalId String
+  poolName      String
+  chain         String
+  
+  // Dados da posição
+  entryPrice    Float?
+  entryTvl      Float?
+  capitalInvested Float
+  
+  // Range (para CL)
+  rangeLower    Float?
+  rangeUpper    Float?
+  isInRange     Boolean?
+  
+  // Status
+  status        String @default("ACTIVE") // ACTIVE, CLOSED, WATCHING
+  
+  // Tracking
+  entryAt       DateTime @default(now())
+  closedAt      DateTime?
+  
+  @@index([userId, status])
+}
+
+// ============================================
+// SAÚDE DO SISTEMA
+// ============================================
+
+model ProviderHealth {
+  id           String   @id @default(uuid())
+  provider     String   @unique // defillama, geckoterminal, dexscreener
+  
+  // Status atual
+  isHealthy    Boolean  @default(true)
+  isCircuitOpen Boolean @default(false)
+  
+  // Métricas
+  lastSuccessAt   DateTime?
+  lastFailureAt   DateTime?
+  consecutiveFailures Int @default(0)
+  totalRequests   Int @default(0)
+  totalFailures   Int @default(0)
+  
+  // Latência média (ms)
+  avgLatency    Float?
+  lastLatency   Float?
+  
+  // Rate limiting
+  requestsThisMinute Int @default(0)
+  requestsThisHour   Int @default(0)
+  rateLimitHits      Int @default(0)
+  
+  // Circuit breaker
+  circuitOpenedAt   DateTime?
+  circuitClosesAt   DateTime?
+  
+  updatedAt DateTime @updatedAt
+  
+  @@index([isHealthy])
+}
+
+model SystemLog {
+  id        String   @id @default(uuid())
+  
+  level     String   // INFO, WARN, ERROR, CRITICAL
+  component String   // RADAR, WATCHLIST, SCORE, RECOMMENDATION, ALERT, PROVIDER
+  message   String   @db.Text
+  data      Json?
+  
+  createdAt DateTime @default(now())
+  
+  @@index([level, createdAt])
+  @@index([component, createdAt])
+}
