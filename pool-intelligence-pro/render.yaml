@@ -24,10 +24,9 @@ services:
     healthCheckPath: /health
     autoDeploy: true
 
+staticSites:
   # Frontend Static Site
-  - type: static_site
-    name: pool-intelligence-ui
-    plan: free
+  - name: pool-intelligence-ui
     rootDir: pool-intelligence-pro/frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
@@ -38,7 +37,6 @@ services:
       - type: rewrite
         source: /*
         destination: /index.html
-    autoDeploy: true
 
 databases:
   - name: pool-intelligence-db
