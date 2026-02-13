@@ -5,8 +5,9 @@ services:
     runtime: node
     region: oregon
     plan: free
-    buildCommand: cd backend && npm ci --include=dev && npx prisma generate && npm run build
-    startCommand: cd backend && npm start
+    rootDir: pool-intelligence-pro/backend
+    buildCommand: npm ci --include=dev && npx prisma generate && npm run build
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
@@ -29,18 +30,12 @@ services:
     runtime: static
     region: oregon
     plan: free
-    buildCommand: cd frontend && npm ci && npm run build
-    staticPublishPath: frontend/dist
+    rootDir: pool-intelligence-pro/frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
         value: https://pool-intelligence-api.onrender.com
-    headers:
-      - path: /*
-        name: Cache-Control
-        value: public, max-age=31536000, immutable
-      - path: /index.html
-        name: Cache-Control
-        value: no-cache
     routes:
       - type: rewrite
         source: /*
