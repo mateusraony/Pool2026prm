@@ -109,21 +109,25 @@ async function healthJobRunner() {
 // Initialize cron jobs
 export function initializeJobs() {
   logService.info('SYSTEM', 'Initializing scheduled jobs');
-  
-  // Radar: every 30 minutes
-  cron.schedule('*/30 * * * *', radarJobRunner);
-  
+
+  // Radar: every 15 minutes
+  cron.schedule('*/15 * * * *', radarJobRunner);
+
   // Watchlist: every minute
   cron.schedule('* * * * *', watchlistJobRunner);
-  
-  // Recommendations: every hour
-  cron.schedule('0 * * * *', recommendationJobRunner);
-  
+
+  // Recommendations: every 5 minutes
+  cron.schedule('*/5 * * * *', recommendationJobRunner);
+
   // Health check: every minute
   cron.schedule('* * * * *', healthJobRunner);
-  
-  // Run initial radar scan
-  setTimeout(radarJobRunner, 5000);
-  
+
+  // Run initial jobs in sequence
+  setTimeout(async () => {
+    await radarJobRunner();
+    // Wait 2 seconds then generate recommendations
+    setTimeout(recommendationJobRunner, 2000);
+  }, 3000);
+
   logService.info('SYSTEM', 'Jobs initialized');
 }

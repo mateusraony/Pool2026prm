@@ -1,8 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { TrendingUp, Eye, AlertTriangle, ArrowRight } from 'lucide-react';
-import { fetchPools, Pool, Score } from '../api/client';
+import { TrendingUp, Eye, AlertTriangle, ArrowRight, Check } from 'lucide-react';
+import { fetchPools, addToWatchlist, fetchWatchlist, Pool, Score } from '../api/client';
 import clsx from 'clsx';
 
 function formatNum(num: number): string {
@@ -26,7 +26,13 @@ function ModeBadge({ mode }: { mode: string }) {
   return <span className={clsx('badge', 'badge-' + config.color)}>{config.emoji} {config.label}</span>;
 }
 
-function PoolCard({ pool, score, index }: { pool: Pool; score: Score; index: number }) {
+function PoolCard({ pool, score, index, isWatched, onAddToWatchlist }: {
+  pool: Pool;
+  score: Score;
+  index: number;
+  isWatched: boolean;
+  onAddToWatchlist: () => void;
+}) {
   const navigate = useNavigate();
   const poolPath = '/simulation/' + pool.chain + '/' + pool.poolAddress;
 
@@ -81,8 +87,15 @@ function PoolCard({ pool, score, index }: { pool: Pool; score: Score; index: num
             </div>
           )}
           <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button className="p-2 rounded-lg bg-dark-600 hover:bg-dark-500" onClick={(e) => e.stopPropagation()}>
-              <Eye className="w-4 h-4" />
+            <button
+              className={clsx(
+                'p-2 rounded-lg transition-colors',
+                isWatched ? 'bg-success-600 text-white' : 'bg-dark-600 hover:bg-dark-500'
+              )}
+              onClick={(e) => { e.stopPropagation(); onAddToWatchlist(); }}
+              title={isWatched ? 'Na watchlist' : 'Adicionar à watchlist'}
+            >
+              {isWatched ? <Check className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
             <button className="p-2 rounded-lg bg-primary-600 hover:bg-primary-500" onClick={(e) => { e.stopPropagation(); navigate(poolPath); }}>
               <ArrowRight className="w-4 h-4" />
@@ -95,11 +108,28 @@ function PoolCard({ pool, score, index }: { pool: Pool; score: Score; index: num
 }
 
 export default function RadarPage() {
+  const queryClient = useQueryClient();
+
   const { data: pools, isLoading, error } = useQuery({
     queryKey: ['pools'],
     queryFn: () => fetchPools(),
     refetchInterval: 60000,
   });
+
+  const { data: watchlist } = useQuery({
+    queryKey: ['watchlist'],
+    queryFn: fetchWatchlist,
+  });
+
+  const addMutation = useMutation({
+    mutationFn: ({ poolId, chain, address }: { poolId: string; chain: string; address: string }) =>
+      addToWatchlist(poolId, chain, address),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['watchlist'] });
+    },
+  });
+
+  const watchedIds = new Set(watchlist?.map(w => w.poolId) || []);
 
   return (
     <div className="space-y-6">
@@ -128,7 +158,20 @@ export default function RadarPage() {
         </div>
       ) : pools && pools.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {pools.map((item, index) => (<PoolCard key={item.pool.externalId} pool={item.pool} score={item.score} index={index} />))}
+          {pools.map((item, index) => (
+            <PoolCard
+              key={item.pool.externalId}
+              pool={item.pool}
+              score={item.score}
+              index={index}
+              isWatched={watchedIds.has(item.pool.externalId)}
+              onAddToWatchlist={() => addMutation.mutate({
+                poolId: item.pool.externalId,
+                chain: item.pool.chain,
+                address: item.pool.poolAddress,
+              })}
+            />
+          ))}
         </div>
       ) : (
         <div className="card p-8 text-center">
