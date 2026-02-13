@@ -20,7 +20,7 @@ app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
     const duration = Date.now() - start;
-    if (req.path !== '/api/health') {
+    if (req.path !== '/health' && req.path !== '/api/health') {
       logService.info('SYSTEM', req.method + ' ' + req.path + ' ' + res.statusCode + ' ' + duration + 'ms');
     }
   });
@@ -29,6 +29,11 @@ app.use((req, res, next) => {
 
 // API routes
 app.use('/api', routes);
+
+// Health check (root level for Render)
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 // Root endpoint
 app.get('/', (req, res) => {
