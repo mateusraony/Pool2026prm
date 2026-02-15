@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import { TrendingUp, TrendingDown, Clock, Fuel, DollarSign, AlertTriangle } from 'lucide-react';
-import { fetchPool, Pool, Score } from '../api/client';
+import { TrendingUp, TrendingDown, Clock, Fuel, DollarSign, AlertTriangle, ArrowLeft, ExternalLink } from 'lucide-react';
+import { fetchPool, fetchPools, Pool, Score } from '../api/client';
+import InteractiveChart from '../components/charts/InteractiveChart';
 import clsx from 'clsx';
 
 function formatNum(num: number): string {
@@ -20,25 +20,39 @@ const modeConfig = {
   AGGRESSIVE: { emoji: '🎯', label: 'Agressivo', rangePercent: 5, color: 'danger' },
 };
 
-function SimulationPanel({ pool, score }: { pool: Pool; score: Score }) {
-  const [mode, setMode] = useState<Mode>('NORMAL');
+function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
+  const [mode, setMode] = useState<Mode>(score.recommendedMode as Mode || 'NORMAL');
   const [capital, setCapital] = useState(1000);
-  
+  const [customRange, setCustomRange] = useState<{ lower: number; upper: number } | null>(null);
+
   const currentPrice = pool.price || 1000;
   const config = modeConfig[mode];
-  
+
+  // Calculate range based on mode or custom
+  const rangeLower = customRange?.lower ?? currentPrice * (1 - config.rangePercent / 100);
+  const rangeUpper = customRange?.upper ?? currentPrice * (1 + config.rangePercent / 100);
+
+  const handleRangeChange = (lower: number, upper: number) => {
+    setCustomRange({ lower, upper });
+  };
+
+  const handleModeChange = (newMode: Mode) => {
+    setMode(newMode);
+    setCustomRange(null); // Reset custom range when mode changes
+  };
+
   const metrics = useMemo(() => {
-    const rangeWidth = config.rangePercent * 2;
-    const widthFactor = 10 / rangeWidth;
-    
+    const rangeWidth = ((rangeUpper - rangeLower) / currentPrice) * 100;
+    const widthFactor = 20 / rangeWidth;
+
     const baseFees = score.breakdown.return.aprEstimate / 52;
     const adjustedFees = baseFees * Math.min(2.5, Math.max(0.3, widthFactor));
     const adjustedIL = 0.4 * Math.min(3, Math.max(0.2, widthFactor * 1.2));
-    const timeInRange = Math.min(98, 85 * Math.min(1.2, Math.max(0.3, 1 / widthFactor)));
-    const gasEstimate = 12.5;
+    const timeInRange = Math.min(98, 70 + rangeWidth * 1.5);
+    const gasEstimate = pool.chain === 'ethereum' ? 25 : pool.chain === 'arbitrum' ? 2.5 : 5;
     const gasPercent = (gasEstimate / capital) * 100;
     const netReturn = adjustedFees - adjustedIL - gasPercent;
-    
+
     return {
       feesPercent: adjustedFees,
       feesUsd: (adjustedFees / 100) * capital,
@@ -49,142 +63,217 @@ function SimulationPanel({ pool, score }: { pool: Pool; score: Score }) {
       netReturnPercent: netReturn,
       netReturnUsd: (netReturn / 100) * capital,
       apr: netReturn * 52,
-      rangeLower: currentPrice * (1 - config.rangePercent / 100),
-      rangeUpper: currentPrice * (1 + config.rangePercent / 100),
+      rangeWidth,
     };
-  }, [mode, capital, score, currentPrice, config.rangePercent]);
+  }, [rangeLower, rangeUpper, capital, score, currentPrice, pool.chain]);
 
   const isPositive = metrics.netReturnPercent >= 0;
 
+  // Uniswap URL
+  const uniswapUrl = `https://app.uniswap.org/add/${pool.token0.address}/${pool.token1.address}/${pool.feeTier || 3000}?chain=${pool.chain}`;
+
   return (
     <div className="space-y-6">
+      {/* Pool Info Header */}
       <div className="card">
-        <div className="card-header">
-          <h2 className="font-semibold">🧪 Simulacao de Range</h2>
-        </div>
-        <div className="card-body space-y-6">
-          <div>
-            <label className="block text-sm text-dark-400 mb-2">Capital a Investir</label>
-            <div className="flex items-center gap-2">
-              <span className="text-dark-400 text-xl">$</span>
-              <input
-                type="number"
-                value={capital}
-                onChange={(e) => setCapital(Number(e.target.value))}
-                className="input text-2xl font-bold"
-              />
+        <div className="card-body">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="stat-card">
+              <div className="stat-label">TVL</div>
+              <div className="stat-value">{'$' + formatNum(pool.tvl)}</div>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm text-dark-400 mb-3">Modo de Operacao</label>
-            <div className="grid grid-cols-3 gap-3">
-              {(Object.keys(modeConfig) as Mode[]).map((m) => {
-                const cfg = modeConfig[m];
-                return (
-                  <button
-                    key={m}
-                    onClick={() => setMode(m)}
-                    className={clsx(
-                      'p-4 rounded-xl border-2 transition-all text-center',
-                      mode === m
-                        ? 'border-primary-500 bg-primary-500/10'
-                        : 'border-dark-600 hover:border-dark-500'
-                    )}
-                  >
-                    <div className="text-2xl mb-1">{cfg.emoji}</div>
-                    <div className="font-semibold">{cfg.label}</div>
-                    <div className="text-xs text-dark-400">{'±' + cfg.rangePercent + '% range'}</div>
-                  </button>
-                );
-              })}
+            <div className="stat-card">
+              <div className="stat-label">Volume 24h</div>
+              <div className="stat-value">{'$' + formatNum(pool.volume24h)}</div>
             </div>
-          </div>
-
-          <div className="bg-dark-700/50 rounded-xl p-4">
-            <div className="flex justify-between text-sm mb-2">
-              <span className="text-dark-400">Range Selecionado</span>
-              <span className={'badge badge-' + config.color}>{config.emoji} {config.label}</span>
+            <div className="stat-card">
+              <div className="stat-label">APR Base</div>
+              <div className="stat-value text-success-400">{score.breakdown.return.aprEstimate.toFixed(1)}%</div>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-lg font-mono">{'$' + metrics.rangeLower.toFixed(2)}</span>
-              <span className="text-dark-400">↔</span>
-              <span className="text-lg font-mono">{'$' + metrics.rangeUpper.toFixed(2)}</span>
+            <div className="stat-card">
+              <div className="stat-label">Score</div>
+              <div className="stat-value text-primary-400">{score.total.toFixed(0)}/100</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Preco Atual</div>
+              <div className="stat-value font-mono">{'$' + currentPrice.toFixed(2)}</div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-header">
-          <h2 className="font-semibold">📈 Projecao (7 dias)</h2>
-          <div className="flex items-center gap-1 text-success-400 text-sm">
-            <div className="w-2 h-2 rounded-full bg-success-500 animate-pulse" />
-            Ao vivo
+      {/* Interactive Chart */}
+      <InteractiveChart
+        currentPrice={currentPrice}
+        minPrice={currentPrice * 0.5}
+        maxPrice={currentPrice * 1.5}
+        rangeLower={rangeLower}
+        rangeUpper={rangeUpper}
+        onRangeChange={handleRangeChange}
+        token0Symbol={pool.token0.symbol}
+        token1Symbol={pool.token1.symbol}
+      />
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        {/* Controls */}
+        <div className="card">
+          <div className="card-header">
+            <h2 className="font-semibold">⚙️ Configuracao</h2>
+          </div>
+          <div className="card-body space-y-6">
+            <div>
+              <label className="block text-sm text-dark-400 mb-2">Capital a Investir</label>
+              <div className="flex items-center gap-2">
+                <span className="text-dark-400 text-xl">$</span>
+                <input
+                  type="number"
+                  value={capital}
+                  onChange={(e) => setCapital(Number(e.target.value) || 0)}
+                  className="input text-2xl font-bold flex-1"
+                  min={0}
+                />
+              </div>
+              <div className="flex gap-2 mt-2">
+                {[100, 500, 1000, 5000, 10000].map(val => (
+                  <button
+                    key={val}
+                    onClick={() => setCapital(val)}
+                    className={clsx(
+                      'px-3 py-1 rounded text-xs transition-colors',
+                      capital === val ? 'bg-primary-600 text-white' : 'bg-dark-700 hover:bg-dark-600'
+                    )}
+                  >
+                    ${formatNum(val)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm text-dark-400 mb-3">Modo de Operacao</label>
+              <div className="grid grid-cols-3 gap-3">
+                {(Object.keys(modeConfig) as Mode[]).map((m) => {
+                  const cfg = modeConfig[m];
+                  const isRecommended = score.recommendedMode === m;
+                  return (
+                    <button
+                      key={m}
+                      onClick={() => handleModeChange(m)}
+                      className={clsx(
+                        'p-4 rounded-xl border-2 transition-all text-center relative',
+                        mode === m
+                          ? 'border-primary-500 bg-primary-500/10'
+                          : 'border-dark-600 hover:border-dark-500'
+                      )}
+                    >
+                      {isRecommended && (
+                        <span className="absolute -top-2 -right-2 text-xs bg-success-600 px-2 py-0.5 rounded-full">
+                          ✓ Rec
+                        </span>
+                      )}
+                      <div className="text-2xl mb-1">{cfg.emoji}</div>
+                      <div className="font-semibold">{cfg.label}</div>
+                      <div className="text-xs text-dark-400">{'±' + cfg.rangePercent + '% range'}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {customRange && (
+              <div className="bg-warning-500/10 border border-warning-500/30 rounded-lg p-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-warning-400">Range personalizado ativo</span>
+                  <button
+                    onClick={() => setCustomRange(null)}
+                    className="text-xs bg-dark-600 px-2 py-1 rounded hover:bg-dark-500"
+                  >
+                    Resetar
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-        <div className="card-body space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="stat-card">
-              <div className="flex items-center gap-2 text-dark-400 mb-1">
-                <TrendingUp className="w-4 h-4 text-success-400" />
-                <span className="text-xs">Fees Estimadas</span>
-              </div>
-              <div className="text-success-400 font-bold">{'+' + metrics.feesPercent.toFixed(2) + '%'}</div>
-              <div className="text-xs text-dark-400">{'~$' + metrics.feesUsd.toFixed(2)}</div>
-            </div>
-            <div className="stat-card">
-              <div className="flex items-center gap-2 text-dark-400 mb-1">
-                <TrendingDown className="w-4 h-4 text-danger-400" />
-                <span className="text-xs">IL Estimada</span>
-              </div>
-              <div className="text-danger-400 font-bold">{'-' + metrics.ilPercent.toFixed(2) + '%'}</div>
-              <div className="text-xs text-dark-400">{'~$' + metrics.ilUsd.toFixed(2)}</div>
-            </div>
-            <div className="stat-card">
-              <div className="flex items-center gap-2 text-dark-400 mb-1">
-                <Clock className="w-4 h-4" />
-                <span className="text-xs">Tempo no Range</span>
-              </div>
-              <div className="font-bold">{metrics.timeInRange.toFixed(0) + '%'}</div>
-              <div className="text-xs text-dark-400">do periodo</div>
-            </div>
-            <div className="stat-card">
-              <div className="flex items-center gap-2 text-dark-400 mb-1">
-                <Fuel className="w-4 h-4" />
-                <span className="text-xs">Custo Gas</span>
-              </div>
-              <div className="font-bold">{'~$' + metrics.gasEstimate.toFixed(2)}</div>
-              <div className="text-xs text-dark-400">entrada</div>
+
+        {/* Results */}
+        <div className="card">
+          <div className="card-header">
+            <h2 className="font-semibold">📈 Projecao (7 dias)</h2>
+            <div className="flex items-center gap-1 text-success-400 text-sm">
+              <div className="w-2 h-2 rounded-full bg-success-500 animate-pulse" />
+              Ao vivo
             </div>
           </div>
-
-          <div className={clsx(
-            'rounded-xl p-4 border',
-            isPositive ? 'bg-success-500/10 border-success-500/30' : 'bg-danger-500/10 border-danger-500/30'
-          )}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <DollarSign className={clsx('w-5 h-5', isPositive ? 'text-success-400' : 'text-danger-400')} />
-                <span className="font-medium">Retorno Liquido (7d)</span>
+          <div className="card-body space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="stat-card">
+                <div className="flex items-center gap-2 text-dark-400 mb-1">
+                  <TrendingUp className="w-4 h-4 text-success-400" />
+                  <span className="text-xs">Fees Estimadas</span>
+                </div>
+                <div className="text-success-400 font-bold">{'+' + metrics.feesPercent.toFixed(2) + '%'}</div>
+                <div className="text-xs text-dark-400">{'~$' + metrics.feesUsd.toFixed(2)}</div>
               </div>
-              <div className={clsx('text-2xl font-bold', isPositive ? 'text-success-400' : 'text-danger-400')}>
-                {(isPositive ? '+' : '') + metrics.netReturnPercent.toFixed(2) + '%'}
+              <div className="stat-card">
+                <div className="flex items-center gap-2 text-dark-400 mb-1">
+                  <TrendingDown className="w-4 h-4 text-danger-400" />
+                  <span className="text-xs">IL Estimada</span>
+                </div>
+                <div className="text-danger-400 font-bold">{'-' + metrics.ilPercent.toFixed(2) + '%'}</div>
+                <div className="text-xs text-dark-400">{'~$' + metrics.ilUsd.toFixed(2)}</div>
+              </div>
+              <div className="stat-card">
+                <div className="flex items-center gap-2 text-dark-400 mb-1">
+                  <Clock className="w-4 h-4" />
+                  <span className="text-xs">Tempo no Range</span>
+                </div>
+                <div className="font-bold">{metrics.timeInRange.toFixed(0) + '%'}</div>
+                <div className="text-xs text-dark-400">do periodo</div>
+              </div>
+              <div className="stat-card">
+                <div className="flex items-center gap-2 text-dark-400 mb-1">
+                  <Fuel className="w-4 h-4" />
+                  <span className="text-xs">Custo Gas ({pool.chain})</span>
+                </div>
+                <div className="font-bold">{'~$' + metrics.gasEstimate.toFixed(2)}</div>
+                <div className="text-xs text-dark-400">entrada + saida</div>
               </div>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-dark-400">{'Valor: ' + (isPositive ? '+' : '') + '$' + metrics.netReturnUsd.toFixed(2)}</span>
-              <span className="text-primary-400 font-medium">{'APR: ~' + metrics.apr.toFixed(1) + '%'}</span>
+
+            <div className={clsx(
+              'rounded-xl p-4 border',
+              isPositive ? 'bg-success-500/10 border-success-500/30' : 'bg-danger-500/10 border-danger-500/30'
+            )}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <DollarSign className={clsx('w-5 h-5', isPositive ? 'text-success-400' : 'text-danger-400')} />
+                  <span className="font-medium">Retorno Liquido (7d)</span>
+                </div>
+                <div className={clsx('text-2xl font-bold', isPositive ? 'text-success-400' : 'text-danger-400')}>
+                  {(isPositive ? '+' : '') + metrics.netReturnPercent.toFixed(2) + '%'}
+                </div>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-dark-400">{'Valor: ' + (isPositive ? '+' : '') + '$' + metrics.netReturnUsd.toFixed(2)}</span>
+                <span className="text-primary-400 font-medium">{'APR: ~' + metrics.apr.toFixed(1) + '%'}</span>
+              </div>
             </div>
-          </div>
 
-          <div className="text-center text-xs text-dark-400">
-            {'Retorno = Fees (' + metrics.feesPercent.toFixed(2) + '%) - IL (' + metrics.ilPercent.toFixed(2) + '%) - Gas (' + ((metrics.gasEstimate / capital) * 100).toFixed(2) + '%)'}
-          </div>
+            <div className="text-center text-xs text-dark-400 bg-dark-700/50 rounded-lg p-2">
+              Retorno = Fees ({metrics.feesPercent.toFixed(2)}%) - IL ({metrics.ilPercent.toFixed(2)}%) - Gas ({((metrics.gasEstimate / capital) * 100).toFixed(2)}%)
+            </div>
 
-          <button className="btn btn-primary w-full py-4 text-lg">
-            🚀 Simular no Uniswap
-          </button>
+            <a
+              href={uniswapUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-primary w-full py-4 text-lg flex items-center justify-center gap-2"
+            >
+              🚀 Abrir no Uniswap
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          </div>
         </div>
       </div>
     </div>
@@ -193,32 +282,94 @@ function SimulationPanel({ pool, score }: { pool: Pool; score: Score }) {
 
 export default function SimulationPage() {
   const { chain, address } = useParams();
-  
-  const { data, isLoading } = useQuery({
+  const navigate = useNavigate();
+
+  const { data, isLoading, error } = useQuery({
     queryKey: ['pool', chain, address],
     queryFn: () => chain && address ? fetchPool(chain, address) : null,
     enabled: !!chain && !!address,
+    retry: 2,
+  });
+
+  // Fetch pools for quick selection when no pool is selected
+  const { data: pools } = useQuery({
+    queryKey: ['pools'],
+    queryFn: () => fetchPools(),
+    enabled: !chain || !address,
   });
 
   if (!chain || !address) {
     return (
-      <div className="card p-8 text-center">
-        <div className="text-4xl mb-4">🧪</div>
-        <h3 className="text-lg font-semibold mb-2">Selecione uma pool</h3>
-        <p className="text-dark-400">Escolha uma pool no Radar para simular</p>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">🧪 Simulacao de Range</h1>
+          <p className="text-dark-400 mt-1">Selecione uma pool para simular estrategias de liquidez</p>
+        </div>
+
+        {pools && pools.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {pools.slice(0, 6).map((item) => (
+              <button
+                key={item.pool.externalId}
+                onClick={() => navigate('/simulation/' + item.pool.chain + '/' + item.pool.poolAddress)}
+                className="card hover:border-primary-500/50 transition-all text-left"
+              >
+                <div className="p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="flex -space-x-2">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-xs font-bold border-2 border-dark-800">
+                        {item.pool.token0.symbol.slice(0, 2)}
+                      </div>
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-success-500 to-success-700 flex items-center justify-center text-xs font-bold border-2 border-dark-800">
+                        {item.pool.token1.symbol.slice(0, 2)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="font-semibold">{item.pool.token0.symbol}/{item.pool.token1.symbol}</div>
+                      <div className="text-xs text-dark-400">{item.pool.protocol} - {item.pool.chain}</div>
+                    </div>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-dark-400">TVL: ${formatNum(item.pool.tvl)}</span>
+                    <span className="text-primary-400">Score: {item.score.total.toFixed(0)}</span>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="card p-8 text-center">
+            <div className="text-4xl mb-4">🔍</div>
+            <h3 className="text-lg font-semibold mb-2">Carregando pools...</h3>
+            <p className="text-dark-400">Ou va ao Radar para escolher uma pool</p>
+          </div>
+        )}
       </div>
     );
   }
 
   if (isLoading) {
-    return <div className="card animate-pulse p-8"><div className="h-96 bg-dark-700 rounded" /></div>;
+    return (
+      <div className="space-y-6">
+        <div className="h-8 w-48 bg-dark-700 rounded animate-pulse" />
+        <div className="card animate-pulse p-8"><div className="h-64 bg-dark-700 rounded" /></div>
+        <div className="grid lg:grid-cols-2 gap-6">
+          <div className="card animate-pulse p-8"><div className="h-96 bg-dark-700 rounded" /></div>
+          <div className="card animate-pulse p-8"><div className="h-96 bg-dark-700 rounded" /></div>
+        </div>
+      </div>
+    );
   }
 
-  if (!data) {
+  if (error || !data) {
     return (
       <div className="card p-8 text-center">
         <AlertTriangle className="w-12 h-12 text-danger-400 mx-auto mb-4" />
         <h3 className="text-lg font-semibold mb-2">Pool nao encontrada</h3>
+        <p className="text-dark-400 mb-4">Nao foi possivel carregar os dados desta pool</p>
+        <button onClick={() => navigate('/radar')} className="btn btn-primary">
+          Voltar ao Radar
+        </button>
       </div>
     );
   }
@@ -227,44 +378,20 @@ export default function SimulationPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">🧪 Simulacao: {poolName}</h1>
-        <p className="text-dark-400 mt-1">{data.pool.protocol} - {data.pool.chain}</p>
-      </div>
-
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <div className="card">
-            <div className="card-header">
-              <h2 className="font-semibold">📊 Informacoes da Pool</h2>
-            </div>
-            <div className="card-body">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="stat-card">
-                  <div className="stat-label">TVL</div>
-                  <div className="stat-value">{'$' + formatNum(data.pool.tvl)}</div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-label">Volume 24h</div>
-                  <div className="stat-value">{'$' + formatNum(data.pool.volume24h)}</div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-label">Score</div>
-                  <div className="stat-value text-primary-400">{data.score.total.toFixed(0)}/100</div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-label">Preco</div>
-                  <div className="stat-value">{'$' + (data.pool.price?.toFixed(2) || 'N/A')}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
+      <div className="flex items-center gap-4">
+        <button
+          onClick={() => navigate(-1)}
+          className="p-2 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
         <div>
-          <SimulationPanel pool={data.pool} score={data.score} />
+          <h1 className="text-2xl font-bold">🧪 {poolName}</h1>
+          <p className="text-dark-400">{data.pool.protocol} - {data.pool.chain}</p>
         </div>
       </div>
+
+      <FullSimulation pool={data.pool} score={data.score} />
     </div>
   );
 }
