@@ -81,8 +81,8 @@ export async function fetchPool(chain: string, address: string): Promise<{ pool:
   return data.data;
 }
 
-export async function fetchRecommendations(): Promise<Recommendation[]> {
-  const { data } = await api.get('/recommendations');
+export async function fetchRecommendations(mode?: string, limit?: number): Promise<Recommendation[]> {
+  const { data } = await api.get('/recommendations', { params: { mode, limit } });
   return data.data || [];
 }
 
@@ -118,4 +118,29 @@ export async function fetchLogs(limit?: number, level?: string, component?: stri
 }[]> {
   const { data } = await api.get('/logs', { params: { limit, level, component } });
   return data.data || [];
+}
+
+export interface AlertRule {
+  id: string;
+  poolId?: string;
+  type: string;
+  threshold: number;
+  enabled?: boolean;
+}
+
+export async function fetchAlerts(): Promise<{
+  rules: { id: string; rule: { type: string; poolId?: string; value?: number } }[];
+  recentAlerts: { type: string; message: string; timestamp: string }[];
+}> {
+  const { data } = await api.get('/alerts');
+  return data.data || { rules: [], recentAlerts: [] };
+}
+
+export async function createAlert(poolId: string | undefined, type: string, threshold: number): Promise<{ id: string }> {
+  const { data } = await api.post('/alerts', { poolId, type, threshold });
+  return data.data;
+}
+
+export async function deleteAlert(id: string): Promise<void> {
+  await api.delete('/alerts/' + id);
 }

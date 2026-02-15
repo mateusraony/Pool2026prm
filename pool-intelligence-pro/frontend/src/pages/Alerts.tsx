@@ -1,33 +1,28 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Bell, BellOff, Settings, Plus, X, Send } from 'lucide-react';
-import { fetchHealth, fetchWatchlist, fetchSettings } from '../api/client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Bell, BellOff, Settings, Plus, X, Send, Trash2 } from 'lucide-react';
+import { fetchHealth, fetchPools, fetchAlerts, createAlert, deleteAlert, fetchSettings, Pool, Score } from '../api/client';
 import clsx from 'clsx';
 
-type AlertType = 'PRICE_DROP' | 'TVL_DROP' | 'APR_CHANGE' | 'SCORE_CHANGE';
+type AlertType = 'PRICE_ABOVE' | 'PRICE_BELOW' | 'VOLUME_DROP' | 'LIQUIDITY_FLIGHT';
 
-interface AlertRule {
-  id: string;
-  poolId: string;
-  type: AlertType;
-  threshold: number;
-  enabled: boolean;
-}
-
-const alertTypeConfig: Record<AlertType, { label: string; icon: string; unit: string }> = {
-  PRICE_DROP: { label: 'Queda de Preco', icon: '📉', unit: '%' },
-  TVL_DROP: { label: 'Queda de TVL', icon: '💧', unit: '%' },
-  APR_CHANGE: { label: 'Mudanca de APR', icon: '📊', unit: '%' },
-  SCORE_CHANGE: { label: 'Mudanca de Score', icon: '🎯', unit: 'pts' },
+const alertTypeConfig: Record<AlertType, { label: string; icon: string; unit: string; description: string }> = {
+  PRICE_ABOVE: { label: 'Preco Acima', icon: '📈', unit: '$', description: 'Notificar quando preco subir acima' },
+  PRICE_BELOW: { label: 'Preco Abaixo', icon: '📉', unit: '$', description: 'Notificar quando preco cair abaixo' },
+  VOLUME_DROP: { label: 'Queda de Volume', icon: '💧', unit: '%', description: 'Notificar quando volume cair' },
+  LIQUIDITY_FLIGHT: { label: 'Fuga de Liquidez', icon: '🚨', unit: '%', description: 'Notificar fuga de TVL' },
 };
 
 export default function AlertsPage() {
+  const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
-  const [rules, setRules] = useState<AlertRule[]>([]);
-  const [newRule, setNewRule] = useState<Partial<AlertRule>>({
-    type: 'PRICE_DROP',
-    threshold: 10,
-    enabled: true,
+  const [newAlert, setNewAlert] = useState<{
+    poolId?: string;
+    type: AlertType;
+    threshold: number;
+  }>({
+    type: 'PRICE_BELOW',
+    threshold: 0,
   });
 
   const { data: health } = useQuery({
@@ -35,9 +30,15 @@ export default function AlertsPage() {
     queryFn: fetchHealth,
   });
 
-  const { data: watchlist } = useQuery({
-    queryKey: ['watchlist'],
-    queryFn: fetchWatchlist,
+  const { data: pools } = useQuery({
+    queryKey: ['pools'],
+    queryFn: () => fetchPools(),
+  });
+
+  const { data: alerts, isLoading: loadingAlerts } = useQuery({
+    queryKey: ['alerts'],
+    queryFn: fetchAlerts,
+    refetchInterval: 30000,
   });
 
   const { data: settings } = useQuery({
@@ -45,26 +46,37 @@ export default function AlertsPage() {
     queryFn: fetchSettings,
   });
 
-  const handleAddRule = () => {
-    if (newRule.poolId && newRule.type && newRule.threshold) {
-      setRules([...rules, {
-        id: Date.now().toString(),
-        poolId: newRule.poolId,
-        type: newRule.type as AlertType,
-        threshold: newRule.threshold,
-        enabled: true,
-      }]);
+  const createMutation = useMutation({
+    mutationFn: () => createAlert(newAlert.poolId, newAlert.type, newAlert.threshold),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
+      queryClient.invalidateQueries({ queryKey: ['health'] });
       setShowModal(false);
-      setNewRule({ type: 'PRICE_DROP', threshold: 10, enabled: true });
+      setNewAlert({ type: 'PRICE_BELOW', threshold: 0 });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteAlert,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
+      queryClient.invalidateQueries({ queryKey: ['health'] });
+    },
+  });
+
+  const handleCreate = () => {
+    if (newAlert.threshold > 0) {
+      createMutation.mutate();
     }
   };
 
-  const toggleRule = (id: string) => {
-    setRules(rules.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
-  };
-
-  const deleteRule = (id: string) => {
-    setRules(rules.filter(r => r.id !== id));
+  const getPoolName = (poolId?: string): string => {
+    if (!poolId) return 'Global';
+    const pool = pools?.find(p => p.pool.externalId === poolId);
+    if (pool) {
+      return pool.pool.token0.symbol + '/' + pool.pool.token1.symbol;
+    }
+    return poolId.slice(0, 12) + '...';
   };
 
   const telegramConnected = health?.alerts?.rulesCount !== undefined;
@@ -79,7 +91,6 @@ export default function AlertsPage() {
         <button
           className="btn btn-primary flex items-center gap-2"
           onClick={() => setShowModal(true)}
-          disabled={!watchlist?.length}
         >
           <Plus className="w-4 h-4" />
           Novo Alerta
@@ -91,49 +102,42 @@ export default function AlertsPage() {
           <div className="card-header">
             <h3 className="font-semibold flex items-center gap-2">
               <Bell className="w-4 h-4 text-primary-400" />
-              Alertas Ativos ({rules.filter(r => r.enabled).length})
+              Alertas Ativos ({alerts?.rules?.length || 0})
             </h3>
           </div>
           <div className="card-body">
-            {rules.length > 0 ? (
+            {loadingAlerts ? (
               <div className="space-y-3">
-                {rules.map(rule => {
-                  const config = alertTypeConfig[rule.type];
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-16 bg-dark-700 rounded animate-pulse" />
+                ))}
+              </div>
+            ) : alerts?.rules && alerts.rules.length > 0 ? (
+              <div className="space-y-3">
+                {alerts.rules.map(({ id, rule }) => {
+                  const config = alertTypeConfig[rule.type as AlertType];
                   return (
                     <div
-                      key={rule.id}
-                      className={clsx(
-                        'p-3 rounded-lg border transition-all',
-                        rule.enabled ? 'bg-dark-700/50 border-dark-600' : 'bg-dark-800/50 border-dark-700 opacity-50'
-                      )}
+                      key={id}
+                      className="p-3 rounded-lg border bg-dark-700/50 border-dark-600"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <span className="text-xl">{config.icon}</span>
+                          <span className="text-xl">{config?.icon || '🔔'}</span>
                           <div>
-                            <div className="font-medium">{config.label}</div>
+                            <div className="font-medium">{config?.label || rule.type}</div>
                             <div className="text-sm text-dark-400">
-                              Pool: {rule.poolId.slice(0, 15)}... | Limite: {rule.threshold}{config.unit}
+                              Pool: {getPoolName(rule.poolId)} | Limite: {rule.value}{config?.unit || ''}
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            className={clsx(
-                              'p-2 rounded-lg transition-colors',
-                              rule.enabled ? 'bg-success-600' : 'bg-dark-600'
-                            )}
-                            onClick={() => toggleRule(rule.id)}
-                          >
-                            {rule.enabled ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
-                          </button>
-                          <button
-                            className="p-2 rounded-lg bg-danger-600 hover:bg-danger-500"
-                            onClick={() => deleteRule(rule.id)}
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
+                        <button
+                          className="p-2 rounded-lg bg-danger-600 hover:bg-danger-500 transition-colors"
+                          onClick={() => deleteMutation.mutate(id)}
+                          disabled={deleteMutation.isPending}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                   );
@@ -143,46 +147,50 @@ export default function AlertsPage() {
               <div className="text-center py-8 text-dark-400">
                 <BellOff className="w-12 h-12 mx-auto mb-4 opacity-50" />
                 <p>Nenhum alerta configurado</p>
-                <p className="text-sm mt-1">
-                  {watchlist?.length ? 'Clique em "Novo Alerta" para criar' : 'Adicione pools à watchlist primeiro'}
-                </p>
+                <p className="text-sm mt-1">Clique em "Novo Alerta" para criar</p>
               </div>
             )}
           </div>
         </div>
 
-        <div className="card">
-          <div className="card-header">
-            <h3 className="font-semibold flex items-center gap-2">
-              <Settings className="w-4 h-4" />
-              Configuracoes
-            </h3>
-          </div>
-          <div className="card-body space-y-4">
-            <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
-              <span>Cooldown entre alertas</span>
-              <span className="text-primary-400 font-medium">60 min</span>
+        <div className="space-y-4">
+          <div className="card">
+            <div className="card-header">
+              <h3 className="font-semibold flex items-center gap-2">
+                <Settings className="w-4 h-4" />
+                Configuracoes
+              </h3>
             </div>
-            <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
-              <span>Max alertas por hora</span>
-              <span className="text-primary-400 font-medium">10</span>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
-              <span>Modo atual</span>
-              <span className="badge badge-warning">{settings?.mode || 'NORMAL'}</span>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
-              <div className="flex items-center gap-2">
-                <Send className="w-4 h-4" />
-                <span>Telegram Bot</span>
+            <div className="card-body space-y-4">
+              <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+                <span>Cooldown entre alertas</span>
+                <span className="text-primary-400 font-medium">60 min</span>
               </div>
-              <span className={clsx('badge', telegramConnected ? 'badge-success' : 'badge-danger')}>
-                {telegramConnected ? 'Conectado' : 'Desconectado'}
-              </span>
+              <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+                <span>Max alertas por hora</span>
+                <span className="text-primary-400 font-medium">10</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+                <span>Modo atual</span>
+                <span className="badge badge-warning">{settings?.mode || 'NORMAL'}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Send className="w-4 h-4" />
+                  <span>Telegram Bot</span>
+                </div>
+                <span className={clsx('badge', telegramConnected ? 'badge-success' : 'badge-danger')}>
+                  {telegramConnected ? 'Conectado' : 'Desconectado'}
+                </span>
+              </div>
             </div>
+          </div>
 
-            <div className="pt-4 border-t border-dark-600">
-              <h4 className="font-medium mb-3">Estatisticas</h4>
+          <div className="card">
+            <div className="card-header">
+              <h3 className="font-semibold">Estatisticas</h3>
+            </div>
+            <div className="card-body">
               <div className="grid grid-cols-2 gap-3">
                 <div className="stat-card">
                   <div className="stat-label">Alertas hoje</div>
@@ -190,17 +198,37 @@ export default function AlertsPage() {
                 </div>
                 <div className="stat-card">
                   <div className="stat-label">Total de regras</div>
-                  <div className="stat-value">{health?.alerts?.rulesCount || rules.length}</div>
+                  <div className="stat-value">{alerts?.rules?.length || 0}</div>
                 </div>
               </div>
             </div>
           </div>
+
+          {alerts?.recentAlerts && alerts.recentAlerts.length > 0 && (
+            <div className="card">
+              <div className="card-header">
+                <h3 className="font-semibold">Alertas Recentes</h3>
+              </div>
+              <div className="card-body">
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {alerts.recentAlerts.slice(0, 5).map((alert, i) => (
+                    <div key={i} className="p-2 bg-dark-700/50 rounded text-sm">
+                      <div className="font-medium">{alert.message}</div>
+                      <div className="text-xs text-dark-400">
+                        {new Date(alert.timestamp).toLocaleString('pt-BR')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="card w-full max-w-md">
+          <div className="card w-full max-w-lg">
             <div className="card-header flex items-center justify-between">
               <h3 className="font-semibold">Novo Alerta</h3>
               <button onClick={() => setShowModal(false)} className="p-1 hover:bg-dark-600 rounded">
@@ -209,15 +237,17 @@ export default function AlertsPage() {
             </div>
             <div className="card-body space-y-4">
               <div>
-                <label className="block text-sm text-dark-400 mb-2">Pool</label>
+                <label className="block text-sm text-dark-400 mb-2">Pool (opcional - deixe vazio para global)</label>
                 <select
                   className="input w-full"
-                  value={newRule.poolId || ''}
-                  onChange={(e) => setNewRule({ ...newRule, poolId: e.target.value })}
+                  value={newAlert.poolId || ''}
+                  onChange={(e) => setNewAlert({ ...newAlert, poolId: e.target.value || undefined })}
                 >
-                  <option value="">Selecione uma pool...</option>
-                  {watchlist?.map(w => (
-                    <option key={w.poolId} value={w.poolId}>{w.poolId}</option>
+                  <option value="">🌐 Global (todas as pools)</option>
+                  {pools?.slice(0, 30).map((item) => (
+                    <option key={item.pool.externalId} value={item.pool.externalId}>
+                      {item.pool.token0.symbol}/{item.pool.token1.symbol} - {item.pool.protocol}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -232,12 +262,13 @@ export default function AlertsPage() {
                         key={type}
                         className={clsx(
                           'p-3 rounded-lg border-2 transition-all text-left',
-                          newRule.type === type ? 'border-primary-500 bg-primary-500/10' : 'border-dark-600 hover:border-dark-500'
+                          newAlert.type === type ? 'border-primary-500 bg-primary-500/10' : 'border-dark-600 hover:border-dark-500'
                         )}
-                        onClick={() => setNewRule({ ...newRule, type })}
+                        onClick={() => setNewAlert({ ...newAlert, type })}
                       >
                         <div className="text-lg mb-1">{config.icon}</div>
                         <div className="text-sm font-medium">{config.label}</div>
+                        <div className="text-xs text-dark-400">{config.description}</div>
                       </button>
                     );
                   })}
@@ -246,14 +277,14 @@ export default function AlertsPage() {
 
               <div>
                 <label className="block text-sm text-dark-400 mb-2">
-                  Limite ({alertTypeConfig[newRule.type as AlertType]?.unit || '%'})
+                  Valor ({alertTypeConfig[newAlert.type]?.unit || '$'})
                 </label>
                 <input
                   type="number"
                   className="input w-full"
-                  value={newRule.threshold || ''}
-                  onChange={(e) => setNewRule({ ...newRule, threshold: Number(e.target.value) })}
-                  placeholder="Ex: 10"
+                  value={newAlert.threshold || ''}
+                  onChange={(e) => setNewAlert({ ...newAlert, threshold: Number(e.target.value) })}
+                  placeholder="Ex: 1000"
                 />
               </div>
 
@@ -263,10 +294,10 @@ export default function AlertsPage() {
                 </button>
                 <button
                   className="btn btn-primary flex-1"
-                  onClick={handleAddRule}
-                  disabled={!newRule.poolId || !newRule.threshold}
+                  onClick={handleCreate}
+                  disabled={!newAlert.threshold || createMutation.isPending}
                 >
-                  Criar Alerta
+                  {createMutation.isPending ? 'Criando...' : 'Criar Alerta'}
                 </button>
               </div>
             </div>

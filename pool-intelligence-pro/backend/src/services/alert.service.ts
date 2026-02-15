@@ -222,19 +222,33 @@ export class AlertService {
   getStats(): { rulesCount: number; recentAlertsCount: number; triggersToday: number } {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     let triggersToday = 0;
     for (const rule of this.rules.values()) {
       if (rule.lastTriggered && rule.lastTriggered >= today) {
         triggersToday += rule.triggerCount;
       }
     }
-    
+
     return {
       rulesCount: this.rules.size,
       recentAlertsCount: this.recentAlerts.length,
       triggersToday,
     };
+  }
+
+  // Get all rules
+  getRules(): { id: string; rule: AlertRule }[] {
+    const rules: { id: string; rule: AlertRule }[] = [];
+    for (const [id, rule] of this.rules) {
+      rules.push({ id, rule });
+    }
+    return rules;
+  }
+
+  // Get recent alerts
+  getRecentAlerts(): AlertEvent[] {
+    return this.recentAlerts;
   }
 }
 

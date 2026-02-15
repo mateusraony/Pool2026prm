@@ -55,14 +55,33 @@ router.get('/pools', async (req, res) => {
 router.get('/pools/:chain/:address', async (req, res) => {
   try {
     const { chain, address } = req.params;
+
+    // First check if we have this pool in radar results (most common case)
+    const radarResults = getLatestRadarResults();
+    const fromRadar = radarResults.find(r =>
+      r.pool.chain === chain &&
+      (r.pool.poolAddress === address || r.pool.externalId === address)
+    );
+
+    if (fromRadar) {
+      return res.json({
+        success: true,
+        data: { pool: fromRadar.pool, score: fromRadar.score },
+        provider: 'radar-cache',
+        usedFallback: false,
+        timestamp: new Date(),
+      });
+    }
+
+    // If not in radar, try external providers
     const { pool, provider, usedFallback } = await getPoolWithFallback(chain, address);
-    
+
     if (!pool) {
       return res.status(404).json({ success: false, error: 'Pool not found' });
     }
-    
+
     const score = scoreService.calculateScore(pool);
-    
+
     res.json({
       success: true,
       data: { pool, score },
@@ -79,11 +98,22 @@ router.get('/pools/:chain/:address', async (req, res) => {
 // Get recommendations
 router.get('/recommendations', async (req, res) => {
   try {
-    const recommendations = getLatestRecommendations();
-    
+    const { mode, limit } = req.query;
+    let recommendations = getLatestRecommendations();
+
+    // Filter by mode if specified
+    if (mode && typeof mode === 'string') {
+      recommendations = recommendations.filter(r => r.mode === mode.toUpperCase());
+    }
+
+    // Limit results
+    const maxLimit = Math.min(parseInt(limit as string) || 10, 20);
+    recommendations = recommendations.slice(0, maxLimit);
+
     res.json({
       success: true,
       data: recommendations,
+      total: getLatestRecommendations().length,
       mode: config.defaults.mode,
       capital: config.defaults.capital,
       timestamp: new Date(),
@@ -181,6 +211,71 @@ router.get('/settings', async (req, res) => {
     },
     timestamp: new Date(),
   });
+});
+
+// Get all alert rules
+router.get('/alerts', async (req, res) => {
+  try {
+    const rules = alertService.getRules();
+    const recent = alertService.getRecentAlerts();
+
+    res.json({
+      success: true,
+      data: {
+        rules,
+        recentAlerts: recent.slice(0, 20),
+      },
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    logService.error('SYSTEM', 'GET /alerts failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// Create alert rule
+router.post('/alerts', async (req, res) => {
+  try {
+    const { poolId, type, threshold } = req.body;
+
+    if (!type || threshold === undefined) {
+      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+
+    const id = Date.now().toString();
+    alertService.addRule(id, {
+      type,
+      poolId,
+      value: threshold,
+    });
+
+    res.json({
+      success: true,
+      data: { id },
+      message: 'Alert rule created',
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    logService.error('SYSTEM', 'POST /alerts failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// Delete alert rule
+router.delete('/alerts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    alertService.removeRule(id);
+
+    res.json({
+      success: true,
+      message: 'Alert rule deleted',
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    logService.error('SYSTEM', 'DELETE /alerts/:id failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
 });
 
 export default router;

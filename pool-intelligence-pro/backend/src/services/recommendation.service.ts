@@ -10,29 +10,38 @@ interface RecommendationInput {
 }
 
 export class RecommendationService {
-  // Generate Top 3 recommendations
+  // Generate Top N recommendations (default 10)
   generateTop3(
     poolsWithScores: { pool: Pool; score: Score }[],
     mode: Mode,
-    capital: number
+    capital: number,
+    limit: number = 10
   ): Recommendation[] {
-    // Filter by mode compatibility and not suspect
-    const eligible = poolsWithScores
+    // Generate recommendations for ALL modes to allow filtering later
+    const allRecommendations: Recommendation[] = [];
+
+    // Sort by score
+    const sorted = poolsWithScores
       .filter(({ score }) => !score.isSuspect)
-      .filter(({ score }) => this.isModeCompatible(score.recommendedMode, mode))
       .sort((a, b) => b.score.total - a.score.total);
-    
-    // Take top 3
-    const top3 = eligible.slice(0, 3);
-    
-    return top3.map((item, index) => 
-      this.generateRecommendation({
-        pool: item.pool,
-        score: item.score,
-        mode,
-        capital,
-      }, index + 1)
-    );
+
+    // Generate for each pool with its recommended mode
+    for (let i = 0; i < Math.min(sorted.length, limit * 3); i++) {
+      const item = sorted[i];
+      const poolMode = item.score.recommendedMode;
+
+      allRecommendations.push(
+        this.generateRecommendation({
+          pool: item.pool,
+          score: item.score,
+          mode: poolMode,
+          capital,
+        }, i + 1)
+      );
+    }
+
+    // Return all (will be filtered by API if needed)
+    return allRecommendations.slice(0, limit * 3);
   }
 
   private isModeCompatible(recommended: Mode, selected: Mode): boolean {

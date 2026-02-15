@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { TrendingUp, Eye, AlertTriangle, ArrowRight, Check } from 'lucide-react';
+import { TrendingUp, Eye, AlertTriangle, ArrowRight, Check, Loader2, Star } from 'lucide-react';
 import { fetchPools, addToWatchlist, fetchWatchlist, Pool, Score } from '../api/client';
 import clsx from 'clsx';
 
@@ -26,11 +26,12 @@ function ModeBadge({ mode }: { mode: string }) {
   return <span className={clsx('badge', 'badge-' + config.color)}>{config.emoji} {config.label}</span>;
 }
 
-function PoolCard({ pool, score, index, isWatched, onAddToWatchlist }: {
+function PoolCard({ pool, score, index, isWatched, isAdding, onAddToWatchlist }: {
   pool: Pool;
   score: Score;
   index: number;
   isWatched: boolean;
+  isAdding: boolean;
   onAddToWatchlist: () => void;
 }) {
   const navigate = useNavigate();
@@ -86,18 +87,32 @@ function PoolCard({ pool, score, index, isWatched, onAddToWatchlist }: {
               Suspeito
             </div>
           )}
-          <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex gap-2">
             <button
               className={clsx(
-                'p-2 rounded-lg transition-colors',
-                isWatched ? 'bg-success-600 text-white' : 'bg-dark-600 hover:bg-dark-500'
+                'p-2 rounded-lg transition-all',
+                isWatched
+                  ? 'bg-warning-500 text-white'
+                  : isAdding
+                    ? 'bg-dark-600 animate-pulse'
+                    : 'bg-dark-600 hover:bg-dark-500 opacity-0 group-hover:opacity-100'
               )}
-              onClick={(e) => { e.stopPropagation(); onAddToWatchlist(); }}
+              onClick={(e) => { e.stopPropagation(); if (!isWatched && !isAdding) onAddToWatchlist(); }}
               title={isWatched ? 'Na watchlist' : 'Adicionar à watchlist'}
+              disabled={isAdding}
             >
-              {isWatched ? <Check className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              {isAdding ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : isWatched ? (
+                <Star className="w-4 h-4 fill-current" />
+              ) : (
+                <Star className="w-4 h-4" />
+              )}
             </button>
-            <button className="p-2 rounded-lg bg-primary-600 hover:bg-primary-500" onClick={(e) => { e.stopPropagation(); navigate(poolPath); }}>
+            <button
+              className="p-2 rounded-lg bg-primary-600 hover:bg-primary-500 opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={(e) => { e.stopPropagation(); navigate(poolPath); }}
+            >
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -121,15 +136,18 @@ export default function RadarPage() {
     queryFn: fetchWatchlist,
   });
 
+  const watchedIds = new Set(watchlist?.map(w => w.poolId) || []);
+
   const addMutation = useMutation({
     mutationFn: ({ poolId, chain, address }: { poolId: string; chain: string; address: string }) =>
       addToWatchlist(poolId, chain, address),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['watchlist'] });
     },
+    onError: (error) => {
+      console.error('Failed to add to watchlist:', error);
+    },
   });
-
-  const watchedIds = new Set(watchlist?.map(w => w.poolId) || []);
 
   return (
     <div className="space-y-6">
@@ -165,6 +183,7 @@ export default function RadarPage() {
               score={item.score}
               index={index}
               isWatched={watchedIds.has(item.pool.externalId)}
+              isAdding={addMutation.isPending && addMutation.variables?.poolId === item.pool.externalId}
               onAddToWatchlist={() => addMutation.mutate({
                 poolId: item.pool.externalId,
                 chain: item.pool.chain,
