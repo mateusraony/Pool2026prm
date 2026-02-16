@@ -95,7 +95,7 @@ function PoolCard({ pool, score, index, isWatched, isAdding, onAddToWatchlist }:
                   ? 'bg-warning-500 text-white'
                   : isAdding
                     ? 'bg-dark-600 animate-pulse'
-                    : 'bg-dark-600 hover:bg-dark-500 opacity-0 group-hover:opacity-100'
+                    : 'bg-dark-600 hover:bg-warning-500 hover:text-white'
               )}
               onClick={(e) => { e.stopPropagation(); if (!isWatched && !isAdding) onAddToWatchlist(); }}
               title={isWatched ? 'Na watchlist' : 'Adicionar à watchlist'}
@@ -110,8 +110,9 @@ function PoolCard({ pool, score, index, isWatched, isAdding, onAddToWatchlist }:
               )}
             </button>
             <button
-              className="p-2 rounded-lg bg-primary-600 hover:bg-primary-500 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="p-2 rounded-lg bg-primary-600 hover:bg-primary-500 transition-colors"
               onClick={(e) => { e.stopPropagation(); navigate(poolPath); }}
+              title="Simular"
             >
               <ArrowRight className="w-4 h-4" />
             </button>
