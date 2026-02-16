@@ -25,7 +25,8 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
   const [capital, setCapital] = useState(1000);
   const [customRange, setCustomRange] = useState<{ lower: number; upper: number } | null>(null);
 
-  const currentPrice = pool.price || 1000;
+  // Use pool price or estimate from TVL (more realistic than flat 1000)
+  const currentPrice = pool.price || (pool.tvl > 0 ? Math.max(1, pool.tvl / 50000) : 100);
   const config = modeConfig[mode];
 
   // Calculate range based on mode or custom

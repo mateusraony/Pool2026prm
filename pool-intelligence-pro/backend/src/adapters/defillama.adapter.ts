@@ -72,7 +72,27 @@ export class DefiLlamaAdapter extends BaseAdapter {
     const symbols = data.symbol.replace('/', '-').split('-');
     const token0Symbol = symbols[0] || 'UNKNOWN';
     const token1Symbol = symbols[1] || 'UNKNOWN';
-    
+
+    // Estimate price based on TVL and typical pool composition
+    // For stablecoin pairs, price ~= 1
+    // For ETH pairs, estimate based on TVL / typical ETH amount
+    let estimatedPrice = 1;
+    const isStablePair = ['USDC', 'USDT', 'DAI', 'BUSD', 'FRAX'].some(
+      s => token0Symbol.includes(s) || token1Symbol.includes(s)
+    );
+    if (!isStablePair && data.tvlUsd > 0) {
+      // Rough estimate: assume 50% of TVL is token0
+      // For ETH-like tokens, estimate ~$2500
+      if (['ETH', 'WETH', 'stETH', 'wstETH'].some(s => token0Symbol.includes(s))) {
+        estimatedPrice = 2500;
+      } else if (['BTC', 'WBTC', 'cbBTC'].some(s => token0Symbol.includes(s))) {
+        estimatedPrice = 45000;
+      } else {
+        // Generic estimate from TVL
+        estimatedPrice = Math.max(1, data.tvlUsd / 100000);
+      }
+    }
+
     return {
       externalId: data.pool,
       chain: this.normalizeChain(data.chain),
@@ -88,6 +108,7 @@ export class DefiLlamaAdapter extends BaseAdapter {
         address: data.underlyingTokens?.[1] || '',
         decimals: 18,
       },
+      price: estimatedPrice,
       tvl: data.tvlUsd,
       volume24h: data.volumeUsd1d || 0,
       volume7d: data.volumeUsd7d,
