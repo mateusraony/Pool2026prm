@@ -1,6 +1,4 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import clsx from 'clsx';
 
 interface PricePoint {
   price: number;
@@ -44,7 +42,7 @@ export default function InteractiveChart({
   token0Symbol,
   token1Symbol,
 }: InteractiveChartProps) {
-  const svgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState<'lower' | 'upper' | null>(null);
   const [hoveredHandle, setHoveredHandle] = useState<'lower' | 'upper' | null>(null);
 
@@ -63,10 +61,15 @@ export default function InteractiveChart({
     return padding.left + ((price - minPrice) / (maxPrice - minPrice)) * chartWidth;
   }, [minPrice, maxPrice, chartWidth]);
 
-  const xToPrice = useCallback((x: number) => {
+  const xToPrice = useCallback((clientX: number) => {
+    if (!containerRef.current) return currentPrice;
+    const rect = containerRef.current.getBoundingClientRect();
+    const svgWidth = rect.width;
+    const scale = width / svgWidth;
+    const x = (clientX - rect.left) * scale;
     const ratio = (x - padding.left) / chartWidth;
     return minPrice + ratio * (maxPrice - minPrice);
-  }, [minPrice, maxPrice, chartWidth]);
+  }, [minPrice, maxPrice, chartWidth, currentPrice]);
 
   const liquidityToY = useCallback((liquidity: number) => {
     const maxLiquidity = Math.max(...liquidityData.map(d => d.liquidity));
@@ -92,16 +95,16 @@ export default function InteractiveChart({
     return `M ${rangePoints.join(' L ')} L ${baseline} Z`;
   }, [liquidityData, rangeLower, rangeUpper, priceToX, liquidityToY, chartHeight]);
 
-  const handleMouseDown = useCallback((handle: 'lower' | 'upper') => {
+  const handleStart = useCallback((handle: 'lower' | 'upper', e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     setDragging(handle);
   }, []);
 
-  const handleMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
-    if (!dragging || !svgRef.current) return;
+  const handleMove = useCallback((clientX: number) => {
+    if (!dragging) return;
 
-    const rect = svgRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    let newPrice = xToPrice(x);
+    let newPrice = xToPrice(clientX);
 
     // Clamp to valid range
     newPrice = Math.max(minPrice, Math.min(maxPrice, newPrice));
@@ -119,16 +122,50 @@ export default function InteractiveChart({
     }
   }, [dragging, xToPrice, minPrice, maxPrice, rangeLower, rangeUpper, onRangeChange]);
 
-  const handleMouseUp = useCallback(() => {
+  const handleEnd = useCallback(() => {
     setDragging(null);
   }, []);
 
+  // Global mouse/touch event listeners for smooth dragging
   useEffect(() => {
-    if (dragging) {
-      window.addEventListener('mouseup', handleMouseUp);
-      return () => window.removeEventListener('mouseup', handleMouseUp);
-    }
-  }, [dragging, handleMouseUp]);
+    if (!dragging) return;
+
+    const onMouseMove = (e: MouseEvent) => {
+      e.preventDefault();
+      handleMove(e.clientX);
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        handleMove(e.touches[0].clientX);
+      }
+    };
+
+    const onEnd = () => {
+      handleEnd();
+    };
+
+    // Add listeners to window for smooth dragging even outside SVG
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onEnd);
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onEnd);
+    window.addEventListener('touchcancel', onEnd);
+
+    // Change cursor while dragging
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onEnd);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onEnd);
+      window.removeEventListener('touchcancel', onEnd);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [dragging, handleMove, handleEnd]);
 
   const rangePercent = ((rangeUpper - rangeLower) / currentPrice * 100).toFixed(1);
   const inRangePercent = useMemo(() => {
@@ -144,7 +181,7 @@ export default function InteractiveChart({
   };
 
   return (
-    <div className="bg-dark-800 rounded-xl p-4 border border-dark-600">
+    <div className="bg-dark-800 rounded-xl p-4 border border-dark-600" ref={containerRef}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-sm flex items-center gap-2">
           📊 Distribuicao de Liquidez
@@ -163,10 +200,9 @@ export default function InteractiveChart({
       </div>
 
       <svg
-        ref={svgRef}
         viewBox={`0 0 ${width} ${height}`}
-        className="w-full h-auto cursor-crosshair select-none"
-        onMouseMove={handleMouseMove}
+        className="w-full h-auto select-none touch-none"
+        style={{ cursor: dragging ? 'ew-resize' : 'default' }}
       >
         {/* Grid lines */}
         {[0, 25, 50, 75, 100].map(percent => {
@@ -219,34 +255,44 @@ export default function InteractiveChart({
           ${formatPrice(currentPrice)}
         </text>
 
-        {/* Lower range handle */}
+        {/* Lower range handle - bigger touch target */}
         <g
-          onMouseDown={() => handleMouseDown('lower')}
+          onMouseDown={(e) => handleStart('lower', e)}
+          onTouchStart={(e) => handleStart('lower', e)}
           onMouseEnter={() => setHoveredHandle('lower')}
           onMouseLeave={() => setHoveredHandle(null)}
           style={{ cursor: 'ew-resize' }}
         >
+          {/* Invisible larger touch target */}
+          <rect
+            x={priceToX(rangeLower) - 25}
+            y={padding.top}
+            width={50}
+            height={chartHeight}
+            fill="transparent"
+          />
           <line
             x1={priceToX(rangeLower)}
             x2={priceToX(rangeLower)}
             y1={padding.top}
             y2={padding.top + chartHeight}
             stroke={hoveredHandle === 'lower' || dragging === 'lower' ? '#f59e0b' : '#8b5cf6'}
-            strokeWidth={hoveredHandle === 'lower' || dragging === 'lower' ? 3 : 2}
+            strokeWidth={hoveredHandle === 'lower' || dragging === 'lower' ? 4 : 2}
           />
           <rect
-            x={priceToX(rangeLower) - 20}
-            y={padding.top + chartHeight - 30}
-            width={40}
-            height={24}
-            rx={4}
+            x={priceToX(rangeLower) - 24}
+            y={padding.top + chartHeight - 32}
+            width={48}
+            height={28}
+            rx={6}
             fill={hoveredHandle === 'lower' || dragging === 'lower' ? '#f59e0b' : '#8b5cf6'}
+            className="drop-shadow-lg"
           />
           <text
             x={priceToX(rangeLower)}
             y={padding.top + chartHeight - 13}
             textAnchor="middle"
-            className="fill-white text-xs font-bold"
+            className="fill-white text-xs font-bold pointer-events-none"
           >
             MIN
           </text>
@@ -254,41 +300,59 @@ export default function InteractiveChart({
           <circle
             cx={priceToX(rangeLower)}
             cy={padding.top + chartHeight / 2}
-            r={hoveredHandle === 'lower' || dragging === 'lower' ? 10 : 8}
+            r={hoveredHandle === 'lower' || dragging === 'lower' ? 14 : 10}
             fill={hoveredHandle === 'lower' || dragging === 'lower' ? '#f59e0b' : '#8b5cf6'}
             stroke="#1f2937"
-            strokeWidth={2}
+            strokeWidth={3}
+            className="drop-shadow-lg"
+          />
+          {/* Inner circle */}
+          <circle
+            cx={priceToX(rangeLower)}
+            cy={padding.top + chartHeight / 2}
+            r={4}
+            fill="#1f2937"
           />
         </g>
 
-        {/* Upper range handle */}
+        {/* Upper range handle - bigger touch target */}
         <g
-          onMouseDown={() => handleMouseDown('upper')}
+          onMouseDown={(e) => handleStart('upper', e)}
+          onTouchStart={(e) => handleStart('upper', e)}
           onMouseEnter={() => setHoveredHandle('upper')}
           onMouseLeave={() => setHoveredHandle(null)}
           style={{ cursor: 'ew-resize' }}
         >
+          {/* Invisible larger touch target */}
+          <rect
+            x={priceToX(rangeUpper) - 25}
+            y={padding.top}
+            width={50}
+            height={chartHeight}
+            fill="transparent"
+          />
           <line
             x1={priceToX(rangeUpper)}
             x2={priceToX(rangeUpper)}
             y1={padding.top}
             y2={padding.top + chartHeight}
             stroke={hoveredHandle === 'upper' || dragging === 'upper' ? '#f59e0b' : '#8b5cf6'}
-            strokeWidth={hoveredHandle === 'upper' || dragging === 'upper' ? 3 : 2}
+            strokeWidth={hoveredHandle === 'upper' || dragging === 'upper' ? 4 : 2}
           />
           <rect
-            x={priceToX(rangeUpper) - 20}
-            y={padding.top + chartHeight - 30}
-            width={40}
-            height={24}
-            rx={4}
+            x={priceToX(rangeUpper) - 24}
+            y={padding.top + chartHeight - 32}
+            width={48}
+            height={28}
+            rx={6}
             fill={hoveredHandle === 'upper' || dragging === 'upper' ? '#f59e0b' : '#8b5cf6'}
+            className="drop-shadow-lg"
           />
           <text
             x={priceToX(rangeUpper)}
             y={padding.top + chartHeight - 13}
             textAnchor="middle"
-            className="fill-white text-xs font-bold"
+            className="fill-white text-xs font-bold pointer-events-none"
           >
             MAX
           </text>
@@ -296,16 +360,42 @@ export default function InteractiveChart({
           <circle
             cx={priceToX(rangeUpper)}
             cy={padding.top + chartHeight / 2}
-            r={hoveredHandle === 'upper' || dragging === 'upper' ? 10 : 8}
+            r={hoveredHandle === 'upper' || dragging === 'upper' ? 14 : 10}
             fill={hoveredHandle === 'upper' || dragging === 'upper' ? '#f59e0b' : '#8b5cf6'}
             stroke="#1f2937"
-            strokeWidth={2}
+            strokeWidth={3}
+            className="drop-shadow-lg"
+          />
+          {/* Inner circle */}
+          <circle
+            cx={priceToX(rangeUpper)}
+            cy={padding.top + chartHeight / 2}
+            r={4}
+            fill="#1f2937"
           />
         </g>
 
-        {/* X-axis labels */}
-        <text x={padding.left} y={height - 10} className="fill-dark-400 text-xs">${formatPrice(minPrice)}</text>
-        <text x={width - padding.right} y={height - 10} textAnchor="end" className="fill-dark-400 text-xs">${formatPrice(maxPrice)}</text>
+        {/* Price labels at handles */}
+        <text
+          x={priceToX(rangeLower)}
+          y={height - 8}
+          textAnchor="middle"
+          className="fill-primary-400 text-xs font-mono"
+        >
+          ${formatPrice(rangeLower)}
+        </text>
+        <text
+          x={priceToX(rangeUpper)}
+          y={height - 8}
+          textAnchor="middle"
+          className="fill-primary-400 text-xs font-mono"
+        >
+          ${formatPrice(rangeUpper)}
+        </text>
+
+        {/* X-axis labels (min/max) */}
+        <text x={padding.left} y={height - 8} className="fill-dark-400 text-xs">${formatPrice(minPrice)}</text>
+        <text x={width - padding.right} y={height - 8} textAnchor="end" className="fill-dark-400 text-xs">${formatPrice(maxPrice)}</text>
 
         {/* Gradients */}
         <defs>
@@ -339,7 +429,7 @@ export default function InteractiveChart({
       <div className="mt-3 text-center text-sm text-dark-400">
         <span className="text-success-400 font-medium">{inRangePercent}%</span> tempo estimado no range
         <span className="mx-2">•</span>
-        Arraste os handles para ajustar
+        🖱️ Arraste os handles <span className="text-primary-400">MIN</span> e <span className="text-primary-400">MAX</span> para ajustar
       </div>
     </div>
   );
