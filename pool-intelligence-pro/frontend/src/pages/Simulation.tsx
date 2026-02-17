@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { TrendingUp, TrendingDown, Clock, Fuel, DollarSign, AlertTriangle, ArrowLeft, ExternalLink } from 'lucide-react';
-import { fetchPool, fetchPools, Pool, Score } from '../api/client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { TrendingUp, TrendingDown, Clock, Fuel, DollarSign, AlertTriangle, ArrowLeft, ExternalLink, Bell, BellRing, Check } from 'lucide-react';
+import { fetchPool, fetchPools, createRangePosition, fetchRangePositions, deleteRangePosition, Pool, Score } from '../api/client';
 import InteractiveChart from '../components/charts/InteractiveChart';
 import clsx from 'clsx';
 
@@ -21,13 +21,64 @@ const modeConfig = {
 };
 
 function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
+  const queryClient = useQueryClient();
   const [mode, setMode] = useState<Mode>(score.recommendedMode as Mode || 'NORMAL');
   const [capital, setCapital] = useState(1000);
   const [customRange, setCustomRange] = useState<{ lower: number; upper: number } | null>(null);
+  const [monitorSuccess, setMonitorSuccess] = useState(false);
 
   // Use pool price or estimate from TVL (more realistic than flat 1000)
   const currentPrice = pool.price || (pool.tvl > 0 ? Math.max(1, pool.tvl / 50000) : 100);
   const config = modeConfig[mode];
+
+  // Check if this pool is already being monitored
+  const { data: rangePositions } = useQuery({
+    queryKey: ['ranges'],
+    queryFn: fetchRangePositions,
+  });
+
+  const isMonitoring = rangePositions?.some(p => p.poolId === pool.externalId && p.isActive);
+
+  // Create range monitor mutation
+  const createMonitorMutation = useMutation({
+    mutationFn: () => createRangePosition({
+      poolId: pool.externalId,
+      chain: pool.chain,
+      poolAddress: pool.poolAddress,
+      token0Symbol: pool.token0.symbol,
+      token1Symbol: pool.token1.symbol,
+      rangeLower,
+      rangeUpper,
+      entryPrice: currentPrice,
+      capital,
+      mode,
+      alertThreshold: 5, // Alert when 5% from edge
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ranges'] });
+      setMonitorSuccess(true);
+      setTimeout(() => setMonitorSuccess(false), 3000);
+    },
+  });
+
+  // Delete range monitor mutation
+  const deleteMonitorMutation = useMutation({
+    mutationFn: (id: string) => deleteRangePosition(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ranges'] });
+    },
+  });
+
+  const handleMonitorRange = () => {
+    if (isMonitoring) {
+      const position = rangePositions?.find(p => p.poolId === pool.externalId && p.isActive);
+      if (position) {
+        deleteMonitorMutation.mutate(position.id);
+      }
+    } else {
+      createMonitorMutation.mutate();
+    }
+  };
 
   // Calculate range based on mode or custom
   const rangeLower = customRange?.lower ?? currentPrice * (1 - config.rangePercent / 100);
@@ -265,15 +316,61 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
               Retorno = Fees ({metrics.feesPercent.toFixed(2)}%) - IL ({metrics.ilPercent.toFixed(2)}%) - Gas ({((metrics.gasEstimate / capital) * 100).toFixed(2)}%)
             </div>
 
-            <a
-              href={uniswapUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-primary w-full py-4 text-lg flex items-center justify-center gap-2"
-            >
-              🚀 Abrir no Uniswap
-              <ExternalLink className="w-4 h-4" />
-            </a>
+            <div className="grid grid-cols-2 gap-3">
+              <a
+                href={uniswapUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-primary py-4 text-lg flex items-center justify-center gap-2"
+              >
+                🚀 Uniswap
+                <ExternalLink className="w-4 h-4" />
+              </a>
+
+              <button
+                onClick={handleMonitorRange}
+                disabled={createMonitorMutation.isPending || deleteMonitorMutation.isPending}
+                className={clsx(
+                  'py-4 text-lg flex items-center justify-center gap-2 rounded-xl font-semibold transition-all',
+                  isMonitoring
+                    ? 'bg-success-600 hover:bg-success-500 text-white'
+                    : monitorSuccess
+                      ? 'bg-success-600 text-white'
+                      : 'bg-warning-600 hover:bg-warning-500 text-white'
+                )}
+              >
+                {createMonitorMutation.isPending || deleteMonitorMutation.isPending ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    {isMonitoring ? 'Removendo...' : 'Ativando...'}
+                  </>
+                ) : monitorSuccess ? (
+                  <>
+                    <Check className="w-5 h-5" />
+                    Monitorando!
+                  </>
+                ) : isMonitoring ? (
+                  <>
+                    <BellRing className="w-5 h-5" />
+                    Monitorando
+                  </>
+                ) : (
+                  <>
+                    <Bell className="w-5 h-5" />
+                    Monitorar Range
+                  </>
+                )}
+              </button>
+            </div>
+
+            {isMonitoring && (
+              <div className="bg-success-500/10 border border-success-500/30 rounded-lg p-3 text-sm text-center">
+                <BellRing className="w-4 h-4 inline mr-2 text-success-400" />
+                <span className="text-success-400">
+                  Voce sera notificado no Telegram quando o preco se aproximar das bordas do range!
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>

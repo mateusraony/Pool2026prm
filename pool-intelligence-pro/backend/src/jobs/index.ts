@@ -4,6 +4,7 @@ import { runWatchlistJob } from './watchlist.job.js';
 import { scoreService } from '../services/score.service.js';
 import { recommendationService } from '../services/recommendation.service.js';
 import { alertService } from '../services/alert.service.js';
+import { rangeMonitorService } from '../services/range.service.js';
 import { telegramBot } from '../bot/telegram.js';
 import { getAllProvidersHealth } from '../adapters/index.js';
 import { logService } from '../services/log.service.js';
@@ -91,18 +92,30 @@ async function healthJobRunner() {
   try {
     const health = await getAllProvidersHealth();
     const unhealthy = health.filter(h => !h.isHealthy);
-    
+
     if (unhealthy.length > 0) {
       logService.warn('SYSTEM', 'Unhealthy providers detected', { unhealthy });
-      
+
       if (unhealthy.length >= health.length / 2) {
-        await telegramBot.sendHealthAlert('DEGRADED', 
+        await telegramBot.sendHealthAlert('DEGRADED',
           'Provedores com problema: ' + unhealthy.map(h => h.name).join(', ')
         );
       }
     }
   } catch (error) {
     logService.error('SYSTEM', 'Health check failed', { error });
+  }
+}
+
+async function rangeCheckJobRunner() {
+  try {
+    const stats = rangeMonitorService.getStats();
+    if (stats.activePositions === 0) return;
+
+    await rangeMonitorService.checkAllPositions();
+    logService.info('SYSTEM', 'Range check completed', { activePositions: stats.activePositions });
+  } catch (error) {
+    logService.error('SYSTEM', 'Range check job failed', { error });
   }
 }
 
@@ -122,6 +135,9 @@ export function initializeJobs() {
   // Health check: every minute
   cron.schedule('* * * * *', healthJobRunner);
 
+  // Range check: every 2 minutes (check if user positions are near exit)
+  cron.schedule('*/2 * * * *', rangeCheckJobRunner);
+
   // Run initial jobs in sequence
   setTimeout(async () => {
     await radarJobRunner();
@@ -129,5 +145,5 @@ export function initializeJobs() {
     setTimeout(recommendationJobRunner, 2000);
   }, 3000);
 
-  logService.info('SYSTEM', 'Jobs initialized');
+  logService.info('SYSTEM', 'Jobs initialized (including range monitoring)');
 }

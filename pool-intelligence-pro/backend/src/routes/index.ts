@@ -4,12 +4,13 @@ import { scoreService } from '../services/score.service.js';
 import { cacheService } from '../services/cache.service.js';
 import { logService } from '../services/log.service.js';
 import { alertService } from '../services/alert.service.js';
-import { 
-  getLatestRadarResults, 
-  getLatestRecommendations, 
-  getWatchlist, 
-  addToWatchlist, 
-  removeFromWatchlist 
+import { rangeMonitorService } from '../services/range.service.js';
+import {
+  getLatestRadarResults,
+  getLatestRecommendations,
+  getWatchlist,
+  addToWatchlist,
+  removeFromWatchlist
 } from '../jobs/index.js';
 import { config } from '../config/index.js';
 
@@ -274,6 +275,113 @@ router.delete('/alerts/:id', async (req, res) => {
     });
   } catch (error) {
     logService.error('SYSTEM', 'DELETE /alerts/:id failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// ============================================
+// RANGE MONITORING ROUTES
+// ============================================
+
+// Get all range positions
+router.get('/ranges', async (req, res) => {
+  try {
+    const positions = rangeMonitorService.getPositions();
+    const stats = rangeMonitorService.getStats();
+
+    res.json({
+      success: true,
+      data: positions,
+      stats,
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    logService.error('SYSTEM', 'GET /ranges failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// Create range position to monitor
+router.post('/ranges', async (req, res) => {
+  try {
+    const {
+      poolId,
+      chain,
+      poolAddress,
+      token0Symbol,
+      token1Symbol,
+      rangeLower,
+      rangeUpper,
+      entryPrice,
+      capital,
+      mode,
+      alertThreshold,
+    } = req.body;
+
+    if (!poolId || !rangeLower || !rangeUpper) {
+      return res.status(400).json({ success: false, error: 'Missing required fields: poolId, rangeLower, rangeUpper' });
+    }
+
+    const position = rangeMonitorService.createPosition({
+      poolId,
+      chain: chain || 'ethereum',
+      poolAddress: poolAddress || poolId,
+      token0Symbol: token0Symbol || 'TOKEN0',
+      token1Symbol: token1Symbol || 'TOKEN1',
+      rangeLower: Number(rangeLower),
+      rangeUpper: Number(rangeUpper),
+      entryPrice: Number(entryPrice) || (Number(rangeLower) + Number(rangeUpper)) / 2,
+      capital: Number(capital) || 1000,
+      mode: mode || 'NORMAL',
+      alertThreshold: Number(alertThreshold) || 5, // Default 5% from edge
+    });
+
+    res.json({
+      success: true,
+      data: position,
+      message: 'Range monitoring started! You will be notified when price approaches the edges.',
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    logService.error('SYSTEM', 'POST /ranges failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// Delete range position
+router.delete('/ranges/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = rangeMonitorService.deletePosition(id);
+
+    if (!deleted) {
+      return res.status(404).json({ success: false, error: 'Position not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Range monitoring stopped',
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    logService.error('SYSTEM', 'DELETE /ranges/:id failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// Manually trigger range check (for testing)
+router.post('/ranges/check', async (req, res) => {
+  try {
+    await rangeMonitorService.checkAllPositions();
+
+    res.json({
+      success: true,
+      message: 'Range check completed',
+      stats: rangeMonitorService.getStats(),
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    logService.error('SYSTEM', 'POST /ranges/check failed', { error });
     res.status(500).json({ success: false, error: 'Internal error' });
   }
 });

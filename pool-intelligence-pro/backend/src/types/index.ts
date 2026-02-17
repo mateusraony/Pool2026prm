@@ -106,7 +106,7 @@ export interface Recommendation {
 // ALERT TYPES
 // ============================================
 
-export type AlertType = 
+export type AlertType =
   | 'PRICE_ABOVE'
   | 'PRICE_BELOW'
   | 'RSI_ABOVE'
@@ -117,6 +117,7 @@ export type AlertType =
   | 'LIQUIDITY_FLIGHT'
   | 'VOLATILITY_SPIKE'
   | 'OUT_OF_RANGE'
+  | 'NEAR_RANGE_EXIT'
   | 'NEW_RECOMMENDATION';
 
 export interface AlertTrigger {
@@ -132,6 +133,28 @@ export interface AlertEvent {
   message: string;
   data: Record<string, unknown>;
   timestamp: Date;
+}
+
+// ============================================
+// RANGE POSITION TYPES
+// ============================================
+
+export interface RangePosition {
+  id: string;
+  poolId: string;
+  chain: string;
+  poolAddress: string;
+  token0Symbol: string;
+  token1Symbol: string;
+  rangeLower: number;
+  rangeUpper: number;
+  entryPrice: number;
+  capital: number;
+  mode: Mode;
+  alertThreshold: number; // % before edge to alert (default 5%)
+  createdAt: Date;
+  lastCheckedAt?: Date;
+  isActive: boolean;
 }
 
 // ============================================

@@ -144,3 +144,51 @@ export async function createAlert(poolId: string | undefined, type: string, thre
 export async function deleteAlert(id: string): Promise<void> {
   await api.delete('/alerts/' + id);
 }
+
+// ============================================
+// RANGE MONITORING
+// ============================================
+
+export interface RangePosition {
+  id: string;
+  poolId: string;
+  chain: string;
+  poolAddress: string;
+  token0Symbol: string;
+  token1Symbol: string;
+  rangeLower: number;
+  rangeUpper: number;
+  entryPrice: number;
+  capital: number;
+  mode: 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE';
+  alertThreshold: number;
+  createdAt: string;
+  lastCheckedAt?: string;
+  isActive: boolean;
+}
+
+export async function fetchRangePositions(): Promise<RangePosition[]> {
+  const { data } = await api.get('/ranges');
+  return data.data || [];
+}
+
+export async function createRangePosition(params: {
+  poolId: string;
+  chain: string;
+  poolAddress: string;
+  token0Symbol: string;
+  token1Symbol: string;
+  rangeLower: number;
+  rangeUpper: number;
+  entryPrice: number;
+  capital: number;
+  mode: string;
+  alertThreshold?: number;
+}): Promise<RangePosition> {
+  const { data } = await api.post('/ranges', params);
+  return data.data;
+}
+
+export async function deleteRangePosition(id: string): Promise<void> {
+  await api.delete('/ranges/' + id);
+}
