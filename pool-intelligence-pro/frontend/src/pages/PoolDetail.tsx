@@ -332,7 +332,27 @@ export default function PoolDetailPage() {
     { key: 'fees', label: 'Fees', color: '#f59e0b' },
   ] as const;
 
-  const addLiquidityUrl = `https://app.uniswap.org/#/add/${pool.token0.address}/${pool.token1.address}`;
+  // Build correct Uniswap URL with chain and fee tier
+  const chainMap: Record<string, string> = {
+    ethereum: 'mainnet',
+    arbitrum: 'arbitrum',
+    polygon: 'polygon',
+    base: 'base',
+    optimism: 'optimism',
+  };
+  const uniChain = chainMap[pool.chain.toLowerCase()] || 'mainnet';
+  // feeTier should be in basis points (500, 3000, 10000) - convert from percentage if needed
+  const feeTierBps = pool.feeTier >= 1 ? Math.round(pool.feeTier * 10000) : pool.feeTier;
+  const token0Addr = pool.token0?.address || 'ETH';
+  const token1Addr = pool.token1?.address || 'ETH';
+
+  const addLiquidityUrl = pool.protocol.toLowerCase().includes('uniswap')
+    ? `https://app.uniswap.org/add/${token0Addr}/${token1Addr}/${feeTierBps}?chain=${uniChain}`
+    : pool.protocol.toLowerCase().includes('pancake')
+    ? `https://pancakeswap.finance/add/${token0Addr}/${token1Addr}`
+    : pool.protocol.toLowerCase().includes('sushi')
+    ? `https://app.sushi.com/add/${token0Addr}/${token1Addr}`
+    : `https://app.uniswap.org/add/${token0Addr}/${token1Addr}/${feeTierBps}?chain=${uniChain}`;
 
   return (
     <div className="p-4 lg:p-6 space-y-5 max-w-5xl">
