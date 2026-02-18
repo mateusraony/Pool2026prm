@@ -5,6 +5,7 @@ import clsx from 'clsx';
 
 const navItems = [
   { path: '/pools', icon: '🏊', label: 'Pool Intelligence' },
+  { path: '/token-analyzer', icon: '🔍', label: 'Token Analyzer' },
   { path: '/radar', icon: '📡', label: 'Radar' },
   { path: '/positions', icon: '💼', label: 'Minhas Posições' },
   { path: '/recommendations', icon: '🧠', label: 'Recomendações' },

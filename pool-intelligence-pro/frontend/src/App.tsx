@@ -10,6 +10,7 @@ import SettingsPage from './pages/Settings';
 import StatusPage from './pages/Status';
 import PoolsPage from './pages/Pools';
 import PoolDetailPage from './pages/PoolDetail';
+import TokenAnalyzerPage from './pages/TokenAnalyzer';
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
           <Route index element={<Navigate to="/pools" replace />} />
           <Route path="pools" element={<PoolsPage />} />
           <Route path="pools/:chain/:address" element={<PoolDetailPage />} />
+          <Route path="token-analyzer" element={<TokenAnalyzerPage />} />
           <Route path="radar" element={<RadarPage />} />
           <Route path="positions" element={<PositionsPage />} />
           <Route path="recommendations" element={<RecommendationsPage />} />
