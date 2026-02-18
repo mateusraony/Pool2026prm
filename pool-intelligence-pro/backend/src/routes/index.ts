@@ -101,8 +101,24 @@ router.get('/pools/:chain/:address', async (req, res) => {
 // Get recommendations
 router.get('/recommendations', async (req, res) => {
   try {
-    const { mode, limit } = req.query;
+    const { mode, limit, tokens, useTokenFilter } = req.query;
     let recommendations = getLatestRecommendations();
+
+    // Apply token filter from settings if useTokenFilter=true or if no tokens query param
+    const shouldUseSettingsFilter = useTokenFilter === 'true' || useTokenFilter === '1';
+    const tokenFilterFromQuery = tokens ? (tokens as string).split(',').map(t => t.trim().toUpperCase()) : null;
+
+    if (shouldUseSettingsFilter && notificationSettingsService.hasTokenFilter()) {
+      recommendations = recommendations.filter(r =>
+        notificationSettingsService.matchesTokenFilter(r.pool.token0.symbol, r.pool.token1.symbol)
+      );
+    } else if (tokenFilterFromQuery && tokenFilterFromQuery.length > 0) {
+      recommendations = recommendations.filter(r => {
+        const t0 = r.pool.token0.symbol.toUpperCase();
+        const t1 = r.pool.token1.symbol.toUpperCase();
+        return tokenFilterFromQuery.some(f => f === t0 || f === t1);
+      });
+    }
 
     // Filter by mode if specified
     if (mode && typeof mode === 'string') {
@@ -117,8 +133,10 @@ router.get('/recommendations', async (req, res) => {
       success: true,
       data: recommendations,
       total: getLatestRecommendations().length,
+      filteredTotal: recommendations.length,
       mode: config.defaults.mode,
       capital: config.defaults.capital,
+      tokenFilters: notificationSettingsService.getTokenFilters(),
       timestamp: new Date(),
     });
   } catch (error) {
@@ -239,7 +257,7 @@ router.put('/settings/notifications', async (req, res) => {
   }
 });
 
-// Send test Telegram message
+// Send test Telegram message (simple connection test)
 router.post('/settings/telegram/test', async (req, res) => {
   try {
     const appUrl = notificationSettingsService.getAppUrl();
@@ -257,6 +275,81 @@ router.post('/settings/telegram/test', async (req, res) => {
     }
   } catch (error) {
     logService.error('SYSTEM', 'POST /settings/telegram/test failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// Send top recommendations via Telegram (real data test)
+router.post('/settings/telegram/test-recommendations', async (req, res) => {
+  try {
+    const { limit = 5, useTokenFilter = true } = req.body;
+    let recommendations = getLatestRecommendations();
+
+    if (recommendations.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nenhuma recomendação disponível. Aguarde o sistema coletar dados das pools.',
+      });
+    }
+
+    // Apply token filter from settings
+    if (useTokenFilter && notificationSettingsService.hasTokenFilter()) {
+      recommendations = recommendations.filter(r =>
+        notificationSettingsService.matchesTokenFilter(r.pool.token0.symbol, r.pool.token1.symbol)
+      );
+    }
+
+    if (recommendations.length === 0) {
+      const tokens = notificationSettingsService.getTokenFilters();
+      return res.status(400).json({
+        success: false,
+        error: `Nenhuma pool encontrada com os tokens filtrados: ${tokens.join(', ')}. Adicione mais tokens ou remova o filtro.`,
+        tokenFilters: tokens,
+      });
+    }
+
+    // Limit
+    const top = recommendations.slice(0, Math.min(limit, 10));
+    const tokenFilters = notificationSettingsService.getTokenFilters();
+    const filterText = tokenFilters.length > 0 ? `Filtros: ${tokenFilters.join(', ')}` : 'Sem filtros de token';
+
+    // Build message
+    let msg = `🏆 <b>TOP ${top.length} RECOMENDAÇÕES DE POOLS</b>\n`;
+    msg += `📅 ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}\n`;
+    msg += `🔍 ${filterText}\n\n`;
+
+    for (const rec of top) {
+      const pool = rec.pool;
+      const score = rec.score;
+      const poolName = `${pool.token0.symbol}/${pool.token1.symbol}`;
+      const modeEmoji = rec.mode === 'DEFENSIVE' ? '🛡️' : rec.mode === 'AGGRESSIVE' ? '🔥' : '⚖️';
+      const scoreEmoji = score.total >= 70 ? '🟢' : score.total >= 50 ? '🟡' : '🔴';
+      const simLink = notificationSettingsService.getSimulationLink(pool.chain, pool.poolAddress);
+
+      msg += `${scoreEmoji} <b>#${rec.rank} ${poolName}</b> ${modeEmoji}\n`;
+      msg += `   📊 Score: <code>${score.total.toFixed(0)}/100</code> | ${pool.protocol} (${pool.chain})\n`;
+      msg += `   💰 TVL: $${(pool.tvl / 1e6).toFixed(2)}M | Vol: $${(pool.volume24h / 1e3).toFixed(0)}K\n`;
+      msg += `   📈 APR Est: <code>${rec.estimatedGainPercent.toFixed(2)}%/semana</code> (${rec.probability}% prob)\n`;
+      msg += `   🔗 <a href="${simLink}">Simular</a>\n\n`;
+    }
+
+    msg += `──────────────────\n`;
+    msg += `💡 <i>Clique em "Simular" para ver detalhes e adicionar ao monitoramento</i>\n`;
+    msg += `<a href="${notificationSettingsService.getAppUrl()}">Abrir Pool Intelligence Pro →</a>`;
+
+    const sent = await telegramBot.sendMessage(msg);
+    if (sent) {
+      res.json({
+        success: true,
+        message: `Enviado TOP ${top.length} recomendações para o Telegram`,
+        count: top.length,
+        tokenFilters,
+      });
+    } else {
+      res.status(400).json({ success: false, error: 'Telegram não configurado ou falhou ao enviar' });
+    }
+  } catch (error) {
+    logService.error('SYSTEM', 'POST /settings/telegram/test-recommendations failed', { error });
     res.status(500).json({ success: false, error: 'Internal error' });
   }
 });

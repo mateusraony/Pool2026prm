@@ -111,6 +111,7 @@ export interface NotificationSettings {
   };
   dailyReportHour: number;
   dailyReportMinute: number;
+  tokenFilters: string[];
 }
 
 export async function fetchSettings(): Promise<{
@@ -129,6 +130,17 @@ export async function updateNotificationSettings(settings: Partial<NotificationS
 
 export async function testTelegramConnection(): Promise<{ success: boolean }> {
   const { data } = await api.post('/settings/telegram/test');
+  return data;
+}
+
+export async function testTelegramRecommendations(limit: number = 5, useTokenFilter: boolean = true): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+  count?: number;
+  tokenFilters?: string[];
+}> {
+  const { data } = await api.post('/settings/telegram/test-recommendations', { limit, useTokenFilter });
   return data;
 }
 

@@ -18,6 +18,7 @@ export interface NotificationSettings {
   };
   dailyReportHour: number;   // 0-23 (local server time)
   dailyReportMinute: number; // 0-59
+  tokenFilters: string[];    // Tokens to filter recommendations (e.g., ['ETH', 'USDC', 'WBTC'])
 }
 
 const DEFAULT_SETTINGS: NotificationSettings = {
@@ -32,6 +33,7 @@ const DEFAULT_SETTINGS: NotificationSettings = {
   },
   dailyReportHour: 8,
   dailyReportMinute: 0,
+  tokenFilters: [], // Empty = show all pools; with tokens = filter pools containing these tokens
 };
 
 class NotificationSettingsService {
@@ -41,11 +43,16 @@ class NotificationSettingsService {
     this.settings = {
       ...DEFAULT_SETTINGS,
       notifications: { ...DEFAULT_SETTINGS.notifications },
+      tokenFilters: [...DEFAULT_SETTINGS.tokenFilters],
     };
   }
 
   getSettings(): NotificationSettings {
-    return { ...this.settings, notifications: { ...this.settings.notifications } };
+    return {
+      ...this.settings,
+      notifications: { ...this.settings.notifications },
+      tokenFilters: [...this.settings.tokenFilters],
+    };
   }
 
   updateSettings(partial: Partial<NotificationSettings>): NotificationSettings {
@@ -62,9 +69,30 @@ class NotificationSettingsService {
     if (partial.dailyReportMinute !== undefined) {
       this.settings.dailyReportMinute = Math.max(0, Math.min(59, partial.dailyReportMinute));
     }
+    if (partial.tokenFilters !== undefined) {
+      // Normalize: uppercase, trim, remove empty
+      this.settings.tokenFilters = partial.tokenFilters
+        .map(t => t.trim().toUpperCase())
+        .filter(t => t.length > 0);
+    }
 
     logService.info('SYSTEM', 'Notification settings updated', { settings: this.settings });
     return this.getSettings();
+  }
+
+  getTokenFilters(): string[] {
+    return [...this.settings.tokenFilters];
+  }
+
+  hasTokenFilter(): boolean {
+    return this.settings.tokenFilters.length > 0;
+  }
+
+  matchesTokenFilter(token0Symbol: string, token1Symbol: string): boolean {
+    if (!this.hasTokenFilter()) return true;
+    const t0 = token0Symbol.toUpperCase();
+    const t1 = token1Symbol.toUpperCase();
+    return this.settings.tokenFilters.some(f => f === t0 || f === t1);
   }
 
   isEnabled(type: keyof NotificationSettings['notifications']): boolean {

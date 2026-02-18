@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Bell, Link, Send, Check, X, RefreshCw, Clock } from 'lucide-react';
+import { Bell, Link, Send, Check, X, RefreshCw, Clock, Filter, Plus, Trash2, Zap } from 'lucide-react';
 import {
   fetchSettings,
   updateNotificationSettings,
   testTelegramConnection,
+  testTelegramRecommendations,
   sendPortfolioReport,
   NotificationSettings,
 } from '../api/client';
@@ -79,8 +80,11 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [reportStatus, setReportStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [recTestStatus, setRecTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [recTestMessage, setRecTestMessage] = useState<string>('');
   const [localSettings, setLocalSettings] = useState<Partial<NotificationSettings> | null>(null);
   const [saved, setSaved] = useState(false);
+  const [newToken, setNewToken] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -102,6 +106,7 @@ export default function SettingsPage() {
     notifications: { rangeExit: true, nearRangeExit: true, dailyReport: true, newRecommendation: false, priceAlerts: true, systemAlerts: false },
     dailyReportHour: 8,
     dailyReportMinute: 0,
+    tokenFilters: [],
   };
   const baseSettings: NotificationSettings = data?.notifications ?? defaultSettings;
   const settings: NotificationSettings = localSettings
@@ -110,6 +115,7 @@ export default function SettingsPage() {
         appUrl: localSettings.appUrl ?? baseSettings.appUrl,
         dailyReportHour: localSettings.dailyReportHour ?? baseSettings.dailyReportHour,
         dailyReportMinute: localSettings.dailyReportMinute ?? baseSettings.dailyReportMinute,
+        tokenFilters: localSettings.tokenFilters ?? baseSettings.tokenFilters ?? [],
         notifications: {
           rangeExit: localSettings.notifications?.rangeExit ?? baseSettings.notifications.rangeExit,
           nearRangeExit: localSettings.notifications?.nearRangeExit ?? baseSettings.notifications.nearRangeExit,
@@ -149,6 +155,44 @@ export default function SettingsPage() {
       setReportStatus('error');
     }
     setTimeout(() => setReportStatus('idle'), 3000);
+  }
+
+  async function handleTestRecommendations() {
+    setRecTestStatus('loading');
+    setRecTestMessage('');
+    try {
+      const result = await testTelegramRecommendations(5, true);
+      if (result.success) {
+        setRecTestStatus('success');
+        setRecTestMessage(result.message || `Enviado ${result.count} recomendações`);
+      } else {
+        setRecTestStatus('error');
+        setRecTestMessage(result.error || 'Falha ao enviar');
+      }
+    } catch (e: unknown) {
+      setRecTestStatus('error');
+      const err = e as { response?: { data?: { error?: string } } };
+      setRecTestMessage(err?.response?.data?.error || 'Erro ao testar recomendações');
+    }
+    setTimeout(() => {
+      setRecTestStatus('idle');
+      setRecTestMessage('');
+    }, 5000);
+  }
+
+  function handleAddToken() {
+    const token = newToken.trim().toUpperCase();
+    if (!token) return;
+    const currentTokens = settings.tokenFilters || [];
+    if (!currentTokens.includes(token)) {
+      updateLocal({ tokenFilters: [...currentTokens, token] });
+    }
+    setNewToken('');
+  }
+
+  function handleRemoveToken(token: string) {
+    const currentTokens = settings.tokenFilters || [];
+    updateLocal({ tokenFilters: currentTokens.filter(t => t !== token) });
   }
 
   function handleSave() {
@@ -259,7 +303,36 @@ export default function SettingsPage() {
                reportStatus === 'error' ? 'Falhou' :
                'Enviar Relatório Agora'}
             </button>
+
+            <button
+              onClick={handleTestRecommendations}
+              disabled={recTestStatus === 'loading' || !telegramEnabled}
+              className={clsx(
+                'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors disabled:opacity-50',
+                recTestStatus === 'success' ? 'bg-green-600 text-white' :
+                recTestStatus === 'error' ? 'bg-red-600 text-white' :
+                'bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 border border-purple-500/30'
+              )}
+            >
+              {recTestStatus === 'loading' ? <RefreshCw className="w-4 h-4 animate-spin" /> :
+               recTestStatus === 'success' ? <Check className="w-4 h-4" /> :
+               recTestStatus === 'error' ? <X className="w-4 h-4" /> :
+               <Zap className="w-4 h-4" />}
+              {recTestStatus === 'success' ? 'Enviado!' :
+               recTestStatus === 'error' ? 'Falhou' :
+               'Testar Recomendações'}
+            </button>
           </div>
+
+          {recTestMessage && (
+            <div className={clsx(
+              'p-3 rounded-lg text-sm',
+              recTestStatus === 'error' ? 'bg-red-500/10 border border-red-500/30 text-red-400' :
+              'bg-green-500/10 border border-green-500/30 text-green-400'
+            )}>
+              {recTestMessage}
+            </div>
+          )}
 
           {!telegramEnabled && (
             <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-sm text-yellow-400">
@@ -292,6 +365,92 @@ export default function SettingsPage() {
           <p className="text-xs text-dark-500">
             Links gerados: <code className="text-dark-300">{settings.appUrl || 'http://localhost:5173'}/positions</code>
           </p>
+        </div>
+      </div>
+
+      {/* Token Filters */}
+      <div className="bg-dark-800 rounded-xl border border-dark-600 overflow-hidden">
+        <div className="p-4 border-b border-dark-700">
+          <h2 className="font-semibold flex items-center gap-2">
+            <Filter className="w-5 h-5 text-orange-400" />
+            Filtro de Tokens
+          </h2>
+          <p className="text-sm text-dark-400 mt-1">
+            Filtre as recomendações para mostrar apenas pools que contenham os tokens selecionados
+          </p>
+        </div>
+        <div className="p-4 space-y-4">
+          {/* Current tokens */}
+          <div className="flex flex-wrap gap-2">
+            {(settings.tokenFilters || []).length === 0 ? (
+              <span className="text-dark-400 text-sm italic">Nenhum filtro ativo — mostrando todas as pools</span>
+            ) : (
+              (settings.tokenFilters || []).map(token => (
+                <span
+                  key={token}
+                  className="flex items-center gap-1 px-3 py-1 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-full text-sm"
+                >
+                  {token}
+                  <button
+                    onClick={() => handleRemoveToken(token)}
+                    className="ml-1 hover:text-orange-200 transition-colors"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </span>
+              ))
+            )}
+          </div>
+
+          {/* Add token */}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newToken}
+              onChange={e => setNewToken(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAddToken()}
+              placeholder="Digite um símbolo (ex: ETH, USDC, WBTC)"
+              className="flex-1 bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm font-mono uppercase focus:border-primary-500 focus:outline-none"
+            />
+            <button
+              onClick={handleAddToken}
+              disabled={!newToken.trim()}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Plus className="w-4 h-4" />
+              Adicionar
+            </button>
+          </div>
+
+          {/* Quick add common tokens */}
+          <div className="flex flex-wrap gap-2">
+            <span className="text-xs text-dark-500 mr-2">Adicionar rápido:</span>
+            {['ETH', 'WETH', 'USDC', 'USDT', 'WBTC', 'DAI', 'ARB', 'OP'].map(token => (
+              <button
+                key={token}
+                onClick={() => {
+                  const currentTokens = settings.tokenFilters || [];
+                  if (!currentTokens.includes(token)) {
+                    updateLocal({ tokenFilters: [...currentTokens, token] });
+                  }
+                }}
+                disabled={(settings.tokenFilters || []).includes(token)}
+                className={clsx(
+                  'px-2 py-0.5 rounded text-xs transition-colors',
+                  (settings.tokenFilters || []).includes(token)
+                    ? 'bg-dark-600 text-dark-400 cursor-not-allowed'
+                    : 'bg-dark-700 hover:bg-dark-600 text-dark-300'
+                )}
+              >
+                {token}
+              </button>
+            ))}
+          </div>
+
+          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-sm text-blue-400">
+            <strong>Como funciona:</strong> Quando você adiciona tokens aqui, as recomendações e o botão "Testar Recomendações"
+            mostrarão apenas pools que contenham pelo menos um dos tokens filtrados. Deixe vazio para ver todas as pools.
+          </div>
         </div>
       </div>
 
