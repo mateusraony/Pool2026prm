@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { getPoolsWithFallback, getPoolWithFallback, getAllProvidersHealth } from '../adapters/index.js';
+import { PrismaClient } from '@prisma/client';
+import { getPoolsWithFallback, getPoolWithFallback, getAllProvidersHealth, theGraphAdapter } from '../adapters/index.js';
 import { scoreService } from '../services/score.service.js';
 import { cacheService } from '../services/cache.service.js';
 import { logService } from '../services/log.service.js';
@@ -15,6 +16,11 @@ import {
   removeFromWatchlist
 } from '../jobs/index.js';
 import { config } from '../config/index.js';
+import { poolIntelligenceService } from '../services/pool-intelligence.service.js';
+import { calcRangeRecommendation, calcUserFees, calcILRisk } from '../services/calc.service.js';
+import { Pool, UnifiedPool } from '../types/index.js';
+
+const prisma = new PrismaClient();
 
 const router = Router();
 
@@ -32,20 +38,84 @@ router.get('/health', async (req, res) => {
   });
 });
 
-// Get pools (radar results)
+// Get pools (radar results) — enhanced with UnifiedPool format + full filtering/sorting
 router.get('/pools', async (req, res) => {
   try {
-    const { chain } = req.query;
-    let results = getLatestRadarResults();
-    
-    if (chain) {
-      results = results.filter(r => r.pool.chain === chain);
+    const {
+      chain, protocol, token, bluechip, poolType,
+      sortBy = 'tvl', sortDirection = 'desc',
+      page, limit: limitStr,
+      minTVL, minHealth,
+    } = req.query;
+
+    let radarResults = getLatestRadarResults();
+
+    // Also pull TheGraph data if available (supplement radar)
+    const theGraphKey = `thegraph_unified_${chain || 'all'}`;
+    let theGraphUnified = cacheService.get<UnifiedPool[]>(theGraphKey).data;
+    if (!theGraphUnified && !cacheService.get(`thegraph_fetching_${chain || 'all'}`).data) {
+      // Kick off background fetch (non-blocking)
+      cacheService.set(`thegraph_fetching_${chain || 'all'}`, true, 60);
+      const chainsToFetch = chain ? [chain as string] : ['ethereum', 'arbitrum', 'base'];
+      Promise.all(chainsToFetch.map(c => theGraphAdapter.getPools(c, 50))).then(results => {
+        const allPools = results.flat();
+        const unified = allPools.map(p => poolIntelligenceService.enrichToUnifiedPool(p, { updatedAt: new Date() }));
+        cacheService.set(theGraphKey, unified, 300);
+      }).catch(() => {});
     }
-    
+
+    // Build unified pool list from radar results
+    const radarUnified: UnifiedPool[] = radarResults.map(r =>
+      poolIntelligenceService.enrichToUnifiedPool(r.pool, { updatedAt: new Date() })
+    );
+
+    // Merge: prefer TheGraph data (has volume1h), fall back to radar
+    const tgUnified = theGraphUnified ?? [];
+    const mergedMap = new Map<string, UnifiedPool>();
+    for (const p of radarUnified) mergedMap.set(p.id, p);
+    for (const p of tgUnified) {
+      // TheGraph has better data if volume1h is available
+      if (!mergedMap.has(p.id) || p.volume1hUSD != null) {
+        mergedMap.set(p.id, p);
+      }
+    }
+    let pools = Array.from(mergedMap.values());
+
+    // Apply filters
+    pools = poolIntelligenceService.applyPoolFilters(pools, {
+      chain: chain as string | undefined,
+      protocol: protocol as string | undefined,
+      token: token as string | undefined,
+      bluechip: bluechip === 'true' ? true : undefined,
+      minTVL: minTVL ? parseFloat(minTVL as string) : undefined,
+      minHealth: minHealth ? parseFloat(minHealth as string) : undefined,
+      poolType: poolType as string | undefined,
+    });
+
+    // Apply sorting
+    const validSortKeys = ['tvl', 'apr', 'aprFee', 'aprAdjusted', 'volume1h', 'volume5m', 'fees1h', 'fees5m', 'healthScore', 'volatilityAnn', 'ratio'] as const;
+    type SortKey = typeof validSortKeys[number];
+    const sortKey = (validSortKeys.includes(sortBy as SortKey) ? sortBy : 'tvl') as SortKey;
+    pools = poolIntelligenceService.sortPools(pools, sortKey, (sortDirection as string) === 'asc' ? 'asc' : 'desc');
+
+    // Pagination
+    const total = pools.length;
+    const lim = limitStr ? Math.min(parseInt(limitStr as string), 200) : 50;
+    const pg = page ? parseInt(page as string) : null;
+    if (pg != null) {
+      const offset = (pg - 1) * lim;
+      pools = pools.slice(offset, offset + lim);
+    } else {
+      pools = pools.slice(0, lim);
+    }
+
     res.json({
-      success: true,
-      data: results,
-      count: results.length,
+      pools,
+      total,
+      page: pg,
+      limit: lim,
+      syncing: !!cacheService.get(`thegraph_fetching_${chain || 'all'}`),
+      tokenFilters: notificationSettingsService.getTokenFilters(),
       timestamp: new Date(),
     });
   } catch (error) {
@@ -537,6 +607,217 @@ router.post('/ranges/check', async (req, res) => {
     });
   } catch (error) {
     logService.error('SYSTEM', 'POST /ranges/check failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// ============================================
+// POOL INTELLIGENCE — NEW ENDPOINTS
+// ============================================
+
+// GET /api/tokens — token list for autocomplete
+router.get('/tokens', async (req, res) => {
+  try {
+    const tokens = poolIntelligenceService.getTokenList();
+    // Also pull from DB if available
+    try {
+      const dbTokens = await prisma.token.findMany({ select: { symbol: true }, distinct: ['symbol'], take: 500 });
+      const extra = dbTokens.map((t: { symbol: string }) => t.symbol.toUpperCase());
+      const merged = Array.from(new Set([...tokens, ...extra])).sort();
+      return res.json(merged);
+    } catch {
+      return res.json(tokens);
+    }
+  } catch (error) {
+    logService.error('SYSTEM', 'GET /tokens failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// GET /api/pools/:chain/:address — enhanced with history and range data
+// (This replaces the existing single pool endpoint with richer data)
+router.get('/pools-detail/:chain/:address', async (req, res) => {
+  try {
+    const { chain, address } = req.params;
+    const { horizonDays = '7', riskMode = 'NORMAL', capital = '1000' } = req.query;
+
+    // Try TheGraph first for richest data
+    let pool = await theGraphAdapter.getPool(chain, address);
+    let history = pool ? await theGraphAdapter.getPoolHistory(chain, address, 7) : [];
+    let provider = 'thegraph';
+
+    // Fallback to existing providers
+    if (!pool) {
+      const result = await getPoolWithFallback(chain, address);
+      pool = result.pool;
+      provider = result.provider;
+    }
+
+    if (!pool) {
+      return res.status(404).json({ success: false, error: 'Pool not found' });
+    }
+
+    const unified = poolIntelligenceService.enrichToUnifiedPool(pool, { updatedAt: new Date() });
+    const score = scoreService.calculateScore(pool);
+
+    // Range recommendations for all 3 modes
+    const horizonD = parseInt(horizonDays as string) || 7;
+    const capUSD = parseFloat(capital as string) || 1000;
+    const p = pool.price || 1;
+    const vol = unified.volatilityAnn;
+    const tickSpacing = (pool as Pool & { tickSpacing?: number }).tickSpacing;
+
+    const ranges = {
+      DEFENSIVE: calcRangeRecommendation({ price: p, volAnn: vol, horizonDays: horizonD, riskMode: 'DEFENSIVE', tickSpacing, poolType: unified.poolType }),
+      NORMAL: calcRangeRecommendation({ price: p, volAnn: vol, horizonDays: horizonD, riskMode: 'NORMAL', tickSpacing, poolType: unified.poolType }),
+      AGGRESSIVE: calcRangeRecommendation({ price: p, volAnn: vol, horizonDays: horizonD, riskMode: 'AGGRESSIVE', tickSpacing, poolType: unified.poolType }),
+    };
+
+    const selectedRange = ranges[(riskMode as string).toUpperCase() as 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE'] || ranges.NORMAL;
+
+    // Fee estimates
+    const feeEstimates = {
+      DEFENSIVE: calcUserFees({ tvl: pool.tvl, fees24h: pool.fees24h, fees1h: (pool as Pool & { fees1h?: number }).fees1h, userCapital: capUSD, riskMode: 'DEFENSIVE' }),
+      NORMAL: calcUserFees({ tvl: pool.tvl, fees24h: pool.fees24h, fees1h: (pool as Pool & { fees1h?: number }).fees1h, userCapital: capUSD, riskMode: 'NORMAL' }),
+      AGGRESSIVE: calcUserFees({ tvl: pool.tvl, fees24h: pool.fees24h, fees1h: (pool as Pool & { fees1h?: number }).fees1h, userCapital: capUSD, riskMode: 'AGGRESSIVE' }),
+    };
+
+    // IL risk for selected range
+    const ilRisk = calcILRisk({
+      price: p,
+      rangeLower: selectedRange.lower,
+      rangeUpper: selectedRange.upper,
+      volAnn: vol,
+      horizonDays: horizonD,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        pool: unified,
+        score,
+        history: history.slice(0, 168), // max 7 days hourly
+        ranges,
+        selectedRange,
+        feeEstimates,
+        ilRisk,
+        recommendations: poolIntelligenceService.buildTop3Recommendations([unified]),
+      },
+      provider,
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    logService.error('SYSTEM', 'GET /pools-detail/:chain/:address failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// POST /api/range-calc — standalone range calculator
+router.post('/range-calc', async (req, res) => {
+  try {
+    const { price, volAnn = 0.20, horizonDays = 7, riskMode = 'NORMAL', tickSpacing, poolType = 'CL', capital = 1000, tvl = 1000000, fees24h } = req.body;
+
+    if (!price || price <= 0) {
+      return res.status(400).json({ success: false, error: 'price is required and must be > 0' });
+    }
+
+    const ranges = {
+      DEFENSIVE: calcRangeRecommendation({ price, volAnn, horizonDays, riskMode: 'DEFENSIVE', tickSpacing, poolType }),
+      NORMAL: calcRangeRecommendation({ price, volAnn, horizonDays, riskMode: 'NORMAL', tickSpacing, poolType }),
+      AGGRESSIVE: calcRangeRecommendation({ price, volAnn, horizonDays, riskMode: 'AGGRESSIVE', tickSpacing, poolType }),
+    };
+
+    const selected = ranges[(riskMode as string).toUpperCase() as 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE'] || ranges.NORMAL;
+
+    const feeEstimate = calcUserFees({ tvl, fees24h, userCapital: capital, riskMode: riskMode as 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE' });
+    const ilRisk = calcILRisk({ price, rangeLower: selected.lower, rangeUpper: selected.upper, volAnn, horizonDays });
+
+    res.json({ success: true, data: { ranges, selected, feeEstimate, ilRisk } });
+  } catch (error) {
+    logService.error('SYSTEM', 'POST /range-calc failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// ============================================
+// FAVORITES
+// ============================================
+
+router.get('/favorites', async (req, res) => {
+  try {
+    const favorites = await prisma.favorite.findMany({ orderBy: { addedAt: 'desc' } });
+    res.json({ success: true, data: favorites });
+  } catch (error) {
+    logService.error('SYSTEM', 'GET /favorites failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+router.post('/favorites', async (req, res) => {
+  try {
+    const { poolId, chain, poolAddress, token0Symbol = '', token1Symbol = '', protocol = '' } = req.body;
+    if (!poolId || !chain || !poolAddress) {
+      return res.status(400).json({ success: false, error: 'poolId, chain, poolAddress are required' });
+    }
+    const fav = await prisma.favorite.upsert({
+      where: { poolId },
+      create: { poolId, chain, poolAddress, token0Symbol, token1Symbol, protocol },
+      update: { addedAt: new Date() },
+    });
+    res.json({ success: true, data: fav });
+  } catch (error) {
+    logService.error('SYSTEM', 'POST /favorites failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+router.delete('/favorites/:poolId', async (req, res) => {
+  try {
+    const { poolId } = req.params;
+    await prisma.favorite.deleteMany({ where: { poolId } });
+    res.json({ success: true });
+  } catch (error) {
+    logService.error('SYSTEM', 'DELETE /favorites failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// ============================================
+// NOTES
+// ============================================
+
+router.get('/notes', async (req, res) => {
+  try {
+    const { poolId } = req.query;
+    const where = poolId ? { poolId: poolId as string } : {};
+    const notes = await prisma.note.findMany({ where, orderBy: { createdAt: 'desc' } });
+    res.json({ success: true, data: notes });
+  } catch (error) {
+    logService.error('SYSTEM', 'GET /notes failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+router.post('/notes', async (req, res) => {
+  try {
+    const { poolId, text, tags = [] } = req.body;
+    if (!poolId || !text) {
+      return res.status(400).json({ success: false, error: 'poolId and text are required' });
+    }
+    const note = await prisma.note.create({ data: { poolId, text, tags } });
+    res.json({ success: true, data: note });
+  } catch (error) {
+    logService.error('SYSTEM', 'POST /notes failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+router.delete('/notes/:id', async (req, res) => {
+  try {
+    await prisma.note.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (error) {
+    logService.error('SYSTEM', 'DELETE /notes/:id failed', { error });
     res.status(500).json({ success: false, error: 'Internal error' });
   }
 });

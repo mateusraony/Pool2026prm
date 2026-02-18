@@ -173,16 +173,100 @@ model PoolSnapshot {
   id        String   @id @default(uuid())
   poolId    String
   pool      PoolCurrent @relation(fields: [poolId], references: [id], onDelete: Cascade)
-  
+
   price     Float?
   tvl       Float
   volume24h Float
   fees24h   Float?
-  
+
+  // Extended fields
+  volume1h   Float?
+  volume5m   Float?
+  fees1h     Float?
+  fees5m     Float?
+  aprFee     Float?
+  aprAdjusted Float?
+  volatilityAnn Float?
+  healthScore Float?
+
   // Snapshot compacto
   timestamp DateTime @default(now())
-  
+
   @@index([poolId, timestamp])
+}
+
+// ============================================
+// TOKEN REGISTRY (for autocomplete)
+// ============================================
+
+model Token {
+  id        String   @id @default(uuid())
+  chain     String
+  address   String
+  symbol    String
+  name      String   @default("")
+  decimals  Int      @default(18)
+
+  // Risk flags
+  isVerified  Boolean  @default(false)
+  isBluechip  Boolean  @default(false)
+  flags       Json?    // { honeypot, highTax, newToken, etc. }
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([chain, address])
+  @@index([symbol])
+}
+
+// ============================================
+// FAVORITES (single-user, no auth required)
+// ============================================
+
+model Favorite {
+  id          String   @id @default(uuid())
+  poolId      String   // externalId of the pool
+  chain       String
+  poolAddress String
+  token0Symbol String  @default("")
+  token1Symbol String  @default("")
+  protocol    String   @default("")
+  addedAt     DateTime @default(now())
+
+  @@unique([poolId])
+  @@index([addedAt])
+}
+
+// ============================================
+// NOTES (single-user, no auth required)
+// ============================================
+
+model Note {
+  id        String   @id @default(uuid())
+  poolId    String   // externalId of the pool
+  text      String   @db.Text
+  tags      Json     @default("[]") // string[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([poolId])
+  @@index([createdAt])
+}
+
+// ============================================
+// JOB RUNS (for monitoring)
+// ============================================
+
+model JobRun {
+  id        String   @id @default(uuid())
+  name      String
+  startedAt DateTime
+  endedAt   DateTime?
+  ok        Boolean  @default(false)
+  error     String?
+  meta      Json?
+
+  @@index([name, startedAt])
 }
 
 // ============================================

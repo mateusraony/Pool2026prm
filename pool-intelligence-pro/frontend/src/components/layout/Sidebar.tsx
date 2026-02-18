@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Menu, X } from 'lucide-react';
 import clsx from 'clsx';
 
 const navItems = [
+  { path: '/pools', icon: '🏊', label: 'Pool Intelligence' },
   { path: '/radar', icon: '📡', label: 'Radar' },
   { path: '/positions', icon: '💼', label: 'Minhas Posições' },
   { path: '/recommendations', icon: '🧠', label: 'Recomendações' },

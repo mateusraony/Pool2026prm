@@ -17,6 +17,14 @@ export interface Pool {
   fees24h?: number;
   fees7d?: number;
   apr?: number;
+  // Extended fields (populated by adapters when available)
+  volume1h?: number;
+  volume5m?: number;
+  fees1h?: number;
+  fees5m?: number;
+  poolType?: string;      // 'CL' | 'V2' | 'STABLE'
+  tickSpacing?: number;
+  bluechip?: boolean;
 }
 
 export interface Token {
@@ -24,6 +32,64 @@ export interface Token {
   address: string;
   decimals: number;
   priceUsd?: number;
+}
+
+// ============================================
+// UNIFIED POOL (yldlab-compatible format)
+// ============================================
+
+export interface UnifiedPool {
+  id: string;                    // `${chain}_${poolAddress}`
+  chain: string;
+  protocol: string;
+  poolAddress: string;
+  poolType: 'CL' | 'V2' | 'STABLE';
+
+  // Tokens
+  baseToken: string;             // token0 symbol
+  quoteToken: string;            // token1 symbol
+  token0: Token;
+  token1: Token;
+
+  // Financials
+  tvlUSD: number;
+  price?: number;
+  feeTier: number;               // decimal (e.g. 0.003 = 0.3%)
+
+  // Volumes (null when not available from source)
+  volume5mUSD: number | null;
+  volume1hUSD: number | null;
+  volume24hUSD: number;
+
+  // Fees
+  fees5mUSD: number | null;
+  fees1hUSD: number | null;
+  fees24hUSD: number | null;
+
+  // APRs
+  aprFee: number | null;         // annualized fee APR
+  aprIncentive: number;          // additional APR from incentives (usually 0 for now)
+  aprTotal: number | null;       // aprFee + aprIncentive
+  aprAdjusted: number | null;    // aprTotal * penaltyTotal (realistic)
+
+  // Volatility & Risk
+  volatilityAnn: number;         // annualized volatility
+  ratio: number;                 // volume1h / tvl (capital efficiency proxy)
+
+  // Health Score (institutional formula)
+  healthScore: number;           // 0..100
+  penaltyTotal: number;          // 0.15..1 (penalty multiplier)
+
+  // Metadata
+  bluechip: boolean;             // both tokens are bluechip
+  warnings: string[];
+  updatedAt: string;             // ISO string
+
+  // Raw fields for compatibility
+  apr?: number;
+  tvl: number;
+  volume24h: number;
+  fees24h?: number;
 }
 
 export interface PoolMetrics {

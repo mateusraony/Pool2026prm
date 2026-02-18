@@ -2,6 +2,7 @@ import { Pool, ProviderAdapter, ProviderHealth } from '../types/index.js';
 import { defiLlamaAdapter } from './defillama.adapter.js';
 import { geckoTerminalAdapter } from './geckoterminal.adapter.js';
 import { dexScreenerAdapter } from './dexscreener.adapter.js';
+import { theGraphAdapter } from './thegraph.adapter.js';
 import { circuitBreaker } from '../services/circuit-breaker.service.js';
 import { logService } from '../services/log.service.js';
 
@@ -9,12 +10,14 @@ import { logService } from '../services/log.service.js';
 export { defiLlamaAdapter } from './defillama.adapter.js';
 export { geckoTerminalAdapter } from './geckoterminal.adapter.js';
 export { dexScreenerAdapter } from './dexscreener.adapter.js';
+export { theGraphAdapter } from './thegraph.adapter.js';
 
 // Registry of all adapters
 const adapters: Record<string, ProviderAdapter> = {
   defillama: defiLlamaAdapter,
   geckoterminal: geckoTerminalAdapter,
   dexscreener: dexScreenerAdapter,
+  thegraph: theGraphAdapter,
 };
 
 // Get adapter by name

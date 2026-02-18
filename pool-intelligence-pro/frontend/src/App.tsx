@@ -8,13 +8,17 @@ import WatchlistPage from './pages/Watchlist';
 import AlertsPage from './pages/Alerts';
 import SettingsPage from './pages/Settings';
 import StatusPage from './pages/Status';
+import PoolsPage from './pages/Pools';
+import PoolDetailPage from './pages/PoolDetail';
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Layout />}>
-          <Route index element={<Navigate to="/radar" replace />} />
+          <Route index element={<Navigate to="/pools" replace />} />
+          <Route path="pools" element={<PoolsPage />} />
+          <Route path="pools/:chain/:address" element={<PoolDetailPage />} />
           <Route path="radar" element={<RadarPage />} />
           <Route path="positions" element={<PositionsPage />} />
           <Route path="recommendations" element={<RecommendationsPage />} />
