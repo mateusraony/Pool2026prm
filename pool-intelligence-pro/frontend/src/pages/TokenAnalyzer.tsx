@@ -62,8 +62,13 @@ function StatCard({ label, value, subValue, icon, color }: {
 // ============================================================
 
 function PoolCard({ pool, rank, onClick }: { pool: UnifiedPool; rank: number; onClick: () => void }) {
-  const modeColor = pool.poolType === 'STABLE' ? 'bg-blue-500/20 text-blue-400' :
-    pool.poolType === 'CL' ? 'bg-purple-500/20 text-purple-400' : 'bg-gray-500/20 text-gray-400';
+  if (!pool) return null;
+
+  const poolType = pool.poolType || 'V2';
+  const modeColor = poolType === 'STABLE' ? 'bg-blue-500/20 text-blue-400' :
+    poolType === 'CL' ? 'bg-purple-500/20 text-purple-400' : 'bg-gray-500/20 text-gray-400';
+  const healthScore = pool.healthScore ?? 0;
+  const warnings = pool.warnings || [];
 
   return (
     <div
@@ -76,15 +81,15 @@ function PoolCard({ pool, rank, onClick }: { pool: UnifiedPool; rank: number; on
             {rank}
           </span>
           <div>
-            <div className="font-bold">{pool.baseToken}/{pool.quoteToken}</div>
+            <div className="font-bold">{pool.baseToken || '?'}/{pool.quoteToken || '?'}</div>
             <div className="flex items-center gap-1 mt-0.5">
-              <span className={clsx('text-[10px] px-1.5 rounded', modeColor)}>{pool.poolType}</span>
-              <span className="text-[10px] text-dark-500">{pool.protocol} · {pool.chain}</span>
+              <span className={clsx('text-[10px] px-1.5 rounded', modeColor)}>{poolType}</span>
+              <span className="text-[10px] text-dark-500">{pool.protocol || 'Unknown'} · {pool.chain || '?'}</span>
             </div>
           </div>
         </div>
-        <div className={clsx('px-2 py-1 rounded-lg text-sm font-bold', healthBg(pool.healthScore))}>
-          {pool.healthScore}
+        <div className={clsx('px-2 py-1 rounded-lg text-sm font-bold', healthBg(healthScore))}>
+          {healthScore}
         </div>
       </div>
 
@@ -107,10 +112,10 @@ function PoolCard({ pool, rank, onClick }: { pool: UnifiedPool; rank: number; on
         </div>
       </div>
 
-      {pool.warnings.length > 0 && (
+      {warnings.length > 0 && (
         <div className="mt-3 flex items-center gap-1 text-xs text-yellow-400">
           <AlertTriangle className="w-3 h-3" />
-          {pool.warnings[0]}
+          {warnings[0]}
         </div>
       )}
 
@@ -126,12 +131,12 @@ function PoolCard({ pool, rank, onClick }: { pool: UnifiedPool; rank: number; on
 // ============================================================
 
 function VerdictPanel({ pools, token }: { pools: UnifiedPool[]; token: string }) {
-  if (pools.length === 0) return null;
+  if (!pools || pools.length === 0) return null;
 
-  const totalTVL = pools.reduce((sum, p) => sum + p.tvlUSD, 0);
-  const avgHealth = pools.reduce((sum, p) => sum + p.healthScore, 0) / pools.length;
+  const totalTVL = pools.reduce((sum, p) => sum + (p.tvlUSD || 0), 0);
+  const avgHealth = pools.reduce((sum, p) => sum + (p.healthScore || 0), 0) / pools.length;
   const best = pools[0];
-  const bluechipPools = pools.filter(p => p.bluechip);
+  const bluechipPools = pools.filter(p => p.bluechip === true);
   const clPools = pools.filter(p => p.poolType === 'CL');
 
   let verdict: 'good' | 'moderate' | 'risky' = 'good';
@@ -192,14 +197,14 @@ function VerdictPanel({ pools, token }: { pools: UnifiedPool[]; token: string })
           {best && (
             <div className="mt-4 pt-4 border-t border-dark-600">
               <div className="text-xs text-dark-400 mb-2">🏆 Melhor pool recomendada:</div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
-                  <span className="font-bold">{best.baseToken}/{best.quoteToken}</span>
-                  <span className="text-dark-400 text-sm ml-2">{best.protocol} · {best.chain}</span>
+                  <span className="font-bold">{best.baseToken || '?'}/{best.quoteToken || '?'}</span>
+                  <span className="text-dark-400 text-sm ml-2">{best.protocol || ''} · {best.chain || ''}</span>
                 </div>
                 <div className="flex gap-3">
-                  <span className="text-green-400">{fmtPct(best.aprAdjusted)} APR</span>
-                  <span className={healthColor(best.healthScore)}>Health {best.healthScore}</span>
+                  <span className="text-green-400">{fmtPct(best.aprAdjusted ?? best.aprFee)} APR</span>
+                  <span className={healthColor(best.healthScore || 0)}>Health {best.healthScore || 0}</span>
                 </div>
               </div>
             </div>
@@ -247,29 +252,40 @@ export default function TokenAnalyzerPage() {
     if (e.key === 'Enter') handleSearch();
   };
 
-  // Filter pools that contain the searched token
+  // Filter pools that contain the searched token - with defensive checks
   const filteredPools = useMemo(() => {
     if (!data?.pools || !searchedToken) return [];
-    const q = searchedToken.toUpperCase();
-    return data.pools
-      .filter(p =>
-        p.baseToken.toUpperCase() === q ||
-        p.quoteToken.toUpperCase() === q ||
-        p.baseToken.toUpperCase().includes(q) ||
-        p.quoteToken.toUpperCase().includes(q) ||
-        p.poolAddress.toLowerCase().includes(searchedToken.toLowerCase())
-      )
-      .sort((a, b) => b.healthScore - a.healthScore);
+    try {
+      const q = searchedToken.toUpperCase();
+      return data.pools
+        .filter(p => {
+          if (!p) return false;
+          const base = (p.baseToken || '').toUpperCase();
+          const quote = (p.quoteToken || '').toUpperCase();
+          const addr = (p.poolAddress || '').toLowerCase();
+          return base === q || quote === q || base.includes(q) || quote.includes(q) || addr.includes(searchedToken.toLowerCase());
+        })
+        .sort((a, b) => (b.healthScore || 0) - (a.healthScore || 0));
+    } catch (e) {
+      console.error('Filter error:', e);
+      return [];
+    }
   }, [data?.pools, searchedToken]);
 
-  // Stats
+  // Stats - with defensive checks to prevent crashes
   const stats = useMemo(() => {
-    if (!filteredPools.length) return null;
-    const totalTVL = filteredPools.reduce((s, p) => s + p.tvlUSD, 0);
-    const avgHealth = filteredPools.reduce((s, p) => s + p.healthScore, 0) / filteredPools.length;
-    const maxAPR = Math.max(...filteredPools.map(p => p.aprAdjusted ?? 0));
-    const totalVol24h = filteredPools.reduce((s, p) => s + p.volume24hUSD, 0);
-    return { totalTVL, avgHealth, maxAPR, totalVol24h };
+    if (!filteredPools || filteredPools.length === 0) return null;
+    try {
+      const totalTVL = filteredPools.reduce((s, p) => s + (p.tvlUSD || 0), 0);
+      const avgHealth = filteredPools.reduce((s, p) => s + (p.healthScore || 0), 0) / filteredPools.length;
+      const aprValues = filteredPools.map(p => p.aprAdjusted ?? p.aprFee ?? 0).filter(v => v > 0);
+      const maxAPR = aprValues.length > 0 ? Math.max(...aprValues) : 0;
+      const totalVol24h = filteredPools.reduce((s, p) => s + (p.volume24hUSD || 0), 0);
+      return { totalTVL, avgHealth, maxAPR, totalVol24h };
+    } catch (e) {
+      console.error('Stats calculation error:', e);
+      return null;
+    }
   }, [filteredPools]);
 
   const quickTokens = ['ETH', 'USDC', 'WBTC', 'ARB', 'OP', 'MATIC', 'USDT', 'DAI'];
