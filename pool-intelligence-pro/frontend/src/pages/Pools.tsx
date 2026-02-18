@@ -250,7 +250,14 @@ export default function PoolsPage() {
       limit: 200,
     }),
     staleTime: 60000,
-    refetchInterval: 120000,
+    // Auto-retry every 3s when no data, otherwise every 2 min
+    refetchInterval: (query) => {
+      const pools = query.state.data?.pools;
+      const syncing = query.state.data?.syncing;
+      // If syncing or no pools, retry quickly
+      if (syncing || !pools || pools.length === 0) return 3000;
+      return 120000;
+    },
   });
 
   const { data: favorites = [] } = useQuery({ queryKey: ['favorites'], queryFn: fetchFavorites });
@@ -490,10 +497,18 @@ export default function PoolsPage() {
                     Carregando pools...
                   </td>
                 </tr>
+              ) : sorted.length === 0 && (data?.syncing || isFetching) ? (
+                <tr>
+                  <td colSpan={10} className="px-3 py-12 text-center text-dark-400">
+                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                    <p className="font-medium">Sincronizando dados do TheGraph...</p>
+                    <p className="text-xs mt-1">Isso pode levar alguns segundos na primeira vez.</p>
+                  </td>
+                </tr>
               ) : sorted.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="px-3 py-12 text-center text-dark-400">
-                    Nenhuma pool encontrada. Ajuste os filtros.
+                    Nenhuma pool encontrada. Ajuste os filtros ou aguarde a sincronização.
                   </td>
                 </tr>
               ) : (

@@ -233,11 +233,17 @@ export default function TokenAnalyzerPage() {
     staleTime: 300000,
   });
 
-  const { data, isLoading, isFetching, refetch } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ['token-pools', searchedToken],
     queryFn: () => fetchUnifiedPools({ token: searchedToken, limit: 100 }),
     enabled: !!searchedToken,
     staleTime: 60000,
+    // Auto-retry every 3s when syncing
+    refetchInterval: (query) => {
+      const syncing = query.state.data?.syncing;
+      if (syncing) return 3000;
+      return false;
+    },
   });
 
   const handleSearch = () => {
