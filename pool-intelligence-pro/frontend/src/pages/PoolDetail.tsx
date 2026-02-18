@@ -261,7 +261,7 @@ export default function PoolDetailPage() {
   });
 
   const { data: favorites = [] } = useQuery({ queryKey: ['favorites'], queryFn: fetchFavorites });
-  const isFav = favorites.some(f => f.poolAddress.toLowerCase() === address?.toLowerCase());
+  const isFav = favorites.some(f => f?.poolAddress?.toLowerCase() === address?.toLowerCase());
 
   // Standalone range calc (client side, instant)
   const { data: calcData, isLoading: calcLoading } = useQuery({
@@ -312,16 +312,38 @@ export default function PoolDetailPage() {
   }
 
   const pool = data.pool;
+  if (!pool) {
+    return (
+      <div className="p-6 text-center">
+        <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-2" />
+        <p className="text-dark-400">Dados da pool não disponíveis.</p>
+        <button onClick={() => navigate(-1)} className="mt-4 px-4 py-2 bg-dark-700 rounded-lg text-sm hover:bg-dark-600 transition-colors">
+          Voltar
+        </button>
+      </div>
+    );
+  }
+
   const selectedRange = calcData?.selected ?? data.selectedRange;
   const feeEstimate = calcData?.feeEstimate ?? (data.feeEstimates?.[riskMode]);
   const ilRisk = calcData?.ilRisk ?? data.ilRisk;
+
+  // Safe access to pool properties
+  const poolChain = pool.chain || 'ethereum';
+  const poolProtocol = pool.protocol || '';
+  const poolAddress = pool.poolAddress || '';
+  const feeTier = pool.feeTier ?? 0;
+  const volatilityAnn = pool.volatilityAnn ?? 0;
+  const penaltyTotal = pool.penaltyTotal ?? 1;
+  const warnings = pool.warnings || [];
+  const healthScore = pool.healthScore ?? 0;
 
   // Build chart data
   const chartData = (data.history ?? []).slice(0, 48).reverse().map((h) => ({
     ts: new Date(h.timestamp).toISOString(),
     price: h.price ?? 0,
-    tvl: h.tvl,
-    volume: h.volume24h,
+    tvl: h.tvl ?? 0,
+    volume: h.volume24h ?? 0,
     fees: h.fees24h ?? 0,
   }));
 
@@ -340,17 +362,17 @@ export default function PoolDetailPage() {
     base: 'base',
     optimism: 'optimism',
   };
-  const uniChain = chainMap[pool.chain.toLowerCase()] || 'mainnet';
+  const uniChain = chainMap[poolChain.toLowerCase()] || 'mainnet';
   // feeTier should be in basis points (500, 3000, 10000) - convert from percentage if needed
-  const feeTierBps = pool.feeTier >= 1 ? Math.round(pool.feeTier * 10000) : pool.feeTier;
+  const feeTierBps = feeTier >= 1 ? Math.round(feeTier * 10000) : feeTier;
   const token0Addr = pool.token0?.address || 'ETH';
   const token1Addr = pool.token1?.address || 'ETH';
 
-  const addLiquidityUrl = pool.protocol.toLowerCase().includes('uniswap')
+  const addLiquidityUrl = poolProtocol.toLowerCase().includes('uniswap')
     ? `https://app.uniswap.org/add/${token0Addr}/${token1Addr}/${feeTierBps}?chain=${uniChain}`
-    : pool.protocol.toLowerCase().includes('pancake')
+    : poolProtocol.toLowerCase().includes('pancake')
     ? `https://pancakeswap.finance/add/${token0Addr}/${token1Addr}`
-    : pool.protocol.toLowerCase().includes('sushi')
+    : poolProtocol.toLowerCase().includes('sushi')
     ? `https://app.sushi.com/add/${token0Addr}/${token1Addr}`
     : `https://app.uniswap.org/add/${token0Addr}/${token1Addr}/${feeTierBps}?chain=${uniChain}`;
 
@@ -368,12 +390,12 @@ export default function PoolDetailPage() {
               {pool.bluechip && <span className="text-yellow-400 text-base">★</span>}
             </h1>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <span className="text-xs bg-dark-700 px-2 py-0.5 rounded">{pool.poolType}</span>
-              <span className="text-xs text-dark-400">{pool.protocol}</span>
-              <span className="text-xs text-dark-400 capitalize">{pool.chain}</span>
-              <span className="text-xs text-dark-500 font-mono">{pool.poolAddress.slice(0, 8)}...{pool.poolAddress.slice(-6)}</span>
-              <span className={clsx('text-xs px-2 py-0.5 rounded font-bold', healthBg(pool.healthScore))}>
-                Health {pool.healthScore}/100
+              <span className="text-xs bg-dark-700 px-2 py-0.5 rounded">{pool.poolType || 'V2'}</span>
+              <span className="text-xs text-dark-400">{poolProtocol}</span>
+              <span className="text-xs text-dark-400 capitalize">{poolChain}</span>
+              <span className="text-xs text-dark-500 font-mono">{poolAddress ? `${poolAddress.slice(0, 8)}...${poolAddress.slice(-6)}` : '—'}</span>
+              <span className={clsx('text-xs px-2 py-0.5 rounded font-bold', healthBg(healthScore))}>
+                Health {healthScore}/100
               </span>
             </div>
           </div>
@@ -384,7 +406,7 @@ export default function PoolDetailPage() {
             {isFav ? <Star className="w-4 h-4 fill-yellow-400" /> : <StarOff className="w-4 h-4" />}
           </button>
           <button
-            onClick={() => navigate(`/simulation/${pool.chain}/${pool.poolAddress}`)}
+            onClick={() => navigate(`/simulation/${poolChain}/${poolAddress}`)}
             className="flex items-center gap-1.5 px-3 py-2 bg-primary-600 hover:bg-primary-700 rounded-lg text-sm transition-colors"
           >
             <Bell className="w-4 h-4" />
@@ -399,10 +421,10 @@ export default function PoolDetailPage() {
       </div>
 
       {/* Warnings */}
-      {pool.warnings.length > 0 && (
+      {warnings.length > 0 && (
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
-          <div className="text-sm text-yellow-300">{pool.warnings.join(' · ')}</div>
+          <div className="text-sm text-yellow-300">{warnings.join(' · ')}</div>
         </div>
       )}
 
@@ -410,12 +432,12 @@ export default function PoolDetailPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <MetricCard label="TVL" value={fmt(pool.tvlUSD)} color="text-white" />
         <MetricCard label="APR de Fees" value={fmtPct(pool.aprFee)} color="text-green-400" sub="anualizado" />
-        <MetricCard label="APR Ajustado" value={fmtPct(pool.aprAdjusted)} color="text-yellow-400" sub={`penalidade ${(pool.penaltyTotal * 100).toFixed(0)}%`} />
+        <MetricCard label="APR Ajustado" value={fmtPct(pool.aprAdjusted)} color="text-yellow-400" sub={`penalidade ${(penaltyTotal * 100).toFixed(0)}%`} />
         <MetricCard label="Volume 24h" value={fmt(pool.volume24hUSD)} />
         <MetricCard label="Fees 24h" value={fmt(pool.fees24hUSD)} color="text-green-400" />
         <MetricCard label="Volume 1h" value={fmt(pool.volume1hUSD)} />
-        <MetricCard label="Volatilidade Anual" value={fmtPct(pool.volatilityAnn * 100, 0)} color={pool.volatilityAnn > 0.5 ? 'text-red-400' : 'text-yellow-400'} />
-        <MetricCard label="Fee Tier" value={`${(pool.feeTier * 100).toFixed(2)}%`} sub="por swap" />
+        <MetricCard label="Volatilidade Anual" value={fmtPct(volatilityAnn * 100, 0)} color={volatilityAnn > 0.5 ? 'text-red-400' : 'text-yellow-400'} />
+        <MetricCard label="Fee Tier" value={`${(feeTier * 100).toFixed(2)}%`} sub="por swap" />
       </div>
 
       {/* Charts */}
@@ -517,7 +539,7 @@ export default function PoolDetailPage() {
                     </div>
                   </div>
                   <p className="text-xs text-dark-500 mt-2">
-                    Baseado na volatilidade anualizada de {fmtPct(pool.volatilityAnn * 100, 0)} com distribuição lognormal.
+                    Baseado na volatilidade anualizada de {fmtPct(volatilityAnn * 100, 0)} com distribuição lognormal.
                     Estimativa; resultado real depende do mercado.
                   </p>
                 </div>

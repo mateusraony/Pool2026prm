@@ -192,15 +192,25 @@ export async function fetchUnifiedPools(params?: {
   minTVL?: number;
   minHealth?: number;
 }): Promise<PoolsResponse> {
-  const { data } = await api.get('/pools', { params });
-  // Support both old format (data.data) and new format
-  if (data.pools) return data;
-  return { pools: data.data || [], total: data.count || 0, page: null, limit: 50, syncing: false };
+  try {
+    const { data } = await api.get('/pools', { params });
+    // Support both old format (data.data) and new format
+    if (data?.pools) return data;
+    return { pools: data?.data || [], total: data?.count || 0, page: null, limit: 50, syncing: false };
+  } catch (e) {
+    console.error('fetchUnifiedPools error:', e);
+    return { pools: [], total: 0, page: null, limit: 50, syncing: false };
+  }
 }
 
 export async function fetchTokens(): Promise<string[]> {
-  const { data } = await api.get('/tokens');
-  return Array.isArray(data) ? data : [];
+  try {
+    const { data } = await api.get('/tokens');
+    return Array.isArray(data) ? data : [];
+  } catch (e) {
+    console.error('fetchTokens error:', e);
+    return [];
+  }
 }
 
 export async function fetchPoolDetail(chain: string, address: string, params?: {
@@ -215,9 +225,14 @@ export async function fetchPoolDetail(chain: string, address: string, params?: {
   selectedRange: RangeResult;
   feeEstimates: { DEFENSIVE: FeeEstimate; NORMAL: FeeEstimate; AGGRESSIVE: FeeEstimate };
   ilRisk: ILRiskResult;
-}> {
-  const { data } = await api.get(`/pools-detail/${chain}/${address}`, { params });
-  return data.data;
+} | null> {
+  try {
+    const { data } = await api.get(`/pools-detail/${chain}/${address}`, { params });
+    return data?.data || null;
+  } catch (e) {
+    console.error('fetchPoolDetail error:', e);
+    return null;
+  }
 }
 
 export async function calcRange(params: {
@@ -235,9 +250,14 @@ export async function calcRange(params: {
   selected: RangeResult;
   feeEstimate: FeeEstimate;
   ilRisk: ILRiskResult;
-}> {
-  const { data } = await api.post('/range-calc', params);
-  return data.data;
+} | null> {
+  try {
+    const { data } = await api.post('/range-calc', params);
+    return data?.data || null;
+  } catch (e) {
+    console.error('calcRange error:', e);
+    return null;
+  }
 }
 
 // Favorites

@@ -70,7 +70,22 @@ function PoolRow({ pool, isFav, onToggleFav, onClick }: {
   onToggleFav: (pool: UnifiedPool) => void;
   onClick: (pool: UnifiedPool) => void;
 }) {
-  const modeColor = pool.poolType === 'STABLE' ? 'bg-blue-500/20 text-blue-400' : pool.poolType === 'CL' ? 'bg-purple-500/20 text-purple-400' : 'bg-gray-500/20 text-gray-400';
+  if (!pool) return null;
+
+  const poolType = pool.poolType || 'V2';
+  const modeColor = poolType === 'STABLE' ? 'bg-blue-500/20 text-blue-400' : poolType === 'CL' ? 'bg-purple-500/20 text-purple-400' : 'bg-gray-500/20 text-gray-400';
+  const warnings = pool.warnings || [];
+  const healthScore = pool.healthScore ?? 0;
+  const volatility = pool.volatilityAnn ?? 0;
+
+  const formatTime = (dateStr: string | undefined) => {
+    if (!dateStr) return '—';
+    try {
+      return new Date(dateStr).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '—';
+    }
+  };
 
   return (
     <tr
@@ -88,27 +103,27 @@ function PoolRow({ pool, isFav, onToggleFav, onClick }: {
           </button>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 font-medium text-sm">
-              <span>{pool.baseToken}/{pool.quoteToken}</span>
+              <span>{pool.baseToken || '?'}/{pool.quoteToken || '?'}</span>
               {pool.bluechip && <span className="text-xs text-blue-400">★</span>}
-              {pool.warnings.length > 0 && <AlertTriangle className="w-3 h-3 text-yellow-500" />}
+              {warnings.length > 0 && <AlertTriangle className="w-3 h-3 text-yellow-500" />}
             </div>
             <div className="flex items-center gap-1 mt-0.5">
-              <span className={clsx('text-[10px] px-1.5 py-0 rounded', modeColor)}>{pool.poolType}</span>
-              <span className="text-[10px] text-dark-500">{pool.protocol}</span>
+              <span className={clsx('text-[10px] px-1.5 py-0 rounded', modeColor)}>{poolType}</span>
+              <span className="text-[10px] text-dark-500">{pool.protocol || ''}</span>
             </div>
           </div>
         </div>
       </td>
 
       {/* Chain */}
-      <td className="px-3 py-2.5 text-xs text-dark-400 capitalize">{pool.chain}</td>
+      <td className="px-3 py-2.5 text-xs text-dark-400 capitalize">{pool.chain || '—'}</td>
 
       {/* TVL */}
       <td className="px-3 py-2.5 text-sm font-mono text-right">{fmt(pool.tvlUSD)}</td>
 
       {/* APR Total */}
       <td className="px-3 py-2.5 text-sm text-right">
-        <span className={clsx('font-mono', pool.aprTotal && pool.aprTotal > 50 ? 'text-green-400' : '')}>
+        <span className={clsx('font-mono', (pool.aprTotal ?? 0) > 50 ? 'text-green-400' : '')}>
           {fmtPct(pool.aprTotal)}
         </span>
       </td>
@@ -126,21 +141,21 @@ function PoolRow({ pool, isFav, onToggleFav, onClick }: {
 
       {/* Volatility */}
       <td className="px-3 py-2.5 text-sm font-mono text-right text-dark-400">
-        {fmtPct(pool.volatilityAnn * 100, 0)}
+        {fmtPct(volatility * 100, 0)}
       </td>
 
       {/* Health Score */}
       <td className="px-3 py-2.5">
         <div className="flex justify-end">
-          <span className={clsx('px-2 py-0.5 rounded text-xs font-bold', healthBg(pool.healthScore))}>
-            {pool.healthScore}
+          <span className={clsx('px-2 py-0.5 rounded text-xs font-bold', healthBg(healthScore))}>
+            {healthScore}
           </span>
         </div>
       </td>
 
       {/* Updated */}
       <td className="px-3 py-2.5 text-[10px] text-dark-500 text-right whitespace-nowrap">
-        {new Date(pool.updatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+        {formatTime(pool.updatedAt)}
       </td>
     </tr>
   );
@@ -151,22 +166,26 @@ function PoolRow({ pool, isFav, onToggleFav, onClick }: {
 // ============================================================
 
 function Top3Cards({ pools, onClick }: { pools: UnifiedPool[]; onClick: (p: UnifiedPool) => void }) {
-  const top3 = pools.slice(0, 3);
+  if (!pools || !Array.isArray(pools)) return null;
+  const top3 = pools.slice(0, 3).filter(p => p != null);
   if (!top3.length) return null;
 
   const modeInfo = (pool: UnifiedPool) => {
-    if (pool.healthScore >= 75) return { label: 'Agressivo', icon: <Zap className="w-4 h-4 text-orange-400" />, color: 'border-orange-500/30 bg-orange-500/5' };
-    if (pool.healthScore >= 55) return { label: 'Normal', icon: <BarChart2 className="w-4 h-4 text-blue-400" />, color: 'border-blue-500/30 bg-blue-500/5' };
+    const score = pool.healthScore ?? 0;
+    if (score >= 75) return { label: 'Agressivo', icon: <Zap className="w-4 h-4 text-orange-400" />, color: 'border-orange-500/30 bg-orange-500/5' };
+    if (score >= 55) return { label: 'Normal', icon: <BarChart2 className="w-4 h-4 text-blue-400" />, color: 'border-blue-500/30 bg-blue-500/5' };
     return { label: 'Defensivo', icon: <Shield className="w-4 h-4 text-green-400" />, color: 'border-green-500/30 bg-green-500/5' };
   };
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
       {top3.map((pool, i) => {
+        if (!pool) return null;
         const info = modeInfo(pool);
+        const healthScore = pool.healthScore ?? 0;
         return (
           <div
-            key={pool.id}
+            key={pool.id || i}
             className={clsx('rounded-xl border p-4 cursor-pointer hover:brightness-110 transition-all', info.color)}
             onClick={() => onClick(pool)}
           >
@@ -174,8 +193,8 @@ function Top3Cards({ pools, onClick }: { pools: UnifiedPool[]; onClick: (p: Unif
               <span className="text-xs font-semibold text-dark-400">#{i + 1} {info.label}</span>
               {info.icon}
             </div>
-            <div className="font-bold text-base">{pool.baseToken}/{pool.quoteToken}</div>
-            <div className="text-xs text-dark-400 mt-0.5">{pool.protocol} · {pool.chain}</div>
+            <div className="font-bold text-base">{pool.baseToken || '?'}/{pool.quoteToken || '?'}</div>
+            <div className="text-xs text-dark-400 mt-0.5">{pool.protocol || ''} · {pool.chain || ''}</div>
             <div className="flex gap-4 mt-3">
               <div>
                 <div className="text-[10px] text-dark-500">TVL</div>
@@ -187,13 +206,13 @@ function Top3Cards({ pools, onClick }: { pools: UnifiedPool[]; onClick: (p: Unif
               </div>
               <div>
                 <div className="text-[10px] text-dark-500">Health</div>
-                <div className={clsx('text-sm font-bold', healthColor(pool.healthScore))}>{pool.healthScore}</div>
+                <div className={clsx('text-sm font-bold', healthColor(healthScore))}>{healthScore}</div>
               </div>
             </div>
             <div className="mt-2 text-xs text-dark-400 line-clamp-2">
-              {pool.healthScore >= 75
+              {healthScore >= 75
                 ? `Alta liquidez e eficiência de capital. APR de fee ${fmtPct(pool.aprFee)}.`
-                : pool.healthScore >= 55
+                : healthScore >= 55
                 ? `Boa relação risco/retorno. ${pool.bluechip ? 'Tokens blue-chip.' : 'Liquidez adequada.'}`
                 : `Posicionamento conservador recomendado. Monitorar volume.`}
             </div>
@@ -237,15 +256,29 @@ export default function PoolsPage() {
   const { data: favorites = [] } = useQuery({ queryKey: ['favorites'], queryFn: fetchFavorites });
   const { data: tokens = [] } = useQuery({ queryKey: ['tokens'], queryFn: fetchTokens, staleTime: 300000 });
 
-  const favSet = useMemo(() => new Set(favorites.map(f => f.poolId)), [favorites]);
+  const favSet = useMemo(() => {
+    if (!favorites || !Array.isArray(favorites)) return new Set<string>();
+    return new Set(favorites.filter(f => f?.poolId).map(f => f.poolId));
+  }, [favorites]);
 
   const handleToggleFav = useCallback(async (pool: UnifiedPool) => {
-    if (favSet.has(pool.id)) {
-      await removeFavorite(pool.id);
-    } else {
-      await addFavorite({ poolId: pool.id, chain: pool.chain, poolAddress: pool.poolAddress, token0Symbol: pool.baseToken, token1Symbol: pool.quoteToken, protocol: pool.protocol });
+    if (!pool?.id) return;
+    try {
+      if (favSet.has(pool.id)) {
+        await removeFavorite(pool.id);
+      } else {
+        await addFavorite({
+          poolId: pool.id,
+          chain: pool.chain || '',
+          poolAddress: pool.poolAddress || '',
+          token0Symbol: pool.baseToken || '',
+          token1Symbol: pool.quoteToken || '',
+          protocol: pool.protocol || ''
+        });
+      }
+    } catch (e) {
+      console.error('Toggle favorite error:', e);
     }
-    // refetch favorites
   }, [favSet]);
 
   const handleSort = (key: SortKey) => {
@@ -255,37 +288,55 @@ export default function PoolsPage() {
 
   const pools = data?.pools ?? [];
 
-  // Client-side token search (supplement server filter)
+  // Client-side token search (supplement server filter) - with defensive checks
   const filtered = useMemo(() => {
-    let result = pools;
-    if (search.trim()) {
-      const q = search.trim().toUpperCase();
-      result = result.filter(p =>
-        p.baseToken.toUpperCase().includes(q) ||
-        p.quoteToken.toUpperCase().includes(q) ||
-        p.protocol.toUpperCase().includes(q) ||
-        p.poolAddress.toLowerCase().includes(search.toLowerCase())
-      );
+    if (!pools || !Array.isArray(pools)) return [];
+    try {
+      let result = pools.filter(p => p != null);
+      if (search.trim()) {
+        const q = search.trim().toUpperCase();
+        const qLower = search.trim().toLowerCase();
+        result = result.filter(p => {
+          const base = (p.baseToken || '').toUpperCase();
+          const quote = (p.quoteToken || '').toUpperCase();
+          const protocol = (p.protocol || '').toUpperCase();
+          const addr = (p.poolAddress || '').toLowerCase();
+          return base.includes(q) || quote.includes(q) || protocol.includes(q) || addr.includes(qLower);
+        });
+      }
+      return result;
+    } catch (e) {
+      console.error('Filter error:', e);
+      return [];
     }
-    return result;
   }, [pools, search]);
 
-  // Client-side sort (backend also sorts, but client refines)
+  // Client-side sort (backend also sorts, but client refines) - with defensive checks
   const sorted = useMemo(() => {
-    const keyMap: Record<SortKey, (p: UnifiedPool) => number> = {
-      tvl: p => p.tvlUSD,
-      apr: p => p.aprTotal ?? 0,
-      aprFee: p => p.aprFee ?? 0,
-      aprAdjusted: p => p.aprAdjusted ?? 0,
-      volume1h: p => p.volume1hUSD ?? 0,
-      volume5m: p => p.volume5mUSD ?? 0,
-      fees1h: p => p.fees1hUSD ?? 0,
-      healthScore: p => p.healthScore,
-      volatilityAnn: p => p.volatilityAnn,
-      ratio: p => p.ratio,
-    };
-    const getter = keyMap[sortKey];
-    return [...filtered].sort((a, b) => sortDir === 'desc' ? getter(b) - getter(a) : getter(a) - getter(b));
+    if (!filtered || !Array.isArray(filtered)) return [];
+    try {
+      const keyMap: Record<SortKey, (p: UnifiedPool) => number> = {
+        tvl: p => p.tvlUSD ?? 0,
+        apr: p => p.aprTotal ?? 0,
+        aprFee: p => p.aprFee ?? 0,
+        aprAdjusted: p => p.aprAdjusted ?? 0,
+        volume1h: p => p.volume1hUSD ?? 0,
+        volume5m: p => p.volume5mUSD ?? 0,
+        fees1h: p => p.fees1hUSD ?? 0,
+        healthScore: p => p.healthScore ?? 0,
+        volatilityAnn: p => p.volatilityAnn ?? 0,
+        ratio: p => p.ratio ?? 0,
+      };
+      const getter = keyMap[sortKey];
+      return [...filtered].sort((a, b) => {
+        const va = getter(a);
+        const vb = getter(b);
+        return sortDir === 'desc' ? vb - va : va - vb;
+      });
+    } catch (e) {
+      console.error('Sort error:', e);
+      return filtered;
+    }
   }, [filtered, sortKey, sortDir]);
 
   const handlePoolClick = (pool: UnifiedPool) => {
