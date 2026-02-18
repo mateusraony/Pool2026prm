@@ -5,6 +5,8 @@ import { cacheService } from '../services/cache.service.js';
 import { logService } from '../services/log.service.js';
 import { alertService } from '../services/alert.service.js';
 import { rangeMonitorService } from '../services/range.service.js';
+import { notificationSettingsService } from '../services/notification-settings.service.js';
+import { telegramBot } from '../bot/telegram.js';
 import {
   getLatestRadarResults,
   getLatestRecommendations,
@@ -199,19 +201,79 @@ router.get('/logs', async (req, res) => {
   });
 });
 
-// Get settings
+// Get settings (system + notification)
 router.get('/settings', async (req, res) => {
   res.json({
     success: true,
     data: {
-      mode: config.defaults.mode,
-      capital: config.defaults.capital,
-      chains: config.defaults.chains,
-      thresholds: config.thresholds,
-      scoreWeights: config.scoreWeights,
+      system: {
+        mode: config.defaults.mode,
+        capital: config.defaults.capital,
+        chains: config.defaults.chains,
+        thresholds: config.thresholds,
+        scoreWeights: config.scoreWeights,
+      },
+      notifications: notificationSettingsService.getSettings(),
+      telegram: {
+        enabled: telegramBot.isEnabled(),
+        chatId: config.telegram.chatId ? '***' + config.telegram.chatId.slice(-4) : null,
+      },
     },
     timestamp: new Date(),
   });
+});
+
+// Update notification settings
+router.put('/settings/notifications', async (req, res) => {
+  try {
+    const updated = notificationSettingsService.updateSettings(req.body);
+    res.json({
+      success: true,
+      data: updated,
+      message: 'Notification settings updated',
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    logService.error('SYSTEM', 'PUT /settings/notifications failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// Send test Telegram message
+router.post('/settings/telegram/test', async (req, res) => {
+  try {
+    const appUrl = notificationSettingsService.getAppUrl();
+    const posLink = notificationSettingsService.getPositionsLink();
+    const msg =
+      `✅ <b>Teste de Notificação</b>\n\n` +
+      `Pool Intelligence Pro está funcionando!\n` +
+      `URL do App: ${appUrl}\n\n` +
+      `🔗 <a href="${posLink}">Abrir Posições</a>`;
+    const sent = await telegramBot.sendMessage(msg);
+    if (sent) {
+      res.json({ success: true, message: 'Test message sent' });
+    } else {
+      res.status(400).json({ success: false, error: 'Telegram not configured or failed to send' });
+    }
+  } catch (error) {
+    logService.error('SYSTEM', 'POST /settings/telegram/test failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// Trigger portfolio report manually
+router.post('/ranges/report', async (req, res) => {
+  try {
+    await rangeMonitorService.sendPortfolioReport();
+    res.json({
+      success: true,
+      message: 'Portfolio report sent via Telegram',
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    logService.error('SYSTEM', 'POST /ranges/report failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
 });
 
 // Get all alert rules

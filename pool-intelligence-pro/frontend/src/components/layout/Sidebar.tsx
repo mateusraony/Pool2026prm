@@ -10,6 +10,7 @@ const navItems = [
   { path: '/simulation', icon: '🧪', label: 'Simulação' },
   { path: '/watchlist', icon: '⭐', label: 'Watchlist' },
   { path: '/alerts', icon: '🚨', label: 'Alertas' },
+  { path: '/settings', icon: '⚙️', label: 'Configurações' },
   { path: '/status', icon: '🩺', label: 'Status' },
 ];
 

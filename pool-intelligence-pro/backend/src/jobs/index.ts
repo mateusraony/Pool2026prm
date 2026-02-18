@@ -5,6 +5,7 @@ import { scoreService } from '../services/score.service.js';
 import { recommendationService } from '../services/recommendation.service.js';
 import { alertService } from '../services/alert.service.js';
 import { rangeMonitorService } from '../services/range.service.js';
+import { notificationSettingsService } from '../services/notification-settings.service.js';
 import { telegramBot } from '../bot/telegram.js';
 import { getAllProvidersHealth } from '../adapters/index.js';
 import { logService } from '../services/log.service.js';
@@ -119,6 +120,26 @@ async function rangeCheckJobRunner() {
   }
 }
 
+// Daily report job: check every minute if it's time to send the report
+async function dailyReportJobRunner() {
+  try {
+    const settings = notificationSettingsService.getSettings();
+    if (!settings.notifications.dailyReport) return;
+    if (rangeMonitorService.getStats().activePositions === 0) return;
+
+    const now = new Date();
+    const isReportTime =
+      now.getHours() === settings.dailyReportHour &&
+      now.getMinutes() === settings.dailyReportMinute;
+
+    if (isReportTime) {
+      await rangeMonitorService.sendPortfolioReport();
+    }
+  } catch (error) {
+    logService.error('SYSTEM', 'Daily report job failed', { error });
+  }
+}
+
 // Initialize cron jobs
 export function initializeJobs() {
   logService.info('SYSTEM', 'Initializing scheduled jobs');
@@ -138,6 +159,9 @@ export function initializeJobs() {
   // Range check: every 2 minutes (check if user positions are near exit)
   cron.schedule('*/2 * * * *', rangeCheckJobRunner);
 
+  // Daily portfolio report: checked every minute, fires at configured time
+  cron.schedule('* * * * *', dailyReportJobRunner);
+
   // Run initial jobs in sequence
   setTimeout(async () => {
     await radarJobRunner();
@@ -145,5 +169,5 @@ export function initializeJobs() {
     setTimeout(recommendationJobRunner, 2000);
   }, 3000);
 
-  logService.info('SYSTEM', 'Jobs initialized (including range monitoring)');
+  logService.info('SYSTEM', 'Jobs initialized (including range monitoring & daily report)');
 }

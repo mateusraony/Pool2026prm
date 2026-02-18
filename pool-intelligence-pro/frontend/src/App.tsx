@@ -6,6 +6,7 @@ import RecommendationsPage from './pages/Recommendations';
 import SimulationPage from './pages/Simulation';
 import WatchlistPage from './pages/Watchlist';
 import AlertsPage from './pages/Alerts';
+import SettingsPage from './pages/Settings';
 import StatusPage from './pages/Status';
 
 export default function App() {
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="simulation/:chain/:address" element={<SimulationPage />} />
           <Route path="watchlist" element={<WatchlistPage />} />
           <Route path="alerts" element={<AlertsPage />} />
+          <Route path="settings" element={<SettingsPage />} />
           <Route path="status" element={<StatusPage />} />
         </Route>
       </Routes>

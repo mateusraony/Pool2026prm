@@ -99,15 +99,41 @@ export async function removeFromWatchlist(poolId: string): Promise<void> {
   await api.delete('/watchlist/' + poolId);
 }
 
+export interface NotificationSettings {
+  appUrl: string;
+  notifications: {
+    rangeExit: boolean;
+    nearRangeExit: boolean;
+    dailyReport: boolean;
+    newRecommendation: boolean;
+    priceAlerts: boolean;
+    systemAlerts: boolean;
+  };
+  dailyReportHour: number;
+  dailyReportMinute: number;
+}
+
 export async function fetchSettings(): Promise<{
-  mode: string;
-  capital: number;
-  chains: string[];
-  thresholds: Record<string, number>;
-  scoreWeights: Record<string, number>;
+  system: { mode: string; capital: number; chains: string[] };
+  notifications: NotificationSettings;
+  telegram: { enabled: boolean; chatId: string | null };
 }> {
   const { data } = await api.get('/settings');
   return data.data;
+}
+
+export async function updateNotificationSettings(settings: Partial<NotificationSettings>): Promise<NotificationSettings> {
+  const { data } = await api.put('/settings/notifications', settings);
+  return data.data;
+}
+
+export async function testTelegramConnection(): Promise<{ success: boolean }> {
+  const { data } = await api.post('/settings/telegram/test');
+  return data;
+}
+
+export async function sendPortfolioReport(): Promise<void> {
+  await api.post('/ranges/report');
 }
 
 export async function fetchLogs(limit?: number, level?: string, component?: string): Promise<{

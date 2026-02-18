@@ -172,7 +172,7 @@ export default function AlertsPage() {
               </div>
               <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
                 <span>Modo atual</span>
-                <span className="badge badge-warning">{settings?.mode || 'NORMAL'}</span>
+                <span className="badge badge-warning">{(settings as any)?.system?.mode || (settings as any)?.mode || 'NORMAL'}</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
                 <div className="flex items-center gap-2">
