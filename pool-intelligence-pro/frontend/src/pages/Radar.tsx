@@ -12,8 +12,9 @@ function formatNum(num: number): string {
 }
 
 function ScoreBadge({ score }: { score: Score }) {
-  const color = score.total >= 70 ? 'success' : score.total >= 50 ? 'warning' : 'danger';
-  return <span className={clsx('badge', 'badge-' + color)}>{score.total.toFixed(0)}/100</span>;
+  const total = score?.total ?? 50;
+  const color = total >= 70 ? 'success' : total >= 50 ? 'warning' : 'danger';
+  return <span className={clsx('badge', 'badge-' + color)}>{total.toFixed(0)}/100</span>;
 }
 
 function ModeBadge({ mode }: { mode: string }) {
@@ -69,21 +70,21 @@ function PoolCard({ pool, score, index, isWatched, isAdding, onAddToWatchlist }:
         <div className="grid grid-cols-3 gap-3 mb-4">
           <div className="stat-card">
             <div className="stat-label">TVL</div>
-            <div className="stat-value">{'$' + formatNum(pool.tvl)}</div>
+            <div className="stat-value">{'$' + formatNum(pool.tvl || 0)}</div>
           </div>
           <div className="stat-card">
             <div className="stat-label">Volume 24h</div>
-            <div className="stat-value">{'$' + formatNum(pool.volume24h)}</div>
+            <div className="stat-value">{'$' + formatNum(pool.volume24h || 0)}</div>
           </div>
           <div className="stat-card">
             <div className="stat-label">APR Est.</div>
-            <div className="stat-value text-success-400">{score.breakdown.return.aprEstimate.toFixed(1) + '%'}</div>
+            <div className="stat-value text-success-400">{(score?.breakdown?.return?.aprEstimate ?? pool.apr ?? 0).toFixed(1) + '%'}</div>
           </div>
         </div>
 
         <div className="flex items-center justify-between">
-          <ModeBadge mode={score.recommendedMode} />
-          {score.isSuspect && (
+          <ModeBadge mode={score?.recommendedMode || 'NORMAL'} />
+          {score?.isSuspect && (
             <div className="flex items-center gap-1 text-warning-400 text-xs">
               <AlertTriangle className="w-3 h-3" />
               Suspeito

@@ -22,7 +22,7 @@ const modeConfig = {
 
 function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
   const queryClient = useQueryClient();
-  const [mode, setMode] = useState<Mode>(score.recommendedMode as Mode || 'NORMAL');
+  const [mode, setMode] = useState<Mode>((score?.recommendedMode as Mode) || 'NORMAL');
   const [capital, setCapital] = useState(100);
   const [customRange, setCustomRange] = useState<{ lower: number; upper: number } | null>(null);
   const [monitorSuccess, setMonitorSuccess] = useState(false);
@@ -107,7 +107,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
 
     // Fee calculation: the APR shown is the annualized rate
     // We earn fees only while price is in range
-    const annualApr = score.breakdown.return.aprEstimate;
+    const annualApr = score?.breakdown?.return?.aprEstimate ?? pool.apr ?? 0;
     const weeklyFeeRate = annualApr / 52; // % per week
     const feesPercent = weeklyFeeRate * (timeInRange / 100);
 
@@ -169,11 +169,11 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
             </div>
             <div className="stat-card">
               <div className="stat-label">APR Base</div>
-              <div className="stat-value text-success-400">{score.breakdown.return.aprEstimate.toFixed(1)}%</div>
+              <div className="stat-value text-success-400">{(score?.breakdown?.return?.aprEstimate ?? pool.apr ?? 0).toFixed(1)}%</div>
             </div>
             <div className="stat-card">
               <div className="stat-label">Score</div>
-              <div className="stat-value text-primary-400">{score.total.toFixed(0)}/100</div>
+              <div className="stat-value text-primary-400">{(score?.total ?? 50).toFixed(0)}/100</div>
             </div>
             <div className="stat-card">
               <div className="stat-label">Preco Atual</div>
@@ -235,7 +235,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
               <div className="grid grid-cols-3 gap-3">
                 {(Object.keys(modeConfig) as Mode[]).map((m) => {
                   const cfg = modeConfig[m];
-                  const isRecommended = score.recommendedMode === m;
+                  const isRecommended = (score?.recommendedMode ?? 'NORMAL') === m;
                   return (
                     <button
                       key={m}

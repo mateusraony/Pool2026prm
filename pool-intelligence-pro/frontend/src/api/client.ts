@@ -80,21 +80,34 @@ export async function fetchPools(chain?: string): Promise<{ pool: Pool; score: S
   return pools.map((p: any) => {
     if (p.pool && p.score) return p;
     // UnifiedPool → { pool, score }
+    const aprEstimate = p.aprTotal || p.aprFee || 0;
     return {
       pool: {
         externalId: p.id || p.poolAddress,
         chain: p.chain,
         protocol: p.protocol,
-        address: p.poolAddress,
+        poolAddress: p.poolAddress,
         token0: p.token0 || { symbol: p.baseToken, address: '', decimals: 18 },
         token1: p.token1 || { symbol: p.quoteToken, address: '', decimals: 18 },
         tvl: p.tvlUSD || p.tvl || 0,
         volume24h: p.volume24hUSD || 0,
         fees24h: p.fees24hUSD || 0,
-        apr: p.aprTotal || p.aprFee || 0,
+        apr: aprEstimate,
         feeTier: p.feeTier ? p.feeTier * 100 : 0.3,
       },
-      score: { total: p.healthScore || 50, health: 0, return: 0, risk: 0, recommendedMode: 'NORMAL' as const },
+      score: {
+        total: p.healthScore || 50,
+        health: p.healthScore || 50,
+        return: 0,
+        risk: 0,
+        recommendedMode: 'NORMAL' as const,
+        isSuspect: (p.warnings?.length || 0) > 0,
+        breakdown: {
+          health: { liquidityStability: 80, ageScore: 70, volumeConsistency: 80 },
+          return: { volumeTvlRatio: 50, feeEfficiency: 50, aprEstimate },
+          risk: { volatilityPenalty: 0, liquidityDropPenalty: 0, inconsistencyPenalty: 0, spreadPenalty: 0 },
+        },
+      },
     };
   });
 }

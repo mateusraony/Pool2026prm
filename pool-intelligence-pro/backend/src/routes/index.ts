@@ -164,7 +164,37 @@ router.get('/pools/:chain/:address', async (req, res) => {
       });
     }
 
-    // If not in radar, try external providers
+    // Check MemoryStore (may have pools loaded from /pools endpoint)
+    const memUnified = memoryStore.getAllPools().find(p =>
+      p.chain === chain && (p.poolAddress === address || p.id === address)
+    );
+    if (memUnified) {
+      const pool: Pool = {
+        externalId: memUnified.id,
+        chain: memUnified.chain,
+        protocol: memUnified.protocol,
+        poolAddress: memUnified.poolAddress,
+        token0: memUnified.token0,
+        token1: memUnified.token1,
+        feeTier: memUnified.feeTier,
+        price: memUnified.price,
+        tvl: memUnified.tvlUSD,
+        volume24h: memUnified.volume24hUSD,
+        fees24h: memUnified.fees24hUSD ?? 0,
+        apr: memUnified.aprTotal ?? memUnified.aprFee ?? 0,
+      } as Pool;
+      const cachedScore = memoryStore.getScore(memUnified.id);
+      const score = cachedScore || scoreService.calculateScore(pool);
+      return res.json({
+        success: true,
+        data: { pool, score },
+        provider: 'memory-store',
+        usedFallback: false,
+        timestamp: new Date(),
+      });
+    }
+
+    // If not in radar or memory, try external providers
     const { pool, provider, usedFallback } = await getPoolWithFallback(chain, address);
 
     if (!pool) {
