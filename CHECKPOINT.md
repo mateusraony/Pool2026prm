@@ -5,9 +5,9 @@
 **Data:** 2026-02-19
 **Fase:** Builds validados ✅ - Backend e Frontend compilam sem erros
 
-## Arquivos Criados (40 arquivos)
+## Arquivos Criados (41 arquivos)
 
-### Backend (24 arquivos)
+### Backend (25 arquivos)
 - `backend/package.json` - Dependências
 - `backend/tsconfig.json` - Config TypeScript
 - `backend/.env.example` - Template env vars
@@ -26,6 +26,7 @@
 - `backend/src/services/score.service.ts` - Score 0-100
 - `backend/src/services/recommendation.service.ts` - Top 3 IA
 - `backend/src/services/alert.service.ts` - Alertas antifalha
+- `backend/src/services/memory-store.service.ts` - MemoryStore (cache em memória)
 - `backend/src/bot/telegram.ts` - Bot Telegram
 - `backend/src/jobs/radar.job.ts` - Loop A: descoberta
 - `backend/src/jobs/watchlist.job.ts` - Loop B: monitoramento
@@ -72,6 +73,11 @@
 - ✅ Cache em memória com TTL
 - ✅ Fallback entre providers
 - ✅ Consensus validation
+- ✅ **MemoryStore** — cache em memória para pools (max 500, ~600KB RAM)
+  - Pools já enriquecidos (sem recálculo a cada request)
+  - Scores e recomendações em cache
+  - Evicção automática horária
+  - Hit rate visível na página Status
 
 ## Próximos Passos (ordem)
 1. [x] Testar build do backend: `cd backend && npm install && npm run build` ✅ Zero erros
