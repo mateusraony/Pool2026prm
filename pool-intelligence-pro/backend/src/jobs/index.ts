@@ -11,8 +11,10 @@ import { getAllProvidersHealth } from '../adapters/index.js';
 import { logService } from '../services/log.service.js';
 import { config } from '../config/index.js';
 import { Pool, Score, Recommendation } from '../types/index.js';
+import { memoryStore } from '../services/memory-store.service.js';
+import { poolIntelligenceService } from '../services/pool-intelligence.service.js';
 
-// State (would be in DB in production)
+// State legado (mantido para compatibilidade com rotas existentes)
 let latestRadarResults: { pool: Pool; score: Score }[] = [];
 let latestRecommendations: Recommendation[] = [];
 let watchlist: { poolId: string; chain: string; address: string }[] = [];
@@ -24,21 +26,37 @@ export function getWatchlist() { return watchlist; }
 export function addToWatchlist(item: { poolId: string; chain: string; address: string }) {
   if (!watchlist.find(w => w.poolId === item.poolId)) {
     watchlist.push(item);
+    memoryStore.addToWatchlist(item.poolId);
   }
 }
 export function removeFromWatchlist(poolId: string) {
   watchlist = watchlist.filter(w => w.poolId !== poolId);
+  memoryStore.removeFromWatchlist(poolId);
 }
 
 // Job runners
 async function radarJobRunner() {
   try {
     const results = await runRadarJob();
-    
+
     // Flatten and store top candidates from all chains
     latestRadarResults = results.flatMap(r => r.topCandidates);
-    
-    logService.info('SYSTEM', 'Radar job stored ' + latestRadarResults.length + ' candidates');
+
+    // Popula o MemoryStore com UnifiedPool já enriquecidos
+    // Assim as rotas servem direto da memória sem recalcular
+    const unifiedPools = latestRadarResults.map(r =>
+      poolIntelligenceService.enrichToUnifiedPool(r.pool, { updatedAt: new Date() })
+    );
+    memoryStore.setPools(unifiedPools);
+
+    // Armazena scores por pool no MemoryStore
+    for (const r of latestRadarResults) {
+      memoryStore.setScore(r.pool.externalId, r.score);
+    }
+
+    logService.info('SYSTEM', 'Radar job stored ' + latestRadarResults.length + ' candidates', {
+      memoryStore: memoryStore.getStats(),
+    });
   } catch (error) {
     logService.error('SYSTEM', 'Radar job failed', { error });
   }
@@ -67,22 +85,25 @@ async function recommendationJobRunner() {
     logService.warn('SYSTEM', 'No radar results for recommendations');
     return;
   }
-  
+
   try {
     const mode = config.defaults.mode;
     const capital = config.defaults.capital;
-    
+
     latestRecommendations = recommendationService.generateTop3(
       latestRadarResults,
       mode,
       capital
     );
-    
+
+    // Persiste recomendações no MemoryStore para leitura imediata pelas rotas
+    memoryStore.setRecommendations(latestRecommendations);
+
     // Send top recommendation to Telegram
     if (latestRecommendations.length > 0 && telegramBot.isEnabled()) {
       await telegramBot.sendRecommendation(latestRecommendations[0]);
     }
-    
+
     logService.info('SYSTEM', 'Generated ' + latestRecommendations.length + ' recommendations');
   } catch (error) {
     logService.error('SYSTEM', 'Recommendation job failed', { error });
@@ -162,6 +183,12 @@ export function initializeJobs() {
   // Daily portfolio report: checked every minute, fires at configured time
   cron.schedule('* * * * *', dailyReportJobRunner);
 
+  // MemoryStore eviction: hourly — remove dados stale para manter RAM baixa
+  cron.schedule('0 * * * *', () => {
+    const evicted = memoryStore.evictStale();
+    logService.info('SYSTEM', 'MemoryStore eviction done', { evicted, ...memoryStore.getStats() });
+  });
+
   // Run initial jobs in sequence
   setTimeout(async () => {
     await radarJobRunner();
@@ -169,5 +196,10 @@ export function initializeJobs() {
     setTimeout(recommendationJobRunner, 2000);
   }, 3000);
 
-  logService.info('SYSTEM', 'Jobs initialized (including range monitoring & daily report)');
+  logService.info('SYSTEM', 'Jobs initialized (including range monitoring, daily report & memory eviction)');
+}
+
+/** Expõe stats do MemoryStore para o endpoint /health */
+export function getMemoryStoreStats() {
+  return memoryStore.getStats();
 }

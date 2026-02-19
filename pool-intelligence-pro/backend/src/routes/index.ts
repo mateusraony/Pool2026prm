@@ -13,8 +13,10 @@ import {
   getLatestRecommendations,
   getWatchlist,
   addToWatchlist,
-  removeFromWatchlist
+  removeFromWatchlist,
+  getMemoryStoreStats
 } from '../jobs/index.js';
+import { memoryStore } from '../services/memory-store.service.js';
 import { config } from '../config/index.js';
 import { poolIntelligenceService } from '../services/pool-intelligence.service.js';
 import { calcRangeRecommendation, calcUserFees, calcILRisk } from '../services/calc.service.js';
@@ -33,12 +35,13 @@ router.get('/health', async (req, res) => {
     status: healthy === providers.length ? 'HEALTHY' : healthy > 0 ? 'DEGRADED' : 'UNHEALTHY',
     providers,
     cache: cacheService.getStats(),
+    memoryStore: getMemoryStoreStats(),
     alerts: alertService.getStats(),
     timestamp: new Date(),
   });
 });
 
-// Get pools (radar results) — enhanced with UnifiedPool format + full filtering/sorting
+// Get pools (radar results) — lê do MemoryStore primeiro (sem recalcular)
 router.get('/pools', async (req, res) => {
   try {
     const {
@@ -48,40 +51,46 @@ router.get('/pools', async (req, res) => {
       minTVL, minHealth,
     } = req.query;
 
-    let radarResults = getLatestRadarResults();
+    // ── 1. Tenta servir do MemoryStore (path rápido — sem API externa) ──
+    let pools = memoryStore.getAllPools();
+    let fromMemory = pools.length > 0;
 
-    // Also pull TheGraph data if available (supplement radar)
-    const theGraphKey = `thegraph_unified_${chain || 'all'}`;
-    let theGraphUnified = cacheService.get<UnifiedPool[]>(theGraphKey).data;
-    if (!theGraphUnified && !cacheService.get(`thegraph_fetching_${chain || 'all'}`).data) {
-      // Kick off background fetch (non-blocking)
-      cacheService.set(`thegraph_fetching_${chain || 'all'}`, true, 60);
-      const chainsToFetch = chain ? [chain as string] : ['ethereum', 'arbitrum', 'base'];
-      Promise.all(chainsToFetch.map(c => theGraphAdapter.getPools(c, 50))).then(results => {
-        const allPools = results.flat();
-        const unified = allPools.map(p => poolIntelligenceService.enrichToUnifiedPool(p, { updatedAt: new Date() }));
-        cacheService.set(theGraphKey, unified, 300);
-      }).catch(() => {});
-    }
+    if (!fromMemory) {
+      // ── 2. Cold-start: MemoryStore vazio → monta de radarResults + TheGraph ──
+      const radarResults = getLatestRadarResults();
 
-    // Build unified pool list from radar results
-    const radarUnified: UnifiedPool[] = radarResults.map(r =>
-      poolIntelligenceService.enrichToUnifiedPool(r.pool, { updatedAt: new Date() })
-    );
-
-    // Merge: prefer TheGraph data (has volume1h), fall back to radar
-    const tgUnified = theGraphUnified ?? [];
-    const mergedMap = new Map<string, UnifiedPool>();
-    for (const p of radarUnified) mergedMap.set(p.id, p);
-    for (const p of tgUnified) {
-      // TheGraph has better data if volume1h is available
-      if (!mergedMap.has(p.id) || p.volume1hUSD != null) {
-        mergedMap.set(p.id, p);
+      // TheGraph supplement (background, non-blocking)
+      const theGraphKey = `thegraph_unified_${chain || 'all'}`;
+      let theGraphUnified = cacheService.get<UnifiedPool[]>(theGraphKey).data;
+      if (!theGraphUnified && !cacheService.get(`thegraph_fetching_${chain || 'all'}`).data) {
+        cacheService.set(`thegraph_fetching_${chain || 'all'}`, true, 60);
+        const chainsToFetch = chain ? [chain as string] : ['ethereum', 'arbitrum', 'base'];
+        Promise.all(chainsToFetch.map(c => theGraphAdapter.getPools(c, 50))).then(results => {
+          const allPools = results.flat();
+          const unified = allPools.map(p => poolIntelligenceService.enrichToUnifiedPool(p, { updatedAt: new Date() }));
+          // Persiste no MemoryStore para os próximos requests
+          memoryStore.setPools(unified);
+          cacheService.set(theGraphKey, unified, 300);
+        }).catch(() => {});
       }
-    }
-    let pools = Array.from(mergedMap.values());
 
-    // Apply filters
+      const radarUnified: UnifiedPool[] = radarResults.map(r =>
+        poolIntelligenceService.enrichToUnifiedPool(r.pool, { updatedAt: new Date() })
+      );
+
+      const tgUnified = theGraphUnified ?? [];
+      const mergedMap = new Map<string, UnifiedPool>();
+      for (const p of radarUnified) mergedMap.set(p.id, p);
+      for (const p of tgUnified) {
+        if (!mergedMap.has(p.id) || p.volume1hUSD != null) mergedMap.set(p.id, p);
+      }
+      pools = Array.from(mergedMap.values());
+
+      // Salva no MemoryStore para os próximos requests não precisarem recalcular
+      if (pools.length > 0) memoryStore.setPools(pools);
+    }
+
+    // ── 3. Filtros e ordenação (mesmo dado, sem re-enriquecer) ──
     pools = poolIntelligenceService.applyPoolFilters(pools, {
       chain: chain as string | undefined,
       protocol: protocol as string | undefined,
@@ -92,29 +101,26 @@ router.get('/pools', async (req, res) => {
       poolType: poolType as string | undefined,
     });
 
-    // Apply sorting
     const validSortKeys = ['tvl', 'apr', 'aprFee', 'aprAdjusted', 'volume1h', 'volume5m', 'fees1h', 'fees5m', 'healthScore', 'volatilityAnn', 'ratio'] as const;
     type SortKey = typeof validSortKeys[number];
     const sortKey = (validSortKeys.includes(sortBy as SortKey) ? sortBy : 'tvl') as SortKey;
     pools = poolIntelligenceService.sortPools(pools, sortKey, (sortDirection as string) === 'asc' ? 'asc' : 'desc');
 
-    // Pagination
+    // ── 4. Paginação ──
     const total = pools.length;
     const lim = limitStr ? Math.min(parseInt(limitStr as string), 200) : 50;
     const pg = page ? parseInt(page as string) : null;
-    if (pg != null) {
-      const offset = (pg - 1) * lim;
-      pools = pools.slice(offset, offset + lim);
-    } else {
-      pools = pools.slice(0, lim);
-    }
+    pools = pg != null
+      ? pools.slice((pg - 1) * lim, pg * lim)
+      : pools.slice(0, lim);
 
     res.json({
       pools,
       total,
       page: pg,
       limit: lim,
-      syncing: !!cacheService.get(`thegraph_fetching_${chain || 'all'}`),
+      fromMemory,
+      syncing: !!cacheService.get(`thegraph_fetching_${chain || 'all'}`).data,
       tokenFilters: notificationSettingsService.getTokenFilters(),
       timestamp: new Date(),
     });
@@ -168,11 +174,12 @@ router.get('/pools/:chain/:address', async (req, res) => {
   }
 });
 
-// Get recommendations
+// Get recommendations — lê do MemoryStore (fresco) ou fallback para state legado
 router.get('/recommendations', async (req, res) => {
   try {
     const { mode, limit, tokens, useTokenFilter } = req.query;
-    let recommendations = getLatestRecommendations();
+    // Prefere MemoryStore (atualizado pelo recommendationJobRunner)
+    let recommendations = memoryStore.getRecommendations() ?? getLatestRecommendations();
 
     // Apply token filter from settings if useTokenFilter=true or if no tokens query param
     const shouldUseSettingsFilter = useTokenFilter === 'true' || useTokenFilter === '1';
