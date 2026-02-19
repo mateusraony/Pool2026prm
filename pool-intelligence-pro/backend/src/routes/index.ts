@@ -29,10 +29,22 @@ const router = Router();
 // Health check
 router.get('/health', async (req, res) => {
   const providers = await getAllProvidersHealth();
-  const healthy = providers.filter(p => p.isHealthy).length;
-  
+
+  // Somente providers obrigatórios (isOptional=false) afetam o status geral
+  const mandatory = providers.filter(p => !p.isOptional);
+  const healthyMandatory = mandatory.filter(p => p.isHealthy).length;
+
+  let status: 'HEALTHY' | 'DEGRADED' | 'UNHEALTHY';
+  if (healthyMandatory === mandatory.length && mandatory.length > 0) {
+    status = 'HEALTHY';
+  } else if (healthyMandatory > 0) {
+    status = 'DEGRADED';
+  } else {
+    status = 'UNHEALTHY';
+  }
+
   res.json({
-    status: healthy === providers.length ? 'HEALTHY' : healthy > 0 ? 'DEGRADED' : 'UNHEALTHY',
+    status,
     providers,
     cache: cacheService.getStats(),
     memoryStore: getMemoryStoreStats(),

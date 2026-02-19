@@ -23,23 +23,23 @@ const SUBGRAPH_ENDPOINTS: Record<string, string> = {
 };
 
 // If THEGRAPH_API_KEY is set, use the decentralized network
+// Without API key → return null (hosted service was removed in 2024)
 function getEndpoint(chain: string): string | null {
   const apiKey = process.env.THEGRAPH_API_KEY;
-  if (apiKey) {
-    // Uniswap V3 subgraph IDs on decentralized network
-    const subgraphIds: Record<string, string> = {
-      ethereum: 'ELUcwgpm14LKPLrBRuVvPvNKHQ9HvwmtKgKSH855M4Np',
-      arbitrum: 'FbCGRftH4a3yZugY7TnbYgPJVEv2LvMT6oF1fxPe9aH',
-      base: 'GqzP4Xaehti8KSfQmv3ZctFSjnSUYZ4En5NRsiTbvZpz',
-      polygon: '3hCPRGf4z88VC5rsBKU5AA9FBBq5nF3jbKJG7VZCDqm9',
-    };
-    const id = subgraphIds[chain];
-    if (id) {
-      return `https://gateway-arbitrum.network.thegraph.com/api/${apiKey}/subgraphs/id/${id}`;
-    }
+  if (!apiKey) return null; // Hosted service removed — API key required
+
+  // Uniswap V3 subgraph IDs on decentralized network
+  const subgraphIds: Record<string, string> = {
+    ethereum: 'ELUcwgpm14LKPLrBRuVvPvNKHQ9HvwmtKgKSH855M4Np',
+    arbitrum: 'FbCGRftH4a3yZugY7TnbYgPJVEv2LvMT6oF1fxPe9aH',
+    base: 'GqzP4Xaehti8KSfQmv3ZctFSjnSUYZ4En5NRsiTbvZpz',
+    polygon: '3hCPRGf4z88VC5rsBKU5AA9FBBq5nF3jbKJG7VZCDqm9',
+  };
+  const id = subgraphIds[chain];
+  if (id) {
+    return `https://gateway-arbitrum.network.thegraph.com/api/${apiKey}/subgraphs/id/${id}`;
   }
-  // Free hosted service (may have limited availability)
-  return SUBGRAPH_ENDPOINTS[chain] || null;
+  return null;
 }
 
 // ============================================================

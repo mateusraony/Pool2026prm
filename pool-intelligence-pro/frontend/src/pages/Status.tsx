@@ -106,7 +106,10 @@ export default function StatusPage() {
           <div className="card-body text-center">
             <Server className="w-12 h-12 mx-auto mb-2 text-primary-400" />
             <h3 className="font-semibold">Provedores</h3>
-            <p className="text-dark-400">{health?.providers?.filter(p => p.isHealthy).length || 0}/{health?.providers?.length || 0} online</p>
+            <p className="text-dark-400">
+              {health?.providers?.filter(p => p.isHealthy && !p.isOptional).length || 0}/
+              {health?.providers?.filter(p => !p.isOptional).length || 0} online
+            </p>
           </div>
         </div>
         <div className="card">
@@ -176,15 +179,21 @@ export default function StatusPage() {
           </div>
           <div className="card-body space-y-3">
             {health?.providers?.map((p) => (
-              <div key={p.name} className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+              <div key={p.name} className={clsx('flex items-center justify-between p-3 rounded-lg', p.isOptional ? 'bg-dark-800/40 opacity-70' : 'bg-dark-700/50')}>
                 <div className="flex items-center gap-3">
-                  <div className={clsx('w-3 h-3 rounded-full', p.isHealthy ? 'bg-success-500' : 'bg-danger-500')} />
+                  <div className={clsx('w-3 h-3 rounded-full', p.isHealthy ? 'bg-success-500' : p.isOptional ? 'bg-dark-500' : 'bg-danger-500')} />
                   <span className="font-medium">{p.name}</span>
+                  {p.isOptional && <span className="text-xs text-dark-500 italic">(opcional)</span>}
                 </div>
                 <div className="flex items-center gap-2">
-                  {p.isCircuitOpen && <span className="badge badge-danger">Circuit Open</span>}
-                  {p.consecutiveFailures > 0 && (
-                    <span className="text-sm text-dark-400">{p.consecutiveFailures + ' falhas'}</span>
+                  {p.isHealthy && <span className="badge badge-success text-xs">OK</span>}
+                  {!p.isHealthy && !p.isOptional && <span className="badge badge-danger text-xs">FALHA</span>}
+                  {!p.isHealthy && p.isOptional && p.note && (
+                    <span className="text-xs text-dark-500 max-w-xs truncate" title={p.note}>{p.note}</span>
+                  )}
+                  {p.isCircuitOpen && <span className="badge badge-danger text-xs">Circuit Open</span>}
+                  {p.consecutiveFailures > 0 && !p.isOptional && (
+                    <span className="text-sm text-dark-400">{p.consecutiveFailures} falhas</span>
                   )}
                 </div>
               </div>

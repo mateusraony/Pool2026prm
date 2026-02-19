@@ -20,6 +20,9 @@ const adapters: Record<string, ProviderAdapter> = {
   thegraph: theGraphAdapter,
 };
 
+// Provedores que requerem config extra — não afetam o status geral se falharem
+const optionalProviders = new Set(['thegraph']);
+
 // Get adapter by name
 export function getAdapter(name: string): ProviderAdapter | undefined {
   return adapters[name.toLowerCase()];
@@ -109,11 +112,26 @@ export async function getPoolsWithFallback(
 // Get health status of all providers
 export async function getAllProvidersHealth(): Promise<ProviderHealth[]> {
   const health: ProviderHealth[] = [];
-  
+
   for (const [name, adapter] of Object.entries(adapters)) {
     const cbStatus = circuitBreaker.getStatus(name);
+    const isOptional = optionalProviders.has(name);
     let isHealthy = false;
-    
+    let note: string | undefined;
+
+    // TheGraph: se não tem API key, nem tenta — sinaliza como "não configurado"
+    if (name === 'thegraph' && !process.env.THEGRAPH_API_KEY) {
+      health.push({
+        name,
+        isHealthy: false,
+        isCircuitOpen: false,
+        consecutiveFailures: 0,
+        isOptional: true,
+        note: 'THEGRAPH_API_KEY não configurada (opcional)',
+      });
+      continue;
+    }
+
     if (!cbStatus.isOpen) {
       try {
         isHealthy = await adapter.healthCheck();
@@ -121,15 +139,17 @@ export async function getAllProvidersHealth(): Promise<ProviderHealth[]> {
         isHealthy = false;
       }
     }
-    
+
     health.push({
       name,
       isHealthy,
       isCircuitOpen: cbStatus.isOpen,
       consecutiveFailures: cbStatus.failures,
+      isOptional,
+      note,
     });
   }
-  
+
   return health;
 }
 

@@ -59,7 +59,7 @@ export interface Recommendation {
 
 export interface HealthData {
   status: 'HEALTHY' | 'DEGRADED' | 'UNHEALTHY';
-  providers: { name: string; isHealthy: boolean; isCircuitOpen: boolean; consecutiveFailures: number }[];
+  providers: { name: string; isHealthy: boolean; isCircuitOpen: boolean; consecutiveFailures: number; isOptional?: boolean; note?: string }[];
   cache: { hits: number; misses: number; sets: number; keys: number; hitRate: number };
   memoryStore?: { pools: number; scores: number; watchlist: number; hasRecs: boolean; recsFresh: boolean; reads: number; hits: number; misses: number; writes: number; hitRatePct: number; estimatedKB: number };
   alerts: { rulesCount: number; recentAlertsCount: number; triggersToday: number };

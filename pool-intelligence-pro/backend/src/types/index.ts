@@ -258,6 +258,8 @@ export interface ProviderHealth {
   lastFailureAt?: Date;
   consecutiveFailures: number;
   avgLatency?: number;
+  isOptional?: boolean;  // Provedores opcionais não afetam o status geral
+  note?: string;         // Explicação de por que está indisponível
 }
 
 // ============================================
