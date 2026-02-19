@@ -1,10 +1,13 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, Database, Server, Clock, AlertTriangle, CheckCircle, XCircle, HardDrive } from 'lucide-react';
+import { Activity, Database, Server, Clock, AlertTriangle, CheckCircle, XCircle, HardDrive, Copy, Check } from 'lucide-react';
 import { fetchHealth, fetchLogs } from '../api/client';
 import { format } from 'date-fns';
 import clsx from 'clsx';
 
 export default function StatusPage() {
+  const [copied, setCopied] = useState(false);
+
   const { data: health } = useQuery({
     queryKey: ['health'],
     queryFn: fetchHealth,
@@ -13,12 +16,76 @@ export default function StatusPage() {
 
   const { data: logs } = useQuery({
     queryKey: ['logs'],
-    queryFn: () => fetchLogs(20),
+    queryFn: () => fetchLogs(50), // Busca mais logs para debug
     refetchInterval: 30000,
   });
 
   const statusColor = health?.status === 'HEALTHY' ? 'success' : health?.status === 'DEGRADED' ? 'warning' : 'danger';
   const StatusIcon = health?.status === 'HEALTHY' ? CheckCircle : health?.status === 'DEGRADED' ? AlertTriangle : XCircle;
+
+  // Função para copiar logs + status completo para clipboard
+  const copyLogsToClipboard = async () => {
+    const timestamp = format(new Date(), 'yyyy-MM-dd HH:mm:ss');
+
+    // Monta relatório completo para debug
+    let report = `=== POOL INTELLIGENCE PRO - DEBUG REPORT ===\n`;
+    report += `Gerado em: ${timestamp}\n\n`;
+
+    // Status do sistema
+    report += `--- STATUS DO SISTEMA ---\n`;
+    report += `Status: ${health?.status || 'N/A'}\n`;
+    report += `Timestamp: ${health?.timestamp || 'N/A'}\n\n`;
+
+    // Provedores
+    report += `--- PROVEDORES ---\n`;
+    health?.providers?.forEach(p => {
+      report += `${p.name}: ${p.isHealthy ? 'OK' : 'FALHA'} | Circuit: ${p.isCircuitOpen ? 'OPEN' : 'closed'} | Falhas: ${p.consecutiveFailures}\n`;
+    });
+    report += `\n`;
+
+    // Cache
+    report += `--- CACHE ---\n`;
+    report += `Hit Rate: ${((health?.cache?.hitRate || 0) * 100).toFixed(1)}%\n`;
+    report += `Hits: ${health?.cache?.hits || 0} | Misses: ${health?.cache?.misses || 0} | Sets: ${health?.cache?.sets || 0} | Keys: ${health?.cache?.keys || 0}\n\n`;
+
+    // MemoryStore
+    if (health?.memoryStore) {
+      report += `--- MEMORY STORE ---\n`;
+      report += `Pools: ${health.memoryStore.pools} | Scores: ${health.memoryStore.scores} | Watchlist: ${health.memoryStore.watchlist}\n`;
+      report += `Hit Rate: ${health.memoryStore.hitRatePct}% | Reads: ${health.memoryStore.reads} | Hits: ${health.memoryStore.hits} | Misses: ${health.memoryStore.misses}\n`;
+      report += `Writes: ${health.memoryStore.writes} | RAM: ~${health.memoryStore.estimatedKB} KB\n`;
+      report += `Recs: ${health.memoryStore.hasRecs ? (health.memoryStore.recsFresh ? 'Fresh' : 'Stale') : 'None'}\n\n`;
+    }
+
+    // Alertas
+    report += `--- ALERTAS ---\n`;
+    report += `Rules: ${health?.alerts?.rulesCount || 0} | Recentes: ${health?.alerts?.recentAlertsCount || 0} | Hoje: ${health?.alerts?.triggersToday || 0}\n\n`;
+
+    // Logs
+    report += `--- LOGS RECENTES (${logs?.length || 0}) ---\n`;
+    logs?.forEach(log => {
+      const time = format(new Date(log.timestamp), 'HH:mm:ss');
+      report += `[${time}] ${log.level.padEnd(5)} [${log.component}] ${log.message}\n`;
+    });
+
+    report += `\n=== FIM DO RELATÓRIO ===\n`;
+
+    try {
+      await navigator.clipboard.writeText(report);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      // Fallback para navegadores sem suporte a clipboard API
+      const textarea = document.createElement('textarea');
+      textarea.value = report;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -126,8 +193,28 @@ export default function StatusPage() {
         </div>
 
         <div className="card">
-          <div className="card-header">
+          <div className="card-header flex items-center justify-between">
             <h3 className="font-semibold">Logs Recentes</h3>
+            <button
+              onClick={copyLogsToClipboard}
+              className={clsx(
+                'btn btn-sm flex items-center gap-2 transition-all',
+                copied ? 'btn-success' : 'btn-secondary'
+              )}
+              title="Copiar relatório completo para debug"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-4 h-4" />
+                  Copiado!
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  Copiar Logs
+                </>
+              )}
+            </button>
           </div>
           <div className="card-body">
             <div className="space-y-2 max-h-80 overflow-y-auto">
@@ -135,7 +222,7 @@ export default function StatusPage() {
                 <div key={i} className="flex items-start gap-2 text-sm p-2 bg-dark-700/50 rounded">
                   <span className={clsx(
                     'badge text-xs',
-                    log.level === 'ERROR' ? 'badge-danger' : 
+                    log.level === 'ERROR' ? 'badge-danger' :
                     log.level === 'WARN' ? 'badge-warning' : 'badge-primary'
                   )}>
                     {log.level}
@@ -145,6 +232,9 @@ export default function StatusPage() {
                   <span className="text-xs text-dark-400">{format(new Date(log.timestamp), 'HH:mm:ss')}</span>
                 </div>
               ))}
+              {(!logs || logs.length === 0) && (
+                <p className="text-dark-400 text-center py-4">Nenhum log disponível</p>
+              )}
             </div>
           </div>
         </div>
