@@ -53,14 +53,14 @@ function PoolCard({ pool, score, index, isWatched, isAdding, onAddToWatchlist }:
           <div className="flex items-center gap-3">
             <div className="flex -space-x-2">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-xs font-bold border-2 border-dark-800">
-                {pool.token0.symbol.slice(0, 3)}
+                {(pool.token0?.symbol ?? '???').slice(0, 3)}
               </div>
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-success-500 to-success-700 flex items-center justify-center text-xs font-bold border-2 border-dark-800">
-                {pool.token1.symbol.slice(0, 3)}
+                {(pool.token1?.symbol ?? '???').slice(0, 3)}
               </div>
             </div>
             <div>
-              <h3 className="font-semibold">{pool.token0.symbol}/{pool.token1.symbol}</h3>
+              <h3 className="font-semibold">{pool.token0?.symbol ?? '?'}/{pool.token1?.symbol ?? '?'}</h3>
               <p className="text-xs text-dark-400">{pool.protocol} - {pool.chain}</p>
             </div>
           </div>

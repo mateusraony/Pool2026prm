@@ -24,8 +24,8 @@ function formatNum(num: number): string {
 
 function RecommendationCard({ rec, index }: { rec: Recommendation; index: number }) {
   const navigate = useNavigate();
-  const isPositive = rec.estimatedGainPercent >= 0;
-  const poolName = rec.pool.token0.symbol + '/' + rec.pool.token1.symbol;
+  const isPositive = (rec.estimatedGainPercent ?? 0) >= 0;
+  const poolName = (rec.pool.token0?.symbol ?? '?') + '/' + (rec.pool.token1?.symbol ?? '?');
   // Defensive: use externalId as fallback
   const poolAddress = rec.pool.poolAddress || rec.pool.externalId || 'unknown';
   const poolPath = '/simulation/' + rec.pool.chain + '/' + poolAddress;
@@ -56,7 +56,7 @@ function RecommendationCard({ rec, index }: { rec: Recommendation; index: number
             {modeConfig[rec.mode as Mode]?.emoji} {rec.mode}
           </span>
           <div className="text-right">
-            <div className="text-2xl font-bold">{rec.score.total.toFixed(0)}</div>
+            <div className="text-2xl font-bold">{(rec.score?.total ?? 0).toFixed(0)}</div>
             <div className="text-xs text-dark-400">Score</div>
           </div>
         </div>
@@ -71,13 +71,13 @@ function RecommendationCard({ rec, index }: { rec: Recommendation; index: number
           <div className="stat-card">
             <div className="stat-label">Retorno Est. (7d)</div>
             <div className={clsx('stat-value', isPositive ? 'text-success-400' : 'text-danger-400')}>
-              {isPositive ? '+' : ''}{rec.estimatedGainPercent.toFixed(2)}%
+              {isPositive ? '+' : ''}{(rec.estimatedGainPercent ?? 0).toFixed(2)}%
             </div>
           </div>
           <div className="stat-card">
             <div className="stat-label">Ganho Est. (USD)</div>
             <div className={clsx('stat-value', isPositive ? 'text-success-400' : 'text-danger-400')}>
-              {isPositive ? '+' : ''}{'$' + rec.estimatedGainUsd.toFixed(2)}
+              {isPositive ? '+' : ''}{'$' + (rec.estimatedGainUsd ?? 0).toFixed(2)}
             </div>
           </div>
           <div className="stat-card">
@@ -142,7 +142,7 @@ function RecommendationCard({ rec, index }: { rec: Recommendation; index: number
               Simular
             </button>
             <a
-              href={'https://app.uniswap.org/add/' + rec.pool.token0.address + '/' + rec.pool.token1.address + '?chain=' + rec.pool.chain}
+              href={'https://app.uniswap.org/add/' + (rec.pool.token0?.address ?? '') + '/' + (rec.pool.token1?.address ?? '') + '?chain=' + rec.pool.chain}
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-primary flex items-center gap-2"

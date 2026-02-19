@@ -66,7 +66,7 @@ export default function WatchlistPage() {
             const pool = item.poolData?.pool;
             const score = item.poolData?.score;
             const poolName = pool
-              ? pool.token0.symbol + '/' + pool.token1.symbol
+              ? (pool.token0?.symbol ?? '?') + '/' + (pool.token1?.symbol ?? '?')
               : item.poolId.slice(0, 12) + '...';
 
             return (
@@ -84,10 +84,10 @@ export default function WatchlistPage() {
                       {pool ? (
                         <div className="flex -space-x-2">
                           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-xs font-bold border-2 border-dark-800">
-                            {pool.token0.symbol.slice(0, 3)}
+                            {(pool.token0?.symbol ?? '???').slice(0, 3)}
                           </div>
                           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-success-500 to-success-700 flex items-center justify-center text-xs font-bold border-2 border-dark-800">
-                            {pool.token1.symbol.slice(0, 3)}
+                            {(pool.token1?.symbol ?? '???').slice(0, 3)}
                           </div>
                         </div>
                       ) : (
@@ -116,17 +116,17 @@ export default function WatchlistPage() {
                         <div className="text-center">
                           <div className="text-xs text-dark-400">APR Est.</div>
                           <div className="font-semibold text-success-400">
-                            {score.breakdown.return.aprEstimate.toFixed(1)}%
+                            {(score?.breakdown?.return?.aprEstimate ?? pool.apr ?? 0).toFixed(1)}%
                           </div>
                         </div>
                         <div className="text-center">
                           <div className="text-xs text-dark-400">Score</div>
                           <div className={clsx(
                             'font-bold',
-                            score.total >= 70 ? 'text-success-400' :
-                              score.total >= 50 ? 'text-warning-400' : 'text-danger-400'
+                            (score?.total ?? 0) >= 70 ? 'text-success-400' :
+                              (score?.total ?? 0) >= 50 ? 'text-warning-400' : 'text-danger-400'
                           )}>
-                            {score.total.toFixed(0)}/100
+                            {(score?.total ?? 0).toFixed(0)}/100
                           </div>
                         </div>
                       </div>
@@ -174,11 +174,11 @@ export default function WatchlistPage() {
                       </div>
                       <div className="bg-dark-700/50 rounded p-2">
                         <div className="text-xs text-dark-400">APR</div>
-                        <div className="font-semibold text-success-400">{score.breakdown.return.aprEstimate.toFixed(1)}%</div>
+                        <div className="font-semibold text-success-400">{(score?.breakdown?.return?.aprEstimate ?? pool.apr ?? 0).toFixed(1)}%</div>
                       </div>
                       <div className="bg-dark-700/50 rounded p-2">
                         <div className="text-xs text-dark-400">Score</div>
-                        <div className="font-semibold">{score.total.toFixed(0)}</div>
+                        <div className="font-semibold">{(score?.total ?? 0).toFixed(0)}</div>
                       </div>
                     </div>
                   )}

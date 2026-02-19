@@ -45,8 +45,8 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
       poolId: pool.externalId,
       chain: pool.chain,
       poolAddress: pool.poolAddress,
-      token0Symbol: pool.token0.symbol,
-      token1Symbol: pool.token1.symbol,
+      token0Symbol: pool.token0?.symbol ?? '???',
+      token1Symbol: pool.token1?.symbol ?? '???',
       rangeLower,
       rangeUpper,
       entryPrice: currentPrice,
@@ -151,7 +151,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
   const isPositive = metrics.netReturnPercent >= 0;
 
   // Uniswap URL
-  const uniswapUrl = `https://app.uniswap.org/add/${pool.token0.address}/${pool.token1.address}/${pool.feeTier || 3000}?chain=${pool.chain}`;
+  const uniswapUrl = `https://app.uniswap.org/add/${pool.token0?.address ?? ''}/${pool.token1?.address ?? ''}/${pool.feeTier || 3000}?chain=${pool.chain}`;
 
   return (
     <div className="space-y-6">
@@ -191,8 +191,8 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
         rangeLower={rangeLower}
         rangeUpper={rangeUpper}
         onRangeChange={handleRangeChange}
-        token0Symbol={pool.token0.symbol}
-        token1Symbol={pool.token1.symbol}
+        token0Symbol={pool.token0?.symbol ?? '???'}
+        token1Symbol={pool.token1?.symbol ?? '???'}
       />
 
       <div className="grid lg:grid-cols-2 gap-6">
@@ -457,14 +457,14 @@ export default function SimulationPage() {
                   <div className="flex items-center gap-3 mb-3">
                     <div className="flex -space-x-2">
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-xs font-bold border-2 border-dark-800">
-                        {item.pool.token0.symbol.slice(0, 2)}
+                        {(item.pool.token0?.symbol ?? '??').slice(0, 2)}
                       </div>
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-success-500 to-success-700 flex items-center justify-center text-xs font-bold border-2 border-dark-800">
-                        {item.pool.token1.symbol.slice(0, 2)}
+                        {(item.pool.token1?.symbol ?? '??').slice(0, 2)}
                       </div>
                     </div>
                     <div>
-                      <div className="font-semibold">{item.pool.token0.symbol}/{item.pool.token1.symbol}</div>
+                      <div className="font-semibold">{item.pool.token0?.symbol ?? '?'}/{item.pool.token1?.symbol ?? '?'}</div>
                       <div className="text-xs text-dark-400">{item.pool.protocol} - {item.pool.chain}</div>
                     </div>
                   </div>
@@ -513,7 +513,7 @@ export default function SimulationPage() {
     );
   }
 
-  const poolName = data.pool.token0.symbol + '/' + data.pool.token1.symbol;
+  const poolName = (data.pool.token0?.symbol ?? '?') + '/' + (data.pool.token1?.symbol ?? '?');
 
   return (
     <div className="space-y-6">
