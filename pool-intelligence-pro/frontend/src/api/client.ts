@@ -61,6 +61,7 @@ export interface HealthData {
   status: 'HEALTHY' | 'DEGRADED' | 'UNHEALTHY';
   providers: { name: string; isHealthy: boolean; isCircuitOpen: boolean; consecutiveFailures: number }[];
   cache: { hits: number; misses: number; sets: number; keys: number; hitRate: number };
+  memoryStore?: { pools: number; scores: number; watchlist: number; hasRecs: boolean; recsFresh: boolean; reads: number; hits: number; misses: number; writes: number; hitRatePct: number; estimatedKB: number };
   alerts: { rulesCount: number; recentAlertsCount: number; triggersToday: number };
   timestamp: string;
 }
@@ -73,7 +74,29 @@ export async function fetchHealth(): Promise<HealthData> {
 
 export async function fetchPools(chain?: string): Promise<{ pool: Pool; score: Score }[]> {
   const { data } = await api.get('/pools', { params: { chain } });
-  return data.data || [];
+  // Suporta novo formato (data.pools) e antigo (data.data)
+  const pools = data?.pools || data?.data || [];
+  // Converte UnifiedPool para o formato legado se necessário
+  return pools.map((p: any) => {
+    if (p.pool && p.score) return p;
+    // UnifiedPool → { pool, score }
+    return {
+      pool: {
+        externalId: p.id || p.poolAddress,
+        chain: p.chain,
+        protocol: p.protocol,
+        address: p.poolAddress,
+        token0: p.token0 || { symbol: p.baseToken, address: '', decimals: 18 },
+        token1: p.token1 || { symbol: p.quoteToken, address: '', decimals: 18 },
+        tvl: p.tvlUSD || p.tvl || 0,
+        volume24h: p.volume24hUSD || 0,
+        fees24h: p.fees24hUSD || 0,
+        apr: p.aprTotal || p.aprFee || 0,
+        feeTier: p.feeTier ? p.feeTier * 100 : 0.3,
+      },
+      score: { total: p.healthScore || 50, health: 0, return: 0, risk: 0, recommendedMode: 'NORMAL' as const },
+    };
+  });
 }
 
 export async function fetchPool(chain: string, address: string): Promise<{ pool: Pool; score: Score } | null> {

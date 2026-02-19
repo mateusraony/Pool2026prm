@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Activity, Database, Server, Clock, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { Activity, Database, Server, Clock, AlertTriangle, CheckCircle, XCircle, HardDrive } from 'lucide-react';
 import { fetchHealth, fetchLogs } from '../api/client';
 import { format } from 'date-fns';
 import clsx from 'clsx';
@@ -27,7 +27,7 @@ export default function StatusPage() {
         <p className="text-dark-400 mt-1">Monitoramento em tempo real</p>
       </div>
 
-      <div className="grid md:grid-cols-4 gap-4">
+      <div className="grid md:grid-cols-5 gap-4">
         <div className="card">
           <div className="card-body text-center">
             <StatusIcon className={clsx('w-12 h-12 mx-auto mb-2', 'text-' + statusColor + '-400')} />
@@ -51,12 +51,56 @@ export default function StatusPage() {
         </div>
         <div className="card">
           <div className="card-body text-center">
+            <HardDrive className="w-12 h-12 mx-auto mb-2 text-cyan-400" />
+            <h3 className="font-semibold">MemoryStore</h3>
+            <p className="text-dark-400">{health?.memoryStore?.pools || 0} pools ({health?.memoryStore?.estimatedKB || 0} KB)</p>
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-body text-center">
             <Activity className="w-12 h-12 mx-auto mb-2 text-warning-400" />
             <h3 className="font-semibold">Alertas Hoje</h3>
             <p className="text-dark-400">{health?.alerts?.triggersToday || 0}</p>
           </div>
         </div>
       </div>
+
+      {health?.memoryStore && (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="font-semibold">MemoryStore — Cache em Memória</h3>
+          </div>
+          <div className="card-body">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+              <div className="p-3 bg-dark-700/50 rounded-lg">
+                <p className="text-2xl font-bold text-cyan-400">{health.memoryStore.pools}</p>
+                <p className="text-sm text-dark-400">Pools</p>
+              </div>
+              <div className="p-3 bg-dark-700/50 rounded-lg">
+                <p className="text-2xl font-bold text-green-400">{health.memoryStore.hitRatePct}%</p>
+                <p className="text-sm text-dark-400">Hit Rate</p>
+              </div>
+              <div className="p-3 bg-dark-700/50 rounded-lg">
+                <p className="text-2xl font-bold text-primary-400">{health.memoryStore.reads}</p>
+                <p className="text-sm text-dark-400">Reads</p>
+              </div>
+              <div className="p-3 bg-dark-700/50 rounded-lg">
+                <p className="text-2xl font-bold text-yellow-400">{health.memoryStore.estimatedKB} KB</p>
+                <p className="text-sm text-dark-400">RAM Estimada</p>
+              </div>
+            </div>
+            <div className="mt-4 flex items-center gap-4 text-sm text-dark-400">
+              <span>Hits: {health.memoryStore.hits}</span>
+              <span>Misses: {health.memoryStore.misses}</span>
+              <span>Writes: {health.memoryStore.writes}</span>
+              <span>Watchlist: {health.memoryStore.watchlist}</span>
+              <span className={health.memoryStore.recsFresh ? 'text-green-400' : 'text-yellow-400'}>
+                Recs: {health.memoryStore.hasRecs ? (health.memoryStore.recsFresh ? 'Fresh' : 'Stale') : 'None'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid md:grid-cols-2 gap-6">
         <div className="card">
