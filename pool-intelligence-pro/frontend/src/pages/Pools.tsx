@@ -347,7 +347,13 @@ export default function PoolsPage() {
   }, [filtered, sortKey, sortDir]);
 
   const handlePoolClick = (pool: UnifiedPool) => {
-    navigate(`/pools/${pool.chain}/${pool.poolAddress}`);
+    // Defensive: use id as fallback if poolAddress is missing
+    const address = pool.poolAddress || pool.id || 'unknown';
+    if (address === 'unknown') {
+      console.warn('Pool has no valid address:', pool);
+      return;
+    }
+    navigate(`/pools/${pool.chain}/${address}`);
   };
 
   const CHAINS = ['', 'ethereum', 'arbitrum', 'base', 'polygon', 'optimism'];

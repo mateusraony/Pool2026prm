@@ -767,8 +767,9 @@ router.get('/favorites', async (req, res) => {
     const favorites = await prisma.favorite.findMany({ orderBy: { addedAt: 'desc' } });
     res.json({ success: true, data: favorites });
   } catch (error) {
-    logService.error('SYSTEM', 'GET /favorites failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
+    // DB might not be configured or table doesn't exist — return empty array gracefully
+    logService.warn('SYSTEM', 'GET /favorites - DB unavailable, returning empty', { error });
+    res.json({ success: true, data: [], note: 'Database não configurada ou tabela não existe' });
   }
 });
 

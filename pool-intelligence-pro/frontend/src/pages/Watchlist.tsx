@@ -76,7 +76,7 @@ export default function WatchlistPage() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.05 }}
                 className="card hover:border-primary-500/50 transition-all cursor-pointer"
-                onClick={() => pool && navigate('/simulation/' + pool.chain + '/' + pool.poolAddress)}
+                onClick={() => pool && navigate('/simulation/' + pool.chain + '/' + (pool.poolAddress || pool.externalId || 'unknown'))}
               >
                 <div className="p-4">
                   <div className="flex items-center justify-between">

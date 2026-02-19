@@ -450,7 +450,7 @@ export default function SimulationPage() {
             {pools.slice(0, 6).map((item) => (
               <button
                 key={item.pool.externalId}
-                onClick={() => navigate('/simulation/' + item.pool.chain + '/' + item.pool.poolAddress)}
+                onClick={() => navigate('/simulation/' + item.pool.chain + '/' + (item.pool.poolAddress || item.pool.externalId || 'unknown'))}
                 className="card hover:border-primary-500/50 transition-all text-left"
               >
                 <div className="p-4">

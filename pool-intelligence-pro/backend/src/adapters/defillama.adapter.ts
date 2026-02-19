@@ -73,6 +73,18 @@ export class DefiLlamaAdapter extends BaseAdapter {
     const token0Symbol = symbols[0] || 'UNKNOWN';
     const token1Symbol = symbols[1] || 'UNKNOWN';
 
+    // Extract pool address from DefiLlama pool ID
+    // Formats: "uniswap-v3-ethereum-0xABC..." or "curve-ethereum-0xABC..." or just "0xABC..."
+    let poolAddress = data.pool;
+    const parts = data.pool.split('-');
+    const lastPart = parts[parts.length - 1];
+    if (lastPart && lastPart.startsWith('0x') && lastPart.length >= 40) {
+      poolAddress = lastPart;
+    } else if (data.underlyingTokens?.[0]?.startsWith('0x')) {
+      // Fallback: use first underlying token as pool reference
+      poolAddress = data.pool; // Keep full ID if no clear address
+    }
+
     // Estimate price based on TVL and typical pool composition
     // For stablecoin pairs, price ~= 1
     // For ETH pairs, estimate based on TVL / typical ETH amount
@@ -97,7 +109,7 @@ export class DefiLlamaAdapter extends BaseAdapter {
       externalId: data.pool,
       chain: this.normalizeChain(data.chain),
       protocol: data.project,
-      poolAddress: data.pool, // DefiLlama uses pool ID as address
+      poolAddress, // Extracted address or full pool ID
       token0: {
         symbol: token0Symbol,
         address: data.underlyingTokens?.[0] || '',

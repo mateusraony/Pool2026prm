@@ -35,7 +35,9 @@ function PoolCard({ pool, score, index, isWatched, isAdding, onAddToWatchlist }:
   onAddToWatchlist: () => void;
 }) {
   const navigate = useNavigate();
-  const poolPath = '/simulation/' + pool.chain + '/' + pool.poolAddress;
+  // Defensive: use externalId as fallback if poolAddress is undefined
+  const poolAddress = pool.poolAddress || pool.externalId || 'unknown';
+  const poolPath = '/simulation/' + pool.chain + '/' + poolAddress;
 
   return (
     <motion.div
