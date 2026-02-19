@@ -2,8 +2,25 @@
 
 ## Status Atual
 **Branch:** `claude/liquidity-pool-intelligence-8LhDk`
-**Data:** 2026-02-19
-**Fase:** Builds validados ✅ - Backend e Frontend compilam sem erros
+**Data:** 2026-02-19 15:30 UTC
+**Último Commit:** `95f1f36`
+**Fase:** Correções de runtime aplicadas ✅
+
+## Para Continuar (IMPORTANTE)
+**Frase de continuação:** `"Continuar do CHECKPOINT 2026-02-19-B"`
+
+### Correções aplicadas nesta sessão:
+1. ✅ TheGraph marcado como opcional (não causa DEGRADED)
+2. ✅ MemoryStore implementado (cache em memória)
+3. ✅ Botão "Copiar Logs" na página Status
+4. ✅ DefiLlama: extração correta do poolAddress
+5. ✅ /favorites: retorna array vazio se DB indisponível
+6. ✅ Frontend: null checks defensivos em todas as navegações
+
+### Pendente para próxima sessão:
+- [ ] Investigar dados incorretos (valores não batem com Uniswap real)
+- [ ] Gráficos mostrando dados iguais (precisa API de preços real-time)
+- [ ] GeckoTerminal/DexScreener com Circuit OPEN (rate limit)
 
 ## Arquivos Criados (41 arquivos)
 
