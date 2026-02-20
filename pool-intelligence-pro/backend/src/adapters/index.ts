@@ -5,6 +5,7 @@ import { dexScreenerAdapter } from './dexscreener.adapter.js';
 import { theGraphAdapter } from './thegraph.adapter.js';
 import { circuitBreaker } from '../services/circuit-breaker.service.js';
 import { logService } from '../services/log.service.js';
+import { memoryStore } from '../services/memory-store.service.js';
 
 // Export individual adapters
 export { defiLlamaAdapter } from './defillama.adapter.js';
@@ -20,8 +21,10 @@ const adapters: Record<string, ProviderAdapter> = {
   thegraph: theGraphAdapter,
 };
 
-// Provedores que requerem config extra — não afetam o status geral se falharem
-const optionalProviders = new Set(['thegraph']);
+// Provedores que não afetam o status geral se falharem:
+// - thegraph: requer API key (THEGRAPH_API_KEY)
+// - geckoterminal: supplementary, rate-limited; main data comes from DefiLlama
+const optionalProviders = new Set(['thegraph', 'geckoterminal']);
 
 // Get adapter by name
 export function getAdapter(name: string): ProviderAdapter | undefined {
@@ -40,7 +43,39 @@ export async function getPoolWithFallback(
   primaryProvider = 'geckoterminal',
   fallbackProvider = 'dexscreener'
 ): Promise<{ pool: Pool | null; provider: string; usedFallback: boolean }> {
-  
+
+  // 0. Check MemoryStore first — avoids external API calls for pools already loaded by radar
+  const memPool = memoryStore.getAllPools().find(p =>
+    p.chain === chain && (p.poolAddress === address || p.id === address || p.id === `${chain}_${address}`)
+  );
+  if (memPool) {
+    const pool: Pool = {
+      externalId: memPool.id,
+      chain: memPool.chain,
+      protocol: memPool.protocol,
+      poolAddress: memPool.poolAddress,
+      token0: memPool.token0,
+      token1: memPool.token1,
+      feeTier: memPool.feeTier,
+      price: memPool.price,
+      tvl: memPool.tvlUSD,
+      volume24h: memPool.volume24hUSD,
+      fees24h: memPool.fees24hUSD ?? 0,
+      apr: memPool.aprTotal ?? memPool.aprFee ?? 0,
+    } as Pool;
+    return { pool, provider: 'memory-store', usedFallback: false };
+  }
+
+  // Skip external providers for non-0x addresses (e.g. DefiLlama UUIDs) — they will always fail
+  if (!address.startsWith('0x')) {
+    // Try DefiLlama which can search by its own pool ID
+    try {
+      const pool = await defiLlamaAdapter.getPool(chain, address);
+      if (pool) return { pool, provider: 'defillama', usedFallback: false };
+    } catch { /* continue */ }
+    return { pool: null, provider: '', usedFallback: false };
+  }
+
   // Try primary
   const primaryAdapter = getAdapter(primaryProvider);
   if (primaryAdapter && !circuitBreaker.isOpen(primaryProvider)) {
@@ -53,7 +88,7 @@ export async function getPoolWithFallback(
       logService.warn('PROVIDER', 'Primary provider failed: ' + primaryProvider, { error });
     }
   }
-  
+
   // Try fallback
   const fallbackAdapter = getAdapter(fallbackProvider);
   if (fallbackAdapter && !circuitBreaker.isOpen(fallbackProvider)) {
@@ -67,7 +102,7 @@ export async function getPoolWithFallback(
       logService.warn('PROVIDER', 'Fallback provider failed: ' + fallbackProvider, { error });
     }
   }
-  
+
   return { pool: null, provider: '', usedFallback: false };
 }
 
@@ -138,6 +173,11 @@ export async function getAllProvidersHealth(): Promise<ProviderHealth[]> {
       } catch {
         isHealthy = false;
       }
+    }
+
+    // Add note for optional providers to clarify they don't affect system status
+    if (isOptional && !isHealthy) {
+      note = `Opcional — não afeta status geral`;
     }
 
     health.push({
