@@ -210,8 +210,9 @@ export class ScoreService {
     }
     
     // Estimate from fee tier if available
+    // feeTier is in decimal form: 0.003 = 0.3%
     if (pool.feeTier && pool.volume24h > 0) {
-      const dailyFees = pool.volume24h * (pool.feeTier / 100);
+      const dailyFees = pool.volume24h * pool.feeTier;
       const annualizedApr = (dailyFees * 365) / pool.tvl * 100;
       return Math.min(100, annualizedApr);
     }
@@ -221,12 +222,13 @@ export class ScoreService {
 
   private estimateApr(pool: Pool): number {
     // Estimate APR from volume and typical fee
+    // feeTier is in decimal form: 0.003 = 0.3%
     if (pool.tvl === 0) return 0;
-    
-    const assumedFeeRate = pool.feeTier || 0.3; // Default 0.3%
-    const dailyFees = pool.volume24h * (assumedFeeRate / 100);
+
+    const assumedFeeRate = pool.feeTier || 0.003; // Default 0.3% = 0.003
+    const dailyFees = pool.volume24h * assumedFeeRate;
     const annualizedApr = (dailyFees * 365) / pool.tvl * 100;
-    
+
     return Math.round(annualizedApr * 10) / 10;
   }
 

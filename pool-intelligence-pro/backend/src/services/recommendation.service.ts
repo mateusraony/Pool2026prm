@@ -142,9 +142,10 @@ export class RecommendationService {
   private estimateAprFromPool(pool: Pool): number {
     if (pool.apr) return pool.apr;
     if (pool.tvl === 0) return 0;
-    
-    const feeRate = pool.feeTier || 0.3;
-    const dailyFees = pool.volume24h * (feeRate / 100);
+
+    // feeTier is in decimal form: 0.003 = 0.3%
+    const feeRate = pool.feeTier || 0.003;
+    const dailyFees = pool.volume24h * feeRate;
     return (dailyFees * 365) / pool.tvl * 100;
   }
 

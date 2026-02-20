@@ -150,8 +150,9 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
 
   const isPositive = metrics.netReturnPercent >= 0;
 
-  // Uniswap URL
-  const uniswapUrl = `https://app.uniswap.org/add/${pool.token0?.address ?? ''}/${pool.token1?.address ?? ''}/${pool.feeTier || 3000}?chain=${pool.chain}`;
+  // Uniswap URL — feeTier needs to be in bps (e.g. 3000 for 0.3%)
+  const feeTierBps = pool.feeTier ? Math.round(pool.feeTier * 1000000) : 3000;
+  const uniswapUrl = `https://app.uniswap.org/add/${pool.token0?.address ?? ''}/${pool.token1?.address ?? ''}/${feeTierBps}?chain=${pool.chain}`;
 
   return (
     <div className="space-y-6">

@@ -80,7 +80,8 @@ export async function fetchPools(chain?: string): Promise<{ pool: Pool; score: S
   return pools.map((p: any) => {
     if (p.pool && p.score) return p;
     // UnifiedPool → { pool, score }
-    const aprEstimate = p.aprTotal || p.aprFee || 0;
+    // Use aprTotal (computed from fees) → aprFee → apr (adapter APY e.g. DefiLlama) → 0
+    const aprEstimate = p.aprTotal || p.aprFee || p.apr || 0;
     return {
       pool: {
         externalId: p.id || p.poolAddress,
@@ -90,10 +91,11 @@ export async function fetchPools(chain?: string): Promise<{ pool: Pool; score: S
         token0: p.token0 || { symbol: p.baseToken, address: '', decimals: 18 },
         token1: p.token1 || { symbol: p.quoteToken, address: '', decimals: 18 },
         tvl: p.tvlUSD || p.tvl || 0,
-        volume24h: p.volume24hUSD || 0,
-        fees24h: p.fees24hUSD || 0,
+        volume24h: p.volume24hUSD || p.volume24h || 0,
+        fees24h: p.fees24hUSD || p.fees24h || 0,
         apr: aprEstimate,
-        feeTier: p.feeTier ? p.feeTier * 100 : 0.3,
+        price: p.price,
+        feeTier: p.feeTier || 0.003, // decimal: 0.003 = 0.3%
       },
       score: {
         total: p.healthScore || 50,

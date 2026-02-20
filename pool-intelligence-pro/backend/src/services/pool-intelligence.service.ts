@@ -55,7 +55,11 @@ export function enrichToUnifiedPool(
 
   const aprFee = aprRes.feeAPR;
   const aprIncentive = 0; // No incentive data yet
-  const aprTotal = aprFee != null ? aprFee + aprIncentive : null;
+  // Use computed fee APR when available; otherwise fall back to adapter-provided APR/APY
+  // (e.g. DefiLlama provides APY directly even when fees24h is unavailable)
+  const aprTotal = aprFee != null
+    ? aprFee + aprIncentive
+    : (pool.apr != null ? pool.apr : null);
 
   // Volatility (proxy using price vs estimate)
   // We don't have historical price series per-pool in memory, so use proxy
