@@ -2,9 +2,8 @@
 
 ## Status Atual
 **Branch:** `claude/liquidity-pool-intelligence-8LhDk`
-**Data:** 2026-02-19 15:30 UTC
-**Último Commit:** `95f1f36`
-**Fase:** Correções de runtime aplicadas ✅
+**Data:** 2026-02-20 UTC
+**Fase:** Dados de volume corrigidos ✅
 
 ## Para Continuar (IMPORTANTE)
 **Frase de continuação:** `"Continuar do CHECKPOINT 2026-02-19-B"`
@@ -17,10 +16,20 @@
 5. ✅ /favorites: retorna array vazio se DB indisponível
 6. ✅ Frontend: null checks defensivos em todas as navegações
 
+### Correções sessão 2026-02-20:
+7. ✅ Watchlist job: checa MemoryStore antes de APIs externas (UUIDs DefiLlama não falhavam mais)
+8. ✅ GeckoTerminal marcado como opcional (não causa DEGRADED)
+9. ✅ getPoolWithFallback: MemoryStore first, skip non-0x addresses
+10. ✅ **Volume data fix**: DefiLlama `volumeUsd1d` frequentemente `null` — agora 3 camadas de enrichment:
+    - Camada 1: DefiLlama `volumeUsd1d` (quando disponível)
+    - Camada 2: GeckoTerminal batch API (`/pools/multi/`) para pools com 0x address
+    - Camada 3: Estimativa reversa via APY: `volume = (apr/100/365*tvl) / feeTier`
+11. ✅ `fees24h` agora calculado como `volume24h * feeTier` quando não fornecido
+12. ✅ Health check mostra nota "Opcional" para provedores não-críticos
+
 ### Pendente para próxima sessão:
-- [ ] Investigar dados incorretos (valores não batem com Uniswap real)
-- [ ] Gráficos mostrando dados iguais (precisa API de preços real-time)
-- [ ] GeckoTerminal/DexScreener com Circuit OPEN (rate limit)
+- [ ] Gráficos mostrando dados iguais (precisa API de preços real-time / histórico)
+- [ ] Code splitting para reduzir bundle (900KB → ~300KB)
 
 ## Arquivos Criados (41 arquivos)
 

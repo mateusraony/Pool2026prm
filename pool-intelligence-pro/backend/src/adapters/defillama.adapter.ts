@@ -4,6 +4,7 @@ import { Pool } from '../types/index.js';
 import { fetchWithRetry } from '../services/retry.service.js';
 import { cacheService } from '../services/cache.service.js';
 import { config } from '../config/index.js';
+import { logService } from '../services/log.service.js';
 
 const BASE_URL = 'https://yields.llama.fi';
 
@@ -67,7 +68,12 @@ export class DefiLlamaAdapter extends BaseAdapter {
     // Fetch real token prices from DefiLlama coins API (batch)
     const priceMap = await this.fetchTokenPrices(normalizedChain, filtered);
 
-    return filtered.map(p => this.mapToPool(p, priceMap));
+    const mappedPools = filtered.map(p => this.mapToPool(p, priceMap));
+
+    // Supplement missing volume data from GeckoTerminal (batch)
+    await this.supplementVolumeData(normalizedChain, mappedPools);
+
+    return mappedPools;
   }
 
   /**
@@ -112,6 +118,88 @@ export class DefiLlamaAdapter extends BaseAdapter {
     }
   }
   
+  /**
+   * Supplement missing volume data for pools that have a 0x address.
+   * Uses GeckoTerminal's batch endpoint to fetch volume in one call.
+   * Falls back to APY-based estimation if GeckoTerminal is unavailable.
+   */
+  private async supplementVolumeData(chain: string, pools: Pool[]): Promise<void> {
+    // Identify pools missing volume that have a real 0x address
+    const needVolume = pools.filter(p => !p.volume24h && p.poolAddress.startsWith('0x'));
+    if (needVolume.length === 0) return;
+
+    // Map chain name to GeckoTerminal chain slug
+    const geckoChainMap: Record<string, string> = {
+      ethereum: 'eth', arbitrum: 'arbitrum', base: 'base',
+      polygon: 'polygon_pos', optimism: 'optimism', bsc: 'bsc',
+    };
+    const geckoChain = geckoChainMap[chain] || chain;
+
+    // GeckoTerminal multi_pools endpoint: up to 30 addresses per call
+    const batches: Pool[][] = [];
+    for (let i = 0; i < needVolume.length; i += 30) {
+      batches.push(needVolume.slice(i, i + 30));
+    }
+
+    let enriched = 0;
+    for (const batch of batches) {
+      try {
+        const addresses = batch.map(p => p.poolAddress).join(',');
+        const res = await axios.get(
+          `https://api.geckoterminal.com/api/v2/networks/${geckoChain}/pools/multi/${addresses}`,
+          { timeout: 15000, headers: { Accept: 'application/json' } }
+        );
+        const geckoData: any[] = res.data?.data || [];
+
+        for (const gp of geckoData) {
+          const addr = gp.attributes?.address?.toLowerCase();
+          if (!addr) continue;
+
+          const vol24h = parseFloat(gp.attributes?.volume_usd?.h24) || 0;
+          if (vol24h <= 0) continue;
+
+          const match = batch.find(p => p.poolAddress.toLowerCase() === addr);
+          if (match) {
+            match.volume24h = vol24h;
+            // Also estimate fees24h from volume if not already set
+            if (!match.fees24h && match.feeTier) {
+              match.fees24h = vol24h * match.feeTier;
+            }
+            enriched++;
+          }
+        }
+      } catch (err) {
+        // GeckoTerminal unavailable — fall back to APY-based estimation below
+        logService.warn('PROVIDER', 'GeckoTerminal volume supplement failed', { chain, batchSize: batch.length });
+      }
+    }
+
+    // Fallback: for pools still missing volume, estimate from APY when available
+    // APY = (fees24h / tvl) * 365 * 100  →  fees24h = apy / 100 / 365 * tvl
+    // volume24h = fees24h / feeTier
+    for (const pool of pools) {
+      if (pool.volume24h > 0) continue; // Already has volume
+      if (!pool.apr || pool.apr <= 0 || !pool.tvl || pool.tvl <= 0) continue;
+
+      const fees24hEstimate = (pool.apr / 100 / 365) * pool.tvl;
+      const feeTier = pool.feeTier || 0.003;
+      const volumeEstimate = fees24hEstimate / feeTier;
+
+      // Sanity check: volume should be reasonable (not 100x TVL)
+      if (volumeEstimate > 0 && volumeEstimate < pool.tvl * 50) {
+        pool.volume24h = Math.round(volumeEstimate);
+        if (!pool.fees24h) {
+          pool.fees24h = Math.round(fees24hEstimate * 100) / 100;
+        }
+        enriched++;
+      }
+    }
+
+    if (enriched > 0) {
+      logService.info('PROVIDER', `DefiLlama: enriched ${enriched} pools with volume data`, { chain });
+    }
+  }
+
   private mapToPool(data: DefiLlamaPool, priceMap: Map<string, number> = new Map()): Pool {
     // Parse symbol (e.g., "WETH-USDC" or "ETH/USDC")
     const symbols = data.symbol.replace('/', '-').split('-');
@@ -160,6 +248,16 @@ export class DefiLlamaAdapter extends BaseAdapter {
       : data.poolMeta?.includes('1%') ? 0.01
       : undefined;
 
+    const volume24h = data.volumeUsd1d || 0;
+    const volume7d = data.volumeUsd7d;
+    const apr = data.apyBase ?? data.apy; // Prefer base APY (fees only); fall back to total APY
+
+    // Estimate fees24h when volume is available but fees aren't
+    let fees24h: number | undefined;
+    if (volume24h > 0 && feeTier) {
+      fees24h = volume24h * feeTier;
+    }
+
     return {
       externalId: data.pool,
       chain: this.normalizeChain(data.chain),
@@ -180,9 +278,10 @@ export class DefiLlamaAdapter extends BaseAdapter {
       feeTier,
       price,
       tvl: data.tvlUsd,
-      volume24h: data.volumeUsd1d || 0,
-      volume7d: data.volumeUsd7d,
-      apr: data.apyBase ?? data.apy, // Prefer base APY (fees only); fall back to total APY
+      volume24h,
+      volume7d,
+      fees24h,
+      apr,
     };
   }
   

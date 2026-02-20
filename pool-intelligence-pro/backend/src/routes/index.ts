@@ -179,9 +179,10 @@ router.get('/pools/:chain/:address', async (req, res) => {
         feeTier: memUnified.feeTier,
         price: memUnified.price,
         tvl: memUnified.tvlUSD,
-        volume24h: memUnified.volume24hUSD,
+        volume24h: memUnified.volume24hUSD || 0,
+        volume7d: (memUnified as any).volume7d,
         fees24h: memUnified.fees24hUSD ?? 0,
-        apr: memUnified.aprTotal ?? memUnified.aprFee ?? 0,
+        apr: memUnified.aprTotal ?? memUnified.aprFee ?? (memUnified as any).apr ?? 0,
       } as Pool;
       const cachedScore = memoryStore.getScore(memUnified.id);
       const score = cachedScore || scoreService.calculateScore(pool);
