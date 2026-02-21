@@ -3,8 +3,8 @@
 ## Status Atual
 **Branch:** `claude/review-pool2026-pr-rO5Zd`
 **Data:** 2026-02-21 UTC
-**Último Commit:** `8d39f03`
-**Fase:** Item #1 concluído — volatilidade real por OHLCV histórico
+**Último Commit:** `ada50ba`
+**Fase:** Items #1 e #2 concluídos — dados reais end-to-end
 
 ## Para Continuar (IMPORTANTE)
 **Frase de continuação:** `"Continuar do CHECKPOINT 2026-02-20-C"`
@@ -44,15 +44,23 @@
     - `pools-detail` endpoint: enriquece via GeckoTerminal quando TheGraph não forneceu
     - Commit: `8d39f03`
 
-### Valores fixos restantes (limitações de dados, não corrigíveis sem novas APIs):
-- `liquidityDropPenalty: 0` — precisa histórico de TVL (não disponível)
-- `inconsistencyPenalty: 0` — precisa múltiplas fontes com preços diferentes
-- `spreadPenalty: 0` — precisa order book (não disponível na DefiLlama)
-- `aprIncentive: 0` — precisa API de incentivos de farming
+20. ✅ **Item #2 — Substituir valores hardcoded por dados reais**:
+    - `aprIncentive`: agora usa `apyReward` real do DefiLlama (antes era hardcoded 0)
+    - `liquidityDropPenalty`: calculado do TheGraph TVL peak 24h vs atual (5-20pt penalty para drops >10-50%)
+    - `determineMode`: usa `pool.volatilityAnn * 100` real (antes era hardcoded `|| 10`)
+    - Pool type: campos `aprReward` e `tvlPeak24h` adicionados
+    - Frontend Simulation: range dinâmico `z*σ√T` (antes fixo ±15/10/5%)
+    - Frontend client.ts: ageScore calculado de sinais de maturidade, volatilityPenalty usa vol real
+    - Commit: `ada50ba`
+
+### Valores fixos restantes (limitações reais — sem API disponível):
+- `inconsistencyPenalty: 0` — precisa consensus multi-provider wired no scoring loop
+- `spreadPenalty: 0` — precisa order book (não disponível em nenhuma API atual)
 
 ### Pendente para próxima sessão:
 - [ ] Gráficos mostrando dados iguais (precisa API de preços real-time / histórico)
 - [ ] Code splitting para reduzir bundle (900KB → ~300KB)
+- [ ] `inconsistencyPenalty`: integrar `getPoolWithConsensus()` no scoring
 
 ## Arquivos Criados (41 arquivos)
 
