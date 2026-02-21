@@ -2,9 +2,9 @@
 
 ## Status Atual
 **Branch:** `claude/liquidity-pool-intelligence-8LhDk`
-**Data:** 2026-02-20 18:30 UTC
-**Último Commit:** `77a24d5`
-**Fase:** Volume data enrichment implementado ✅
+**Data:** 2026-02-21 UTC
+**Último Commit:** `617d0f0`
+**Fase:** Dados mockados removidos, tudo online ✅
 
 ## Para Continuar (IMPORTANTE)
 **Frase de continuação:** `"Continuar do CHECKPOINT 2026-02-20-C"`
@@ -27,6 +27,20 @@
     - Camada 3: Estimativa reversa via APY: `volume = (apr/100/365*tvl) / feeTier`
 11. ✅ `fees24h` agora calculado como `volume24h * feeTier` quando não fornecido
 12. ✅ Health check mostra nota "Opcional" para provedores não-críticos
+
+### Correções sessão 2026-02-21:
+13. ✅ **Token prices display**: Preços dos tokens exibidos ao lado de cada pool (Radar, Simulation, Watchlist)
+14. ✅ **Simulation live calculations**: `timeInRange` e `IL` agora calculados com modelo lognormal usando `volatilityAnn` real do pool (não mais hardcoded)
+15. ✅ **ageScore dinâmico**: Substituído `ageScore: 50` fixo por `estimateAgeScore()` derivado de TVL, volume e bluechip
+16. ✅ **Score breakdown dinâmico**: Frontend agora calcula liquidityStability, volumeConsistency, feeEfficiency a partir dos dados reais do pool
+17. ✅ **volatilityAnn propagado**: Adicionado ao tipo Pool e passado do backend ao frontend via API
+18. ✅ **Volatility penalty com dados reais**: score.service.ts agora usa pool.volatilityAnn quando disponível
+
+### Valores fixos restantes (limitações de dados, não corrigíveis sem novas APIs):
+- `liquidityDropPenalty: 0` — precisa histórico de TVL (não disponível)
+- `inconsistencyPenalty: 0` — precisa múltiplas fontes com preços diferentes
+- `spreadPenalty: 0` — precisa order book (não disponível na DefiLlama)
+- `aprIncentive: 0` — precisa API de incentivos de farming
 
 ### Pendente para próxima sessão:
 - [ ] Gráficos mostrando dados iguais (precisa API de preços real-time / histórico)
