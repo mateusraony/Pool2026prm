@@ -26,6 +26,8 @@ export interface Pool {
   tickSpacing?: number;
   bluechip?: boolean;
   volatilityAnn?: number; // Annualized volatility for live calculations
+  aprReward?: number;     // Incentive/reward APR from protocol (DefiLlama apyReward)
+  tvlPeak24h?: number;    // Peak TVL in last 24h (from TheGraph poolHourData)
 }
 
 export interface Token {

@@ -166,6 +166,7 @@ function transformPool(raw: GraphQLPool, chain: string): Pool {
 
   // ── Compute real volatility from poolHourData close prices ──
   let volatilityAnn: number | undefined;
+  let tvlPeak24h: number | undefined;
   if (raw.poolHourData && raw.poolHourData.length >= 3) {
     const pricePoints: { price: number; timestamp: Date }[] = [];
     for (const h of raw.poolHourData) {
@@ -180,6 +181,15 @@ function transformPool(raw: GraphQLPool, chain: string): Pool {
         volatilityAnn = result.volAnn;
       }
     }
+
+    // ── Compute peak TVL from last 24h hourly data for liquidityDropPenalty ──
+    const last24 = raw.poolHourData.slice(0, 24);
+    let maxTvl = 0;
+    for (const h of last24) {
+      const hTvl = parseFloat(h.tvlUSD) || 0;
+      if (hTvl > maxTvl) maxTvl = hTvl;
+    }
+    if (maxTvl > 0) tvlPeak24h = maxTvl;
   }
 
   const poolType: PoolType = calcService.inferPoolType({
@@ -219,6 +229,7 @@ function transformPool(raw: GraphQLPool, chain: string): Pool {
     tickSpacing: raw.tickSpacing ? parseInt(raw.tickSpacing) : undefined,
     bluechip: calcService.isBluechip(raw.token0.symbol, raw.token1.symbol),
     volatilityAnn,
+    tvlPeak24h,
   };
 
   return pool;

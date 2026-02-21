@@ -117,9 +117,24 @@ export async function fetchPools(chain?: string): Promise<{ pool: Pool; score: S
         recommendedMode: 'NORMAL' as const,
         isSuspect: (p.warnings?.length || 0) > 0,
         breakdown: {
-          health: { liquidityStability: liqScore, ageScore: 50, volumeConsistency: volConsist },
+          health: {
+            liquidityStability: liqScore,
+            // Estimate age score from maturity signals (mirrors backend estimateAgeScore)
+            ageScore: Math.min(100, 30 + (tvl >= 10e6 ? 30 : tvl >= 1e6 ? 20 : tvl >= 100000 ? 10 : 0) +
+              (tvl > 0 && vol24h > 0 && vol24h / tvl >= 0.01 ? 20 : vol24h / tvl >= 0.005 ? 10 : 0) +
+              (p.bluechip ? 20 : 0)),
+            volumeConsistency: volConsist,
+          },
           return: { volumeTvlRatio: volTvlRatio, feeEfficiency: feeEff, aprEstimate },
-          risk: { volatilityPenalty: 0, liquidityDropPenalty: 0, inconsistencyPenalty: 0, spreadPenalty: 0 },
+          risk: {
+            // Use real volatility for penalty when available
+            volatilityPenalty: p.volatilityAnn
+              ? (p.volatilityAnn * 100 >= 30 ? 25 : p.volatilityAnn * 100 >= 20 ? 20 : p.volatilityAnn * 100 >= 10 ? 12 : p.volatilityAnn * 100 >= 5 ? 5 : 0)
+              : 5,
+            liquidityDropPenalty: 0,
+            inconsistencyPenalty: 0,
+            spreadPenalty: 0,
+          },
         },
       },
     };

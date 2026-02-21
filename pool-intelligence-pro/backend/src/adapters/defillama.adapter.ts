@@ -251,6 +251,7 @@ export class DefiLlamaAdapter extends BaseAdapter {
     const volume24h = data.volumeUsd1d || 0;
     const volume7d = data.volumeUsd7d;
     const apr = data.apyBase ?? data.apy; // Prefer base APY (fees only); fall back to total APY
+    const aprReward = data.apyReward ?? undefined; // Incentive/reward APR from protocol
 
     // Estimate fees24h when volume is available but fees aren't
     let fees24h: number | undefined;
@@ -282,6 +283,7 @@ export class DefiLlamaAdapter extends BaseAdapter {
       volume7d,
       fees24h,
       apr,
+      aprReward,
     };
   }
   

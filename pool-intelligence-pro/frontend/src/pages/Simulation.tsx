@@ -14,11 +14,38 @@ function formatNum(num: number): string {
 
 type Mode = 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE';
 
-const modeConfig = {
+// Static fallback config (used only when volatility unavailable)
+const modeConfigStatic = {
   DEFENSIVE: { emoji: '🛡️', label: 'Defensivo', rangePercent: 15, color: 'success' },
   NORMAL: { emoji: '⚖️', label: 'Normal', rangePercent: 10, color: 'warning' },
   AGGRESSIVE: { emoji: '🎯', label: 'Agressivo', rangePercent: 5, color: 'danger' },
 };
+
+/**
+ * Compute dynamic range width from real pool volatility.
+ * Mirrors backend calcRangeRecommendation: width = z * volAnn * sqrt(horizonDays/365)
+ * Clamped to [0.3%, 45%] for CL pools, max 3% for stable pools.
+ */
+function getDynamicModeConfig(volAnn: number | undefined, isStable: boolean) {
+  if (!volAnn || volAnn <= 0) return modeConfigStatic;
+
+  const zMap = { DEFENSIVE: 0.8, NORMAL: 1.2, AGGRESSIVE: 1.8 };
+  const horizonDays = 7;
+  const sqrtT = Math.sqrt(horizonDays / 365);
+
+  const calc = (z: number) => {
+    let w = z * volAnn * sqrtT * 100; // convert to %
+    w = Math.max(0.3, Math.min(45, w));
+    if (isStable) w = Math.min(3, w);
+    return Math.round(w * 10) / 10;
+  };
+
+  return {
+    DEFENSIVE: { ...modeConfigStatic.DEFENSIVE, rangePercent: calc(zMap.DEFENSIVE) },
+    NORMAL: { ...modeConfigStatic.NORMAL, rangePercent: calc(zMap.NORMAL) },
+    AGGRESSIVE: { ...modeConfigStatic.AGGRESSIVE, rangePercent: calc(zMap.AGGRESSIVE) },
+  };
+}
 
 function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
   const queryClient = useQueryClient();
@@ -29,6 +56,14 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
 
   // Use pool price or estimate from TVL (more realistic than flat 1000)
   const currentPrice = pool.price || (pool.tvl > 0 ? Math.max(1, pool.tvl / 50000) : 100);
+
+  // Detect stable pair for range clamping
+  const stableTokens = ['USDC', 'USDT', 'DAI', 'FRAX', 'LUSD', 'BUSD'];
+  const isStable = stableTokens.some(s => pool.token0?.symbol?.includes(s)) &&
+                   stableTokens.some(s => pool.token1?.symbol?.includes(s));
+
+  // Dynamic mode config based on real volatility
+  const modeConfig = getDynamicModeConfig(pool.volatilityAnn, isStable);
   const config = modeConfig[mode];
 
   // Check if this pool is already being monitored
@@ -357,6 +392,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
             <div className="text-xs text-dark-500 flex items-center gap-2 px-1">
               <span>Vol. anual: {(metrics.volAnn * 100).toFixed(0)}%</span>
               <span>{pool.volatilityAnn ? '(dados reais)' : '(estimativa)'}</span>
+              <span>| Range: ±{config.rangePercent.toFixed(1)}%{pool.volatilityAnn ? ' (dinâmico)' : ''}</span>
             </div>
 
             <div className={clsx(

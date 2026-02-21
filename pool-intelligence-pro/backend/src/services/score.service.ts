@@ -111,11 +111,11 @@ export class ScoreService {
       risk: {
         // Volatility penalty (uses real volatilityAnn when available)
         volatilityPenalty: this.calculateVolatilityPenalty(volatility24h),
-        // Liquidity drop penalty (requires historical TVL data — not available)
-        liquidityDropPenalty: 0,
+        // Liquidity drop penalty: detect TVL drop from peak (TheGraph poolHourData)
+        liquidityDropPenalty: this.calculateLiquidityDropPenalty(pool),
         // Inconsistency between sources (set by consensus when multiple providers)
         inconsistencyPenalty: 0,
-        // Spread penalty (requires order book data — not available)
+        // Spread penalty (requires order book data — not available from current APIs)
         spreadPenalty: 0,
       },
     };
@@ -268,7 +268,7 @@ export class ScoreService {
 
   private calculateVolatilityPenalty(volatility?: number): number {
     if (!volatility) return 5; // Default small penalty for unknown
-    
+
     // Higher volatility = higher penalty
     if (volatility >= 30) return 25;
     if (volatility >= 20) return 20;
@@ -277,8 +277,26 @@ export class ScoreService {
     return 0;
   }
 
+  /**
+   * Calculate liquidity drop penalty from recent TVL history.
+   * Uses tvlPeak24h (from TheGraph poolHourData) vs current TVL.
+   * A >20% drop from peak signals potential liquidity flight.
+   */
+  private calculateLiquidityDropPenalty(pool: Pool): number {
+    if (!pool.tvlPeak24h || pool.tvlPeak24h <= 0 || pool.tvl <= 0) return 0;
+
+    const dropPercent = ((pool.tvlPeak24h - pool.tvl) / pool.tvlPeak24h) * 100;
+
+    if (dropPercent >= 50) return 20; // Severe liquidity flight
+    if (dropPercent >= 30) return 15;
+    if (dropPercent >= 20) return 10;
+    if (dropPercent >= 10) return 5;
+    return 0;
+  }
+
   private determineMode(pool: Pool, metrics: PoolWithMetrics['metrics'] | undefined, score: number): Mode {
-    const volatility = metrics?.volatility24h || 10;
+    // Use real volatility: metrics > pool.volatilityAnn (annualized, convert to %) > conservative default
+    const volatility = metrics?.volatility24h ?? (pool.volatilityAnn ? pool.volatilityAnn * 100 : 15);
     
     // High score + low volatility = can be aggressive
     if (score >= 70 && volatility <= MODE_THRESHOLDS.AGGRESSIVE.volatilityMax) {

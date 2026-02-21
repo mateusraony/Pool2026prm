@@ -54,7 +54,8 @@ export function enrichToUnifiedPool(
   });
 
   const aprFee = aprRes.feeAPR;
-  const aprIncentive = 0; // No incentive data yet
+  // Use real incentive APR from DefiLlama (apyReward) when available
+  const aprIncentive = pool.aprReward ?? 0;
   // Use computed fee APR when available; otherwise fall back to adapter-provided APR/APY
   // (e.g. DefiLlama provides APY directly even when fees24h is unavailable)
   const aprTotal = aprFee != null

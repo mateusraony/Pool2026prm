@@ -1,10 +1,10 @@
 # CHECKPOINT - Pool Intelligence Pro
 
 ## Status Atual
-**Branch:** `claude/liquidity-pool-intelligence-8LhDk`
+**Branch:** `claude/review-pool2026-pr-rO5Zd`
 **Data:** 2026-02-21 UTC
-**Último Commit:** `617d0f0`
-**Fase:** Dados mockados removidos, tudo online ✅
+**Último Commit:** `8d39f03`
+**Fase:** Item #1 concluído — volatilidade real por OHLCV histórico
 
 ## Para Continuar (IMPORTANTE)
 **Frase de continuação:** `"Continuar do CHECKPOINT 2026-02-20-C"`
@@ -35,6 +35,14 @@
 16. ✅ **Score breakdown dinâmico**: Frontend agora calcula liquidityStability, volumeConsistency, feeEfficiency a partir dos dados reais do pool
 17. ✅ **volatilityAnn propagado**: Adicionado ao tipo Pool e passado do backend ao frontend via API
 18. ✅ **Volatility penalty com dados reais**: score.service.ts agora usa pool.volatilityAnn quando disponível
+
+### Sessão review PR #3 (2026-02-21):
+19. ✅ **Item #1 — Volatilidade real por histórico OHLCV**:
+    - TheGraph: `transformPool()` calcula `volatilityAnn` real dos `poolHourData` close prices via `calcVolatilityAnn()` log-returns
+    - GeckoTerminal: novo `fetchVolatility()` busca OHLCV hourly (72h), calcula vol real, cache 30min
+    - `enrichToUnifiedPool()`: prioriza `pool.volatilityAnn` do adapter (real), proxy só como fallback
+    - `pools-detail` endpoint: enriquece via GeckoTerminal quando TheGraph não forneceu
+    - Commit: `8d39f03`
 
 ### Valores fixos restantes (limitações de dados, não corrigíveis sem novas APIs):
 - `liquidityDropPenalty: 0` — precisa histórico de TVL (não disponível)
