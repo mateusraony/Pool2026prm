@@ -61,15 +61,21 @@ export function enrichToUnifiedPool(
     ? aprFee + aprIncentive
     : (pool.apr != null ? pool.apr : null);
 
-  // Volatility (proxy using price vs estimate)
-  // We don't have historical price series per-pool in memory, so use proxy
-  // If pool.apr is set, we can use that as a rough estimate
-  const volAnn = 0.20; // Default 20% annualized — override when history available
-  const { volAnn: computedVol } = calcVolatilityProxy(
-    pool.price ?? 1,
-    pool.price != null ? pool.price * (1 + (pool.apr || 0) / 100 / 365) : 1
-  );
-  const finalVolAnn = computedVol > 0.05 ? computedVol : volAnn;
+  // Volatility: prefer adapter-provided value (real, from historical OHLCV),
+  // fall back to proxy estimate only if no real data available.
+  let finalVolAnn: number;
+  if (pool.volatilityAnn != null && pool.volatilityAnn > 0) {
+    // Real volatility from adapter (TheGraph poolHourData or GeckoTerminal OHLCV)
+    finalVolAnn = pool.volatilityAnn;
+  } else {
+    // Proxy fallback: estimate from APR-derived price difference
+    const defaultVol = 0.20;
+    const { volAnn: computedVol } = calcVolatilityProxy(
+      pool.price ?? 1,
+      pool.price != null ? pool.price * (1 + (pool.apr || 0) / 100 / 365) : 1
+    );
+    finalVolAnn = computedVol > 0.05 ? computedVol : defaultVol;
+  }
 
   // Health score
   const healthResult = calcHealthScore({

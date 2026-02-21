@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { getPoolsWithFallback, getPoolWithFallback, getAllProvidersHealth, theGraphAdapter } from '../adapters/index.js';
+import { geckoTerminalAdapter } from '../adapters/geckoterminal.adapter.js';
 import { scoreService } from '../services/score.service.js';
 import { cacheService } from '../services/cache.service.js';
 import { logService } from '../services/log.service.js';
@@ -706,6 +707,14 @@ router.get('/pools-detail/:chain/:address', async (req, res) => {
 
     if (!pool) {
       return res.status(404).json({ success: false, error: 'Pool not found' });
+    }
+
+    // Enrich with real volatility from GeckoTerminal hourly OHLCV if adapter didn't provide it
+    if (!pool.volatilityAnn && pool.poolAddress.startsWith('0x')) {
+      const realVol = await geckoTerminalAdapter.fetchVolatility(chain, pool.poolAddress);
+      if (realVol != null) {
+        pool.volatilityAnn = realVol;
+      }
     }
 
     const unified = poolIntelligenceService.enrichToUnifiedPool(pool, { updatedAt: new Date() });

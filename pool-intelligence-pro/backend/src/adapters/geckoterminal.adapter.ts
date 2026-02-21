@@ -4,6 +4,7 @@ import { Pool, PoolSnapshot } from '../types/index.js';
 import { fetchWithRetry } from '../services/retry.service.js';
 import { cacheService } from '../services/cache.service.js';
 import { config } from '../config/index.js';
+import { calcVolatilityAnn, PricePoint } from '../services/calc.service.js';
 
 const BASE_URL = 'https://api.geckoterminal.com/api/v2';
 
@@ -201,7 +202,43 @@ export class GeckoTerminalAdapter extends BaseAdapter {
       return null;
     }
   }
-  
+
+  /**
+   * Fetch hourly OHLCV candles and compute annualized volatility.
+   * Returns undefined if insufficient data.
+   */
+  async fetchVolatility(chain: string, address: string): Promise<number | undefined> {
+    const geckoChain = this.getGeckoChain(chain);
+    const cacheKey = `gecko:vol:${geckoChain}:${address}`;
+    const cached = cacheService.get<number>(cacheKey);
+    if (cached.data != null) return cached.data;
+
+    try {
+      const res = await axios.get(
+        `${BASE_URL}/networks/${geckoChain}/pools/${address}/ohlcv/hour`,
+        { params: { aggregate: 1, limit: 72 }, timeout: 15000 }
+      );
+      const ohlcv: number[][] = res.data?.data?.attributes?.ohlcv_list || [];
+      if (ohlcv.length < 5) return undefined;
+
+      const pricePoints: PricePoint[] = ohlcv
+        .map(c => ({
+          timestamp: new Date(c[0] * 1000),
+          price: c[4], // close price
+        }))
+        .filter(p => p.price > 0);
+
+      const result = calcVolatilityAnn(pricePoints, 'hourly');
+      if (result.method === 'log_returns' && result.dataPoints >= 5) {
+        cacheService.set(cacheKey, result.volAnn, 1800); // Cache 30min
+        return result.volAnn;
+      }
+    } catch {
+      // Non-critical — volatility is optional
+    }
+    return undefined;
+  }
+
   async getPoolHistory(chain: string, address: string, days: number): Promise<PoolSnapshot[]> {
     const geckoChain = this.getGeckoChain(chain);
     
