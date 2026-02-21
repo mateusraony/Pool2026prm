@@ -183,6 +183,7 @@ router.get('/pools/:chain/:address', async (req, res) => {
         volume7d: (memUnified as any).volume7d,
         fees24h: memUnified.fees24hUSD ?? 0,
         apr: memUnified.aprTotal ?? memUnified.aprFee ?? (memUnified as any).apr ?? 0,
+        volatilityAnn: memUnified.volatilityAnn, // For live IL/range calculations
       } as Pool;
       const cachedScore = memoryStore.getScore(memUnified.id);
       const score = cachedScore || scoreService.calculateScore(pool);
@@ -765,7 +766,7 @@ router.get('/pools-detail/:chain/:address', async (req, res) => {
 // POST /api/range-calc — standalone range calculator
 router.post('/range-calc', async (req, res) => {
   try {
-    const { price, volAnn = 0.20, horizonDays = 7, riskMode = 'NORMAL', tickSpacing, poolType = 'CL', capital = 1000, tvl = 1000000, fees24h } = req.body;
+    const { price, volAnn = 0.40, horizonDays = 7, riskMode = 'NORMAL', tickSpacing, poolType = 'CL', capital = 1000, tvl, fees24h } = req.body;
 
     if (!price || price <= 0) {
       return res.status(400).json({ success: false, error: 'price is required and must be > 0' });
@@ -779,7 +780,7 @@ router.post('/range-calc', async (req, res) => {
 
     const selected = ranges[(riskMode as string).toUpperCase() as 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE'] || ranges.NORMAL;
 
-    const feeEstimate = calcUserFees({ tvl, fees24h, userCapital: capital, riskMode: riskMode as 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE' });
+    const feeEstimate = calcUserFees({ tvl: tvl || 0, fees24h, userCapital: capital, riskMode: riskMode as 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE' });
     const ilRisk = calcILRisk({ price, rangeLower: selected.lower, rangeUpper: selected.upper, volAnn, horizonDays });
 
     res.json({ success: true, data: { ranges, selected, feeEstimate, ilRisk } });

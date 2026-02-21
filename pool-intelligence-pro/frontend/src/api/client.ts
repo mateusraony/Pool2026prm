@@ -23,6 +23,7 @@ export interface Pool {
   fees24h?: number;
   fees7d?: number;
   apr?: number;
+  volatilityAnn?: number; // Annualized volatility for live IL/range calculations
 }
 
 export interface Score {
@@ -82,6 +83,16 @@ export async function fetchPools(chain?: string): Promise<{ pool: Pool; score: S
     // UnifiedPool → { pool, score }
     // Use aprTotal (computed from fees) → aprFee → apr (adapter APY e.g. DefiLlama) → 0
     const aprEstimate = p.aprTotal || p.aprFee || p.apr || 0;
+    // Derive score breakdown from real data, not hardcoded
+    const tvl = p.tvlUSD || p.tvl || 0;
+    const vol24h = p.volume24hUSD || p.volume24h || 0;
+    const volTvlRatio = tvl > 0 ? Math.min(100, (vol24h / tvl) * 100 * 5) : 0;
+    const feeEff = (p.fees24hUSD || p.fees24h || 0) > 0 && tvl > 0
+      ? Math.min(100, ((p.fees24hUSD || p.fees24h || 0) / tvl) * 365 * 100)
+      : (aprEstimate > 0 ? Math.min(100, aprEstimate) : 0);
+    const liqScore = tvl >= 10e6 ? 100 : tvl >= 1e6 ? 75 : tvl >= 100000 ? 40 : 20;
+    const volConsist = tvl > 0 ? Math.min(100, (vol24h / tvl) * 1000) : 0;
+
     return {
       pool: {
         externalId: p.id || p.poolAddress,
@@ -90,12 +101,13 @@ export async function fetchPools(chain?: string): Promise<{ pool: Pool; score: S
         poolAddress: p.poolAddress,
         token0: p.token0 || { symbol: p.baseToken, address: '', decimals: 18 },
         token1: p.token1 || { symbol: p.quoteToken, address: '', decimals: 18 },
-        tvl: p.tvlUSD || p.tvl || 0,
-        volume24h: p.volume24hUSD || p.volume24h || 0,
+        tvl,
+        volume24h: vol24h,
         fees24h: p.fees24hUSD || p.fees24h || 0,
         apr: aprEstimate,
         price: p.price,
-        feeTier: p.feeTier || 0.003, // decimal: 0.003 = 0.3%
+        feeTier: p.feeTier || 0.003,
+        volatilityAnn: p.volatilityAnn || undefined,
       },
       score: {
         total: p.healthScore || 50,
@@ -105,8 +117,8 @@ export async function fetchPools(chain?: string): Promise<{ pool: Pool; score: S
         recommendedMode: 'NORMAL' as const,
         isSuspect: (p.warnings?.length || 0) > 0,
         breakdown: {
-          health: { liquidityStability: 80, ageScore: 70, volumeConsistency: 80 },
-          return: { volumeTvlRatio: 50, feeEfficiency: 50, aprEstimate },
+          health: { liquidityStability: liqScore, ageScore: 50, volumeConsistency: volConsist },
+          return: { volumeTvlRatio: volTvlRatio, feeEfficiency: feeEff, aprEstimate },
           risk: { volatilityPenalty: 0, liquidityDropPenalty: 0, inconsistencyPenalty: 0, spreadPenalty: 0 },
         },
       },

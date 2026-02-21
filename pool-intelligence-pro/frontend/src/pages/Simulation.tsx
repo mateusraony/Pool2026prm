@@ -96,38 +96,47 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
   const metrics = useMemo(() => {
     const rangeWidth = ((rangeUpper - rangeLower) / currentPrice) * 100;
 
-    // Time in range: % chance price stays within range for 7 days
-    // Based on empirical data from Uniswap V3 analytics
-    const timeInRangeByMode: Record<Mode, number> = {
-      DEFENSIVE: 85,  // ±15% range – price stays in most of the time
-      NORMAL: 72,     // ±10% range – moderate coverage
-      AGGRESSIVE: 50, // ±5% range – narrow, exits frequently
-    };
-    const timeInRange = timeInRangeByMode[mode];
+    // --- LIVE CALCULATIONS BASED ON REAL POOL VOLATILITY ---
+    // Uses pool.volatilityAnn from backend (calculated from price data).
+    // If unavailable, uses a conservative default of 0.40 (40% annualized).
+    const volAnn = pool.volatilityAnn || 0.40;
 
-    // Fee calculation: the APR shown is the annualized rate
-    // We earn fees only while price is in range
+    // Time in range (7 days): probability price stays within [rangeLower, rangeUpper]
+    // Uses lognormal model: P(out) = 2 * (1 - Φ(d)), where d = ln(upper/price) / (σ√T)
+    const horizonDays = 7;
+    const sqrtT = Math.sqrt(horizonDays / 365);
+    const halfWidth = rangeUpper > currentPrice && currentPrice > 0
+      ? Math.log(rangeUpper / currentPrice) / (volAnn * sqrtT)
+      : 2; // fallback: ~95% in range
+    // Standard normal CDF approximation (Abramowitz & Stegun)
+    const absCDF = (z: number): number => {
+      const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741;
+      const a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+      const sign = z < 0 ? -1 : 1;
+      const x = Math.abs(z) / Math.sqrt(2);
+      const t = 1.0 / (1.0 + p * x);
+      const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+      return 0.5 * (1.0 + sign * y);
+    };
+    const probOut = Math.max(0, Math.min(1, 2 * (1 - absCDF(halfWidth))));
+    const timeInRange = Math.round((1 - probOut) * 100);
+
+    // Fee calculation: APR × portion of time in range
     const annualApr = score?.breakdown?.return?.aprEstimate ?? pool.apr ?? 0;
-    const weeklyFeeRate = annualApr / 52; // % per week
+    const weeklyFeeRate = annualApr / 52;
     const feesPercent = weeklyFeeRate * (timeInRange / 100);
 
-    // Impermanent Loss: empirically calibrated for crypto volatility (7d period)
-    // Concentrated positions have higher IL per unit of price movement
-    // but the actual observed weekly IL is smaller for wider ranges
-    const ilByMode: Record<Mode, number> = {
-      DEFENSIVE: 0.07,  // ±15% range → ~3.6% annualized IL (conservative, low-vol pairs)
-      NORMAL: 0.14,     // ±10% range → ~7.3% annualized IL (typical volatile pair)
-      AGGRESSIVE: 0.25, // ±5% range → ~13% annualized IL (narrow, rebalancing-heavy)
-    };
-    const ilPercent = ilByMode[mode];
+    // Impermanent Loss (IL): uses real volatility, not hardcoded values
+    // Weekly IL ≈ 0.5 * (σ²) * T * concentration_factor
+    // concentration_factor scales with how narrow the range is
+    const widthFraction = rangeWidth / 100; // e.g. 0.10 for ±10%
+    const concentrationFactor = widthFraction > 0 ? Math.min(5, 0.10 / widthFraction) : 1;
+    const weeklyVol = volAnn * sqrtT;
+    const ilPercent = Math.max(0, 0.5 * weeklyVol * weeklyVol * concentrationFactor * 100);
 
-    // Gas costs: realistic 2024/2025 values (entry + exit round trip)
+    // Gas costs: realistic L1/L2 values (entry + exit round trip)
     const gasMap: Record<string, number> = {
-      ethereum: 30,   // L1 – expensive
-      arbitrum: 3,    // L2 – cheap
-      base: 1.5,      // L2 – very cheap
-      optimism: 2,    // L2
-      polygon: 0.5,   // Sidechain
+      ethereum: 30, arbitrum: 3, base: 1.5, optimism: 2, polygon: 0.5,
     };
     const gasEstimate = gasMap[pool.chain] ?? 5;
     const gasPercent = (gasEstimate / capital) * 100;
@@ -145,8 +154,9 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
       netReturnUsd: (netReturn / 100) * capital,
       apr: netReturn * 52,
       rangeWidth,
+      volAnn, // expose for UI display
     };
-  }, [rangeLower, rangeUpper, capital, score, currentPrice, pool.chain, mode]);
+  }, [rangeLower, rangeUpper, capital, score, currentPrice, pool.chain, pool.volatilityAnn, mode]);
 
   const isPositive = metrics.netReturnPercent >= 0;
 
@@ -159,6 +169,26 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
       {/* Pool Info Header */}
       <div className="card">
         <div className="card-body">
+          {/* Token Prices - for data verification */}
+          <div className="flex flex-wrap gap-3 mb-4 p-3 bg-dark-800 rounded-lg border border-dark-700">
+            <div className="flex items-center gap-2">
+              <span className="text-dark-400 text-sm">Preço {pool.token0?.symbol}:</span>
+              <span className="font-mono font-semibold">
+                {pool.token0?.priceUsd ? '$' + pool.token0.priceUsd.toFixed(4) : <span className="text-warning-400">API sem dados</span>}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-dark-400 text-sm">Preço {pool.token1?.symbol}:</span>
+              <span className="font-mono font-semibold">
+                {pool.token1?.priceUsd ? '$' + pool.token1.priceUsd.toFixed(4) : <span className="text-warning-400">API sem dados</span>}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-dark-400 text-sm">Fee Tier:</span>
+              <span className="font-mono font-semibold">{pool.feeTier ? (pool.feeTier * 100).toFixed(2) + '%' : 'N/A'}</span>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div className="stat-card">
               <div className="stat-label">TVL</div>
@@ -321,6 +351,12 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
                 <div className="font-bold">{'~$' + metrics.gasEstimate.toFixed(2)}</div>
                 <div className="text-xs text-dark-400">entrada + saida</div>
               </div>
+            </div>
+
+            {/* Data source indicator */}
+            <div className="text-xs text-dark-500 flex items-center gap-2 px-1">
+              <span>Vol. anual: {(metrics.volAnn * 100).toFixed(0)}%</span>
+              <span>{pool.volatilityAnn ? '(dados reais)' : '(estimativa)'}</span>
             </div>
 
             <div className={clsx(

@@ -106,6 +106,18 @@ export default function WatchlistPage() {
                     {pool && score && (
                       <div className="hidden md:flex items-center gap-6">
                         <div className="text-center">
+                          <div className="text-xs text-dark-400">{pool.token0?.symbol}</div>
+                          <div className="font-semibold font-mono text-sm">
+                            {pool.token0?.priceUsd ? '$' + pool.token0.priceUsd.toFixed(2) : <span className="text-warning-400">—</span>}
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-xs text-dark-400">{pool.token1?.symbol}</div>
+                          <div className="font-semibold font-mono text-sm">
+                            {pool.token1?.priceUsd ? '$' + pool.token1.priceUsd.toFixed(2) : <span className="text-warning-400">—</span>}
+                          </div>
+                        </div>
+                        <div className="text-center">
                           <div className="text-xs text-dark-400">TVL</div>
                           <div className="font-semibold">${formatNum(pool.tvl)}</div>
                         </div>

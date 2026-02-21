@@ -88,12 +88,15 @@ export class ScoreService {
   }
 
   private calculateBreakdown(pool: Pool, metrics?: PoolWithMetrics['metrics']): ScoreBreakdown {
+    // Use pool.volatilityAnn for volatility penalty (if available from enrichment)
+    const volatility24h = metrics?.volatility24h ?? (pool.volatilityAnn ? pool.volatilityAnn * 100 : undefined);
+
     return {
       health: {
         // Liquidity stability (higher = better)
         liquidityStability: this.normalizeLiquidity(pool.tvl),
-        // Age score (would need creation date)
-        ageScore: 50, // Default middle value
+        // Age score: estimated from maturity signals (high TVL + consistent volume = mature)
+        ageScore: this.estimateAgeScore(pool),
         // Volume consistency (volume/TVL ratio)
         volumeConsistency: this.calculateVolumeConsistency(pool),
       },
@@ -106,14 +109,14 @@ export class ScoreService {
         aprEstimate: pool.apr || this.estimateApr(pool),
       },
       risk: {
-        // Volatility penalty
-        volatilityPenalty: this.calculateVolatilityPenalty(metrics?.volatility24h),
-        // Liquidity drop penalty
-        liquidityDropPenalty: 0, // Would need historical data
-        // Inconsistency between sources
-        inconsistencyPenalty: 0, // Set by consensus service
-        // Spread penalty
-        spreadPenalty: 0, // Would need order book data
+        // Volatility penalty (uses real volatilityAnn when available)
+        volatilityPenalty: this.calculateVolatilityPenalty(volatility24h),
+        // Liquidity drop penalty (requires historical TVL data — not available)
+        liquidityDropPenalty: 0,
+        // Inconsistency between sources (set by consensus when multiple providers)
+        inconsistencyPenalty: 0,
+        // Spread penalty (requires order book data — not available)
+        spreadPenalty: 0,
       },
     };
   }
@@ -217,7 +220,38 @@ export class ScoreService {
       return Math.min(100, annualizedApr);
     }
     
-    return 50; // Default middle value
+    // Last resort: use pool.apr to derive fee efficiency
+    if (pool.apr && pool.apr > 0) {
+      return Math.min(100, pool.apr);
+    }
+
+    return 20; // No data available — conservative low score
+  }
+
+  /**
+   * Estimate pool age score from maturity signals.
+   * Mature pools tend to have: high TVL, consistent volume, bluechip tokens.
+   * Score: 0-100 (100 = very mature/established pool)
+   */
+  private estimateAgeScore(pool: Pool): number {
+    let score = 30; // baseline for any pool that passed filters
+
+    // High TVL signals established pool
+    if (pool.tvl >= 10_000_000) score += 30;
+    else if (pool.tvl >= 1_000_000) score += 20;
+    else if (pool.tvl >= 100_000) score += 10;
+
+    // Consistent volume relative to TVL signals active, mature pool
+    if (pool.tvl > 0 && pool.volume24h > 0) {
+      const ratio = pool.volume24h / pool.tvl;
+      if (ratio >= 0.01) score += 20;
+      else if (ratio >= 0.005) score += 10;
+    }
+
+    // Bluechip tokens signal mature pool
+    if (pool.bluechip) score += 20;
+
+    return Math.min(100, score);
   }
 
   private estimateApr(pool: Pool): number {

@@ -25,6 +25,7 @@ export interface Pool {
   poolType?: string;      // 'CL' | 'V2' | 'STABLE'
   tickSpacing?: number;
   bluechip?: boolean;
+  volatilityAnn?: number; // Annualized volatility for live calculations
 }
 
 export interface Token {
