@@ -81,17 +81,51 @@ export async function fetchPools(chain?: string): Promise<{ pool: Pool; score: S
   return pools.map((p: any) => {
     if (p.pool && p.score) return p;
     // UnifiedPool → { pool, score }
-    // Use aprTotal (computed from fees) → aprFee → apr (adapter APY e.g. DefiLlama) → 0
+    // Mirrors backend scoreService.calculateScore() logic exactly
     const aprEstimate = p.aprTotal || p.aprFee || p.apr || 0;
-    // Derive score breakdown from real data, not hardcoded
     const tvl = p.tvlUSD || p.tvl || 0;
     const vol24h = p.volume24hUSD || p.volume24h || 0;
-    const volTvlRatio = tvl > 0 ? Math.min(100, (vol24h / tvl) * 100 * 5) : 0;
-    const feeEff = (p.fees24hUSD || p.fees24h || 0) > 0 && tvl > 0
-      ? Math.min(100, ((p.fees24hUSD || p.fees24h || 0) / tvl) * 365 * 100)
-      : (aprEstimate > 0 ? Math.min(100, aprEstimate) : 0);
-    const liqScore = tvl >= 10e6 ? 100 : tvl >= 1e6 ? 75 : tvl >= 100000 ? 40 : 20;
-    const volConsist = tvl > 0 ? Math.min(100, (vol24h / tvl) * 1000) : 0;
+    const fees24h = p.fees24hUSD || p.fees24h || 0;
+
+    // --- Score breakdown components (mirrors backend score.service.ts) ---
+
+    // Health breakdown
+    const liqScore = tvl >= 10e6 ? 100 : tvl >= 5e6 ? 90 : tvl >= 1e6 ? 75 : tvl >= 500000 ? 60 : tvl >= 100000 ? 40 : 20;
+    const ageScore = Math.min(100, 30
+      + (tvl >= 10e6 ? 30 : tvl >= 1e6 ? 20 : tvl >= 100000 ? 10 : 0)
+      + (tvl > 0 && vol24h > 0 ? (vol24h / tvl >= 0.01 ? 20 : vol24h / tvl >= 0.005 ? 10 : 0) : 0)
+      + (p.bluechip ? 20 : 0));
+    const volRatio = tvl > 0 ? vol24h / tvl : 0;
+    const volConsist = volRatio >= 0.1 ? 100 : volRatio >= 0.05 ? 80 : volRatio >= 0.01 ? 60 : volRatio >= 0.005 ? 40 : 20;
+
+    // Return breakdown
+    const vtRatio = tvl > 0 ? vol24h / tvl * 100 : 0;
+    const volTvlRatio = vtRatio >= 20 ? 100 : vtRatio >= 10 ? 80 : vtRatio >= 5 ? 60 : vtRatio >= 1 ? 40 : 20;
+    const feeEff = fees24h > 0 && tvl > 0
+      ? Math.min(100, (() => { const r = fees24h / tvl * 365 * 100; return r >= 50 ? 100 : r >= 30 ? 80 : r >= 15 ? 60 : r >= 5 ? 40 : 20; })())
+      : (p.feeTier && vol24h > 0 && tvl > 0
+        ? Math.min(100, (vol24h * p.feeTier * 365) / tvl * 100)
+        : (aprEstimate > 0 ? Math.min(100, aprEstimate) : 20));
+
+    // Risk breakdown — use real volatility data when available
+    const vol100 = (p.volatilityAnn || 0) * 100; // annualized vol in %
+    const volatilityPenalty = p.volatilityAnn
+      ? (vol100 >= 30 ? 25 : vol100 >= 20 ? 20 : vol100 >= 10 ? 12 : vol100 >= 5 ? 5 : 0)
+      : 5; // conservative default when unknown
+    // liquidityDropPenalty: can't calculate without tvlPeak24h (not in UnifiedPool API)
+    const liquidityDropPenalty = 0;
+
+    // --- Weighted scores (mirrors backend weights: health=40, return=35, risk=25) ---
+    const healthComponent = 40 * ((liqScore / 100) * 0.4 + (ageScore / 100) * 0.2 + (volConsist / 100) * 0.4);
+    const normalizedApr = Math.min(aprEstimate, 100);
+    const returnComponent = 35 * ((volTvlRatio / 100) * 0.3 + (feeEff / 100) * 0.3 + (normalizedApr / 100) * 0.4);
+    const riskPenalty = Math.min(25, volatilityPenalty + liquidityDropPenalty);
+    const totalScore = Math.max(0, Math.min(100, healthComponent + returnComponent - riskPenalty));
+
+    // Recommended mode: mirrors backend determineMode()
+    let recommendedMode: 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE' = 'DEFENSIVE';
+    if (totalScore >= 70 && vol100 <= 30) recommendedMode = 'AGGRESSIVE';
+    else if (totalScore >= 50 && vol100 <= 15) recommendedMode = 'NORMAL';
 
     return {
       pool: {
@@ -103,37 +137,27 @@ export async function fetchPools(chain?: string): Promise<{ pool: Pool; score: S
         token1: p.token1 || { symbol: p.quoteToken, address: '', decimals: 18 },
         tvl,
         volume24h: vol24h,
-        fees24h: p.fees24hUSD || p.fees24h || 0,
+        fees24h,
         apr: aprEstimate,
         price: p.price,
-        feeTier: p.feeTier || 0.003,
+        feeTier: p.feeTier || undefined,
         volatilityAnn: p.volatilityAnn || undefined,
       },
       score: {
-        total: p.healthScore || 50,
-        health: p.healthScore || 50,
-        return: 0,
-        risk: 0,
-        recommendedMode: 'NORMAL' as const,
-        isSuspect: (p.warnings?.length || 0) > 0,
+        total: Math.round(totalScore * 10) / 10,
+        health: Math.round(healthComponent * 10) / 10,
+        return: Math.round(returnComponent * 10) / 10,
+        risk: Math.round(riskPenalty * 10) / 10,
+        recommendedMode,
+        isSuspect: (p.warnings?.length || 0) > 0 || (aprEstimate > 500) || (vol24h > tvl * 10),
         breakdown: {
-          health: {
-            liquidityStability: liqScore,
-            // Estimate age score from maturity signals (mirrors backend estimateAgeScore)
-            ageScore: Math.min(100, 30 + (tvl >= 10e6 ? 30 : tvl >= 1e6 ? 20 : tvl >= 100000 ? 10 : 0) +
-              (tvl > 0 && vol24h > 0 && vol24h / tvl >= 0.01 ? 20 : vol24h / tvl >= 0.005 ? 10 : 0) +
-              (p.bluechip ? 20 : 0)),
-            volumeConsistency: volConsist,
-          },
+          health: { liquidityStability: liqScore, ageScore, volumeConsistency: volConsist },
           return: { volumeTvlRatio: volTvlRatio, feeEfficiency: feeEff, aprEstimate },
           risk: {
-            // Use real volatility for penalty when available
-            volatilityPenalty: p.volatilityAnn
-              ? (p.volatilityAnn * 100 >= 30 ? 25 : p.volatilityAnn * 100 >= 20 ? 20 : p.volatilityAnn * 100 >= 10 ? 12 : p.volatilityAnn * 100 >= 5 ? 5 : 0)
-              : 5,
-            liquidityDropPenalty: 0,
-            inconsistencyPenalty: 0,
-            spreadPenalty: 0,
+            volatilityPenalty,
+            liquidityDropPenalty,
+            inconsistencyPenalty: 0, // requires multi-provider consensus (not available from /pools)
+            spreadPenalty: 0,        // requires order book data (not available)
           },
         },
       },

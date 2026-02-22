@@ -2,12 +2,12 @@
 
 ## Status Atual
 **Branch:** `claude/review-pool2026-pr-rO5Zd`
-**Data:** 2026-02-21 UTC
-**Último Commit:** `ada50ba`
-**Fase:** Items #1 e #2 concluídos — dados reais end-to-end
+**Data:** 2026-02-22 UTC
+**Último Commit:** (ver abaixo)
+**Fase:** 15 valores hardcoded/estáticos corrigidos — scoring real end-to-end
 
 ## Para Continuar (IMPORTANTE)
-**Frase de continuação:** `"Continuar do CHECKPOINT 2026-02-20-C"`
+**Frase de continuação:** `"Continuar do CHECKPOINT 2026-02-22-A"`
 
 ### Correções aplicadas nesta sessão:
 1. ✅ TheGraph marcado como opcional (não causa DEGRADED)
@@ -53,14 +53,71 @@
     - Frontend client.ts: ageScore calculado de sinais de maturidade, volatilityPenalty usa vol real
     - Commit: `ada50ba`
 
-### Valores fixos restantes (limitações reais — sem API disponível):
+### Sessão 2026-02-22 — Eliminação de valores hardcoded/estáticos:
+
+21. ✅ **Score `return` e `risk` calculados de verdade no frontend** (client.ts):
+    - `return` score: calcula usando weights 35 * (volTvlRatio*0.3 + feeEff*0.3 + apr*0.4)
+    - `risk` penalty: calcula usando volatilityPenalty real, capped at 25
+    - `total` score: `health + return - risk` (não mais `healthScore || 50`)
+    - Antes: `return: 0, risk: 0` sempre fixos
+
+22. ✅ **recommendedMode dinâmico** (client.ts):
+    - Agora: AGGRESSIVE se score>=70 e vol<=30%, NORMAL se score>=50 e vol<=15%, senão DEFENSIVE
+    - Antes: sempre 'NORMAL' fixo
+
+23. ✅ **isSuspect melhorado** (client.ts):
+    - Agora detecta: APR>500% ou volume>10x TVL como suspeito
+    - Antes: só checava warnings.length
+
+24. ✅ **volAnn fallback 0.15 eliminado** (calc.service.ts):
+    - Agora retorna 0 quando não há dados suficientes
+    - Consumidor (pool-intelligence.service.ts) usa fallback por tipo: stable=5%, crypto=50%
+    - Antes: 0.15 fixo em 3 lugares
+
+25. ✅ **Proxy de volatilidade com warning** (pool-intelligence.service.ts):
+    - Agora adiciona warning 'volatility estimated' quando usando fallback
+    - Default baseado no tipo: STABLE=0.05, crypto=0.50 (não mais 0.20 genérico)
+
+26. ✅ **volatilityPenalty para dados desconhecidos = 10** (score.service.ts):
+    - Antes: 5 (muito baixo — subestimava risco de pools sem dados)
+    - Agora: 10 (penalidade moderada para dados desconhecidos)
+
+27. ✅ **determineMode sem volatility default** (score.service.ts):
+    - Quando volatilidade é desconhecida: DEFENSIVE (ou NORMAL se score>=75)
+    - Antes: assumia volatility=15 e permitia NORMAL para quase tudo
+
+28. ✅ **feeTier || 0.003 eliminado em 3 arquivos**:
+    - score.service.ts: retorna APR=0 se feeTier desconhecido (não inventa)
+    - recommendation.service.ts: idem
+    - defillama.adapter.ts: pula estimativa de volume se feeTier desconhecido
+
+29. ✅ **Preço fabricado tvl/50000 eliminado** (Simulation.tsx):
+    - Agora mostra "Sem dados de preco" quando preço real indisponível
+    - Antes: inventava preço como tvl/50000 (completamente fictício)
+
+30. ✅ **volAnn || 0.40 substituído** (Simulation.tsx):
+    - Agora: type-aware (stable=5%, crypto=50%)
+    - Antes: 40% genérico
+
+31. ✅ **Indicador de dados melhorado** (Simulation.tsx):
+    - Mostra "(OHLCV real)" em verde ou "(estimativa por tipo)" em amarelo
+    - Mostra "Gas: estimativa fixa" honestamente
+
+32. ✅ **feeTier não assume 0.3% no frontend** (client.ts):
+    - `feeTier: p.feeTier || undefined` (não mais `|| 0.003`)
+    - URL Uniswap omite feeTier se desconhecido
+
+### Valores fixos restantes (limitações técnicas — sem API disponível):
 - `inconsistencyPenalty: 0` — precisa consensus multi-provider wired no scoring loop
 - `spreadPenalty: 0` — precisa order book (não disponível em nenhuma API atual)
+- `liquidityDropPenalty: 0` no frontend — API /pools não retorna tvlPeak24h (só /pools-detail)
+- `gasMap` estático — precisaria integrar gas price API (EIP-1559)
 
 ### Pendente para próxima sessão:
 - [ ] Gráficos mostrando dados iguais (precisa API de preços real-time / histórico)
 - [ ] Code splitting para reduzir bundle (900KB → ~300KB)
 - [ ] `inconsistencyPenalty`: integrar `getPoolWithConsensus()` no scoring
+- [ ] Gas price API para custos dinâmicos
 
 ## Arquivos Criados (41 arquivos)
 

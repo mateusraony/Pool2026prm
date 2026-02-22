@@ -54,8 +54,9 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
   const [customRange, setCustomRange] = useState<{ lower: number; upper: number } | null>(null);
   const [monitorSuccess, setMonitorSuccess] = useState(false);
 
-  // Use pool price or estimate from TVL (more realistic than flat 1000)
-  const currentPrice = pool.price || (pool.tvl > 0 ? Math.max(1, pool.tvl / 50000) : 100);
+  // Use real pool price from API. When unavailable, show warning instead of fabricating a price.
+  const hasRealPrice = pool.price != null && pool.price > 0;
+  const currentPrice = hasRealPrice ? pool.price! : 1; // placeholder for math when no price
 
   // Detect stable pair for range clamping
   const stableTokens = ['USDC', 'USDT', 'DAI', 'FRAX', 'LUSD', 'BUSD'];
@@ -132,9 +133,11 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
     const rangeWidth = ((rangeUpper - rangeLower) / currentPrice) * 100;
 
     // --- LIVE CALCULATIONS BASED ON REAL POOL VOLATILITY ---
-    // Uses pool.volatilityAnn from backend (calculated from price data).
-    // If unavailable, uses a conservative default of 0.40 (40% annualized).
-    const volAnn = pool.volatilityAnn || 0.40;
+    // Uses pool.volatilityAnn from backend (calculated from OHLCV price data).
+    // If unavailable, use type-aware estimate: stable pairs ~5%, crypto pairs ~50%
+    const volAnn = (pool.volatilityAnn && pool.volatilityAnn > 0)
+      ? pool.volatilityAnn
+      : (isStable ? 0.05 : 0.50);
 
     // Time in range (7 days): probability price stays within [rangeLower, rangeUpper]
     // Uses lognormal model: P(out) = 2 * (1 - Φ(d)), where d = ln(upper/price) / (σ√T)
@@ -169,7 +172,8 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
     const weeklyVol = volAnn * sqrtT;
     const ilPercent = Math.max(0, 0.5 * weeklyVol * weeklyVol * concentrationFactor * 100);
 
-    // Gas costs: realistic L1/L2 values (entry + exit round trip)
+    // Gas costs: median estimates for entry + exit round trip (Feb 2026 averages)
+    // These are static estimates — real gas varies with network congestion
     const gasMap: Record<string, number> = {
       ethereum: 30, arbitrum: 3, base: 1.5, optimism: 2, polygon: 0.5,
     };
@@ -196,8 +200,10 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
   const isPositive = metrics.netReturnPercent >= 0;
 
   // Uniswap URL — feeTier needs to be in bps (e.g. 3000 for 0.3%)
-  const feeTierBps = pool.feeTier ? Math.round(pool.feeTier * 1000000) : 3000;
-  const uniswapUrl = `https://app.uniswap.org/add/${pool.token0?.address ?? ''}/${pool.token1?.address ?? ''}/${feeTierBps}?chain=${pool.chain}`;
+  const feeTierBps = pool.feeTier ? Math.round(pool.feeTier * 1000000) : undefined;
+  const uniswapUrl = feeTierBps
+    ? `https://app.uniswap.org/add/${pool.token0?.address ?? ''}/${pool.token1?.address ?? ''}/${feeTierBps}?chain=${pool.chain}`
+    : `https://app.uniswap.org/add/${pool.token0?.address ?? ''}/${pool.token1?.address ?? ''}?chain=${pool.chain}`;
 
   return (
     <div className="space-y-6">
@@ -243,7 +249,12 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
             </div>
             <div className="stat-card">
               <div className="stat-label">Preco Atual</div>
-              <div className="stat-value font-mono">{'$' + currentPrice.toFixed(2)}</div>
+              <div className="stat-value font-mono">
+                {hasRealPrice
+                  ? '$' + currentPrice.toFixed(2)
+                  : <span className="text-warning-400 text-sm">Sem dados de preco</span>
+                }
+              </div>
             </div>
           </div>
         </div>
@@ -391,8 +402,11 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
             {/* Data source indicator */}
             <div className="text-xs text-dark-500 flex items-center gap-2 px-1">
               <span>Vol. anual: {(metrics.volAnn * 100).toFixed(0)}%</span>
-              <span>{pool.volatilityAnn ? '(dados reais)' : '(estimativa)'}</span>
-              <span>| Range: ±{config.rangePercent.toFixed(1)}%{pool.volatilityAnn ? ' (dinâmico)' : ''}</span>
+              <span className={pool.volatilityAnn && pool.volatilityAnn > 0 ? 'text-success-500' : 'text-warning-500'}>
+                {pool.volatilityAnn && pool.volatilityAnn > 0 ? '(OHLCV real)' : '(estimativa por tipo)'}
+              </span>
+              <span>| Range: ±{config.rangePercent.toFixed(1)}%</span>
+              <span>| Gas: estimativa fixa</span>
             </div>
 
             <div className={clsx(

@@ -153,8 +153,9 @@ export function calcVolatilityAnn(
   interval: 'hourly' | '5m' = 'hourly'
 ): VolatilityResult {
   if (pricePoints.length < 3) {
-    // Proxy: not enough data
-    return { volAnn: 0.15, method: 'proxy', dataPoints: pricePoints.length };
+    // Not enough data to compute real volatility — return 0 so consumers know
+    // this is NOT a real measurement and can apply their own fallback
+    return { volAnn: 0, method: 'proxy', dataPoints: pricePoints.length };
   }
 
   const sorted = [...pricePoints].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
@@ -169,7 +170,7 @@ export function calcVolatilityAnn(
   }
 
   if (logReturns.length < 2) {
-    return { volAnn: 0.15, method: 'proxy', dataPoints: pricePoints.length };
+    return { volAnn: 0, method: 'proxy', dataPoints: pricePoints.length };
   }
 
   const sigma = stdev(logReturns);
@@ -182,7 +183,8 @@ export function calcVolatilityAnn(
 /** Proxy volatility using current vs 1h-ago price */
 export function calcVolatilityProxy(priceNow: number, price1hAgo: number): VolatilityResult {
   if (!price1hAgo || price1hAgo <= 0 || !priceNow || priceNow <= 0) {
-    return { volAnn: 0.15, method: 'proxy', dataPoints: 0 };
+    // No valid prices — return 0 so caller knows this is not a real measurement
+    return { volAnn: 0, method: 'proxy', dataPoints: 0 };
   }
   const volAnn = clamp(
     Math.abs(Math.log(priceNow / price1hAgo)) * Math.sqrt(24 * 365),

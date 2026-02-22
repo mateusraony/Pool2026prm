@@ -63,19 +63,27 @@ export function enrichToUnifiedPool(
     : (pool.apr != null ? pool.apr : null);
 
   // Volatility: prefer adapter-provided value (real, from historical OHLCV),
-  // fall back to proxy estimate only if no real data available.
+  // fall back to type-aware estimate only if no real data available.
   let finalVolAnn: number;
   if (pool.volatilityAnn != null && pool.volatilityAnn > 0) {
     // Real volatility from adapter (TheGraph poolHourData or GeckoTerminal OHLCV)
     finalVolAnn = pool.volatilityAnn;
   } else {
-    // Proxy fallback: estimate from APR-derived price difference
-    const defaultVol = 0.20;
+    // Try proxy from price data
     const { volAnn: computedVol } = calcVolatilityProxy(
       pool.price ?? 1,
       pool.price != null ? pool.price * (1 + (pool.apr || 0) / 100 / 365) : 1
     );
-    finalVolAnn = computedVol > 0.05 ? computedVol : defaultVol;
+    if (computedVol > 0.05) {
+      finalVolAnn = computedVol;
+    } else {
+      // No real data — use type-aware conservative estimate
+      // Stablecoin pairs are low vol, crypto pairs are higher
+      finalVolAnn = poolType === 'STABLE' ? 0.05 : 0.50;
+    }
+    if (!warnings.includes('volatility estimated')) {
+      warnings.push('volatility estimated');
+    }
   }
 
   // Health score

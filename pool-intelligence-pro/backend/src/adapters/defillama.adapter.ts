@@ -182,8 +182,9 @@ export class DefiLlamaAdapter extends BaseAdapter {
       if (!pool.apr || pool.apr <= 0 || !pool.tvl || pool.tvl <= 0) continue;
 
       const fees24hEstimate = (pool.apr / 100 / 365) * pool.tvl;
-      const feeTier = pool.feeTier || 0.003;
-      const volumeEstimate = fees24hEstimate / feeTier;
+      // Only estimate volume if we know the real fee tier — don't assume 0.3%
+      if (!pool.feeTier || pool.feeTier <= 0) continue;
+      const volumeEstimate = fees24hEstimate / pool.feeTier;
 
       // Sanity check: volume should be reasonable (not 100x TVL)
       if (volumeEstimate > 0 && volumeEstimate < pool.tvl * 50) {

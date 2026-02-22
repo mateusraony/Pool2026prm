@@ -255,19 +255,24 @@ export class ScoreService {
   }
 
   private estimateApr(pool: Pool): number {
-    // Estimate APR from volume and typical fee
-    // feeTier is in decimal form: 0.003 = 0.3%
+    // Estimate APR from volume and fee tier
     if (pool.tvl === 0) return 0;
 
-    const assumedFeeRate = pool.feeTier || 0.003; // Default 0.3% = 0.003
-    const dailyFees = pool.volume24h * assumedFeeRate;
+    // Only estimate if we know the actual fee tier — don't assume 0.3%
+    if (!pool.feeTier || pool.feeTier <= 0) return 0;
+
+    const dailyFees = pool.volume24h * pool.feeTier;
     const annualizedApr = (dailyFees * 365) / pool.tvl * 100;
 
     return Math.round(annualizedApr * 10) / 10;
   }
 
   private calculateVolatilityPenalty(volatility?: number): number {
-    if (!volatility) return 5; // Default small penalty for unknown
+    if (volatility == null || volatility <= 0) {
+      // Unknown volatility — apply moderate penalty (not too low, not too high)
+      // This is more honest than assuming low risk (5) for unknown data
+      return 10;
+    }
 
     // Higher volatility = higher penalty
     if (volatility >= 30) return 25;
@@ -295,19 +300,26 @@ export class ScoreService {
   }
 
   private determineMode(pool: Pool, metrics: PoolWithMetrics['metrics'] | undefined, score: number): Mode {
-    // Use real volatility: metrics > pool.volatilityAnn (annualized, convert to %) > conservative default
-    const volatility = metrics?.volatility24h ?? (pool.volatilityAnn ? pool.volatilityAnn * 100 : 15);
-    
+    // Use real volatility: metrics > pool.volatilityAnn (annualized, convert to %)
+    // When no data available, default DEFENSIVE (safest assumption)
+    const volatility = metrics?.volatility24h
+      ?? (pool.volatilityAnn && pool.volatilityAnn > 0 ? pool.volatilityAnn * 100 : undefined);
+
+    if (volatility == null) {
+      // Unknown volatility — be conservative. Only allow NORMAL if score is very high.
+      return score >= 75 ? 'NORMAL' : 'DEFENSIVE';
+    }
+
     // High score + low volatility = can be aggressive
     if (score >= 70 && volatility <= MODE_THRESHOLDS.AGGRESSIVE.volatilityMax) {
       return 'AGGRESSIVE';
     }
-    
+
     // Medium score or medium volatility = normal
     if (score >= 50 && volatility <= MODE_THRESHOLDS.NORMAL.volatilityMax) {
       return 'NORMAL';
     }
-    
+
     // Default to defensive
     return 'DEFENSIVE';
   }
