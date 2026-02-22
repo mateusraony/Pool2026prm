@@ -112,14 +112,24 @@ export async function fetchPools(chain?: string): Promise<{ pool: Pool; score: S
     const volatilityPenalty = p.volatilityAnn
       ? (vol100 >= 30 ? 25 : vol100 >= 20 ? 20 : vol100 >= 10 ? 12 : vol100 >= 5 ? 5 : 0)
       : 5; // conservative default when unknown
-    // liquidityDropPenalty: can't calculate without tvlPeak24h (not in UnifiedPool API)
-    const liquidityDropPenalty = 0;
+    // liquidityDropPenalty: now available from API (tvlPeak24h + dropPercent)
+    const dropPct = p.tvlDropPercent || 0;
+    const liquidityDropPenalty = dropPct >= 50 ? 20 : dropPct >= 30 ? 15 : dropPct >= 20 ? 10 : dropPct >= 10 ? 5 : 0;
+
+    // Consensus inconsistency penalty (from API — multi-provider comparison)
+    const inconsistencyPenalty = (p.consensusDivergence || 0) > 10
+      ? ((p.consensusDivergence || 0) > 50 ? 15 : (p.consensusDivergence || 0) > 30 ? 10 : (p.consensusDivergence || 0) > 20 ? 7 : 3)
+      : 0;
+    // Execution cost penalty (AMM price impact — from API)
+    const executionCostPenalty = (p.executionCostImpact || 0) < 0.1 ? 0
+      : (p.executionCostImpact || 0) < 0.5 ? 2 : (p.executionCostImpact || 0) < 1 ? 4
+      : (p.executionCostImpact || 0) < 3 ? 6 : (p.executionCostImpact || 0) < 5 ? 8 : 10;
 
     // --- Weighted scores (mirrors backend weights: health=40, return=35, risk=25) ---
     const healthComponent = 40 * ((liqScore / 100) * 0.4 + (ageScore / 100) * 0.2 + (volConsist / 100) * 0.4);
     const normalizedApr = Math.min(aprEstimate, 100);
     const returnComponent = 35 * ((volTvlRatio / 100) * 0.3 + (feeEff / 100) * 0.3 + (normalizedApr / 100) * 0.4);
-    const riskPenalty = Math.min(25, volatilityPenalty + liquidityDropPenalty);
+    const riskPenalty = Math.min(25, volatilityPenalty + liquidityDropPenalty + inconsistencyPenalty + executionCostPenalty);
     const totalScore = Math.max(0, Math.min(100, healthComponent + returnComponent - riskPenalty));
 
     // Recommended mode: mirrors backend determineMode()
@@ -156,8 +166,8 @@ export async function fetchPools(chain?: string): Promise<{ pool: Pool; score: S
           risk: {
             volatilityPenalty,
             liquidityDropPenalty,
-            inconsistencyPenalty: 0, // requires multi-provider consensus (not available from /pools)
-            spreadPenalty: 0,        // requires order book data (not available)
+            inconsistencyPenalty,
+            spreadPenalty: executionCostPenalty,
           },
         },
       },
@@ -387,6 +397,24 @@ export async function createNote(poolId: string, text: string, tags?: string[]):
 
 export async function deleteNote(id: string): Promise<void> {
   await api.delete(`/notes/${id}`);
+}
+
+export interface GasEstimate {
+  gasPriceGwei: number;
+  roundTripUsd: number;
+  isLive: boolean;
+  chain: string;
+  nativeTokenPriceUsd: number;
+  fetchedAt: number;
+}
+
+export async function fetchGasEstimates(): Promise<Record<string, GasEstimate>> {
+  try {
+    const { data } = await api.get('/gas');
+    return data.data || {};
+  } catch {
+    return {};
+  }
 }
 
 export async function fetchWatchlist(): Promise<{ poolId: string; chain: string; address: string }[]> {

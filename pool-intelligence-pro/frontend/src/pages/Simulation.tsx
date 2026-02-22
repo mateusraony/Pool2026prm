@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TrendingUp, TrendingDown, Clock, Fuel, DollarSign, AlertTriangle, ArrowLeft, ExternalLink, Bell, BellRing, Check } from 'lucide-react';
-import { fetchPool, fetchPools, createRangePosition, fetchRangePositions, deleteRangePosition, Pool, Score } from '../api/client';
+import { fetchPool, fetchPools, createRangePosition, fetchRangePositions, deleteRangePosition, Pool, Score, fetchGasEstimates } from '../api/client';
 import InteractiveChart from '../components/charts/InteractiveChart';
 import clsx from 'clsx';
 
@@ -53,6 +53,13 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
   const [capital, setCapital] = useState(100);
   const [customRange, setCustomRange] = useState<{ lower: number; upper: number } | null>(null);
   const [monitorSuccess, setMonitorSuccess] = useState(false);
+
+  // Fetch dynamic gas estimates from API
+  const { data: gasEstimates } = useQuery({
+    queryKey: ['gas'],
+    queryFn: fetchGasEstimates,
+    staleTime: 60000, // refresh every 60s
+  });
 
   // Use real pool price from API. When unavailable, show warning instead of fabricating a price.
   const hasRealPrice = pool.price != null && pool.price > 0;
@@ -172,12 +179,13 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
     const weeklyVol = volAnn * sqrtT;
     const ilPercent = Math.max(0, 0.5 * weeklyVol * weeklyVol * concentrationFactor * 100);
 
-    // Gas costs: median estimates for entry + exit round trip (Feb 2026 averages)
-    // These are static estimates — real gas varies with network congestion
-    const gasMap: Record<string, number> = {
+    // Gas costs: dynamic from API (JSON-RPC eth_gasPrice) with static fallback
+    const staticGasMap: Record<string, number> = {
       ethereum: 30, arbitrum: 3, base: 1.5, optimism: 2, polygon: 0.5,
     };
-    const gasEstimate = gasMap[pool.chain] ?? 5;
+    const liveGas = gasEstimates?.[pool.chain];
+    const gasEstimate = liveGas?.roundTripUsd ?? staticGasMap[pool.chain] ?? 5;
+    const gasIsLive = liveGas?.isLive ?? false;
     const gasPercent = (gasEstimate / capital) * 100;
 
     const netReturn = feesPercent - ilPercent - gasPercent;
@@ -194,8 +202,9 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
       apr: netReturn * 52,
       rangeWidth,
       volAnn, // expose for UI display
+      gasIsLive,
     };
-  }, [rangeLower, rangeUpper, capital, score, currentPrice, pool.chain, pool.volatilityAnn, mode]);
+  }, [rangeLower, rangeUpper, capital, score, currentPrice, pool.chain, pool.volatilityAnn, mode, gasEstimates]);
 
   const isPositive = metrics.netReturnPercent >= 0;
 
@@ -406,7 +415,9 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
                 {pool.volatilityAnn && pool.volatilityAnn > 0 ? '(OHLCV real)' : '(estimativa por tipo)'}
               </span>
               <span>| Range: ±{config.rangePercent.toFixed(1)}%</span>
-              <span>| Gas: estimativa fixa</span>
+              <span className={metrics.gasIsLive ? 'text-success-500' : ''}>
+                | Gas: {metrics.gasIsLive ? 'RPC ao vivo' : 'estimativa fixa'}
+              </span>
             </div>
 
             <div className={clsx(

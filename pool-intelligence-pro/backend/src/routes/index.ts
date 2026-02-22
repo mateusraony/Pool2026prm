@@ -15,8 +15,12 @@ import {
   getWatchlist,
   addToWatchlist,
   removeFromWatchlist,
-  getMemoryStoreStats
+  getMemoryStoreStats,
+  getConsensusResults,
 } from '../jobs/index.js';
+import { tvlTrackerService } from '../services/tvl-tracker.service.js';
+import { gasService, GasEstimate } from '../services/gas.service.js';
+import { calculateExecutionCost } from '../services/execution-cost.service.js';
 import { memoryStore } from '../services/memory-store.service.js';
 import { config } from '../config/index.js';
 import { poolIntelligenceService } from '../services/pool-intelligence.service.js';
@@ -119,7 +123,27 @@ router.get('/pools', async (req, res) => {
     const sortKey = (validSortKeys.includes(sortBy as SortKey) ? sortBy : 'tvl') as SortKey;
     pools = poolIntelligenceService.sortPools(pools, sortKey, (sortDirection as string) === 'asc' ? 'asc' : 'desc');
 
-    // ── 4. Paginação ──
+    // ── 4. Enrich with TVL drop + consensus data ──
+    const consensusResults = getConsensusResults();
+    for (const pool of pools) {
+      // TVL drop from 24h snapshots
+      const tvlDrop = tvlTrackerService.getTvlDrop(pool.id, pool.tvlUSD);
+      if (tvlDrop.dataPoints > 0) {
+        pool.tvlPeak24h = tvlDrop.tvlPeak24h;
+        pool.tvlDropPercent = tvlDrop.dropPercent;
+      }
+      // Consensus data
+      const consensus = consensusResults.get(pool.poolAddress.toLowerCase());
+      if (consensus) {
+        pool.consensusSources = consensus.sources.length;
+        pool.consensusDivergence = Math.round(consensus.maxDivergence * 10) / 10;
+      }
+      // Execution cost impact
+      const execCost = calculateExecutionCost(pool.tvlUSD, pool.volume24hUSD, pool.poolType);
+      pool.executionCostImpact = execCost.impact1000;
+    }
+
+    // ── 5. Paginação ──
     const total = pools.length;
     const lim = limitStr ? Math.min(parseInt(limitStr as string), 200) : 50;
     const pg = page ? parseInt(page as string) : null;
@@ -659,6 +683,25 @@ router.post('/ranges/check', async (req, res) => {
     });
   } catch (error) {
     logService.error('SYSTEM', 'POST /ranges/check failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// ============================================
+// GAS ESTIMATES
+// ============================================
+
+router.get('/gas', async (req, res) => {
+  try {
+    const { chain } = req.query;
+    if (chain && typeof chain === 'string') {
+      const estimate = await gasService.getGasEstimate(chain);
+      return res.json({ success: true, data: estimate });
+    }
+    const allEstimates = await gasService.getAllGasEstimates();
+    res.json({ success: true, data: allEstimates });
+  } catch (error) {
+    logService.error('SYSTEM', 'GET /gas failed', { error });
     res.status(500).json({ success: false, error: 'Internal error' });
   }
 });

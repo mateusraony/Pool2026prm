@@ -43,9 +43,13 @@ export class ScoreService {
     };
   }
 
-  calculateScore(pool: Pool, metrics?: PoolWithMetrics['metrics']): Score {
+  calculateScore(
+    pool: Pool,
+    metrics?: PoolWithMetrics['metrics'],
+    externalPenalties?: { inconsistencyPenalty?: number; executionCostPenalty?: number }
+  ): Score {
     try {
-      const breakdown = this.calculateBreakdown(pool, metrics);
+      const breakdown = this.calculateBreakdown(pool, metrics, externalPenalties);
       
       // Calculate component scores
       const healthScore = this.calculateHealthScore(breakdown.health);
@@ -87,7 +91,11 @@ export class ScoreService {
     }
   }
 
-  private calculateBreakdown(pool: Pool, metrics?: PoolWithMetrics['metrics']): ScoreBreakdown {
+  private calculateBreakdown(
+    pool: Pool,
+    metrics?: PoolWithMetrics['metrics'],
+    externalPenalties?: { inconsistencyPenalty?: number; executionCostPenalty?: number }
+  ): ScoreBreakdown {
     // Use pool.volatilityAnn for volatility penalty (if available from enrichment)
     const volatility24h = metrics?.volatility24h ?? (pool.volatilityAnn ? pool.volatilityAnn * 100 : undefined);
 
@@ -113,10 +121,10 @@ export class ScoreService {
         volatilityPenalty: this.calculateVolatilityPenalty(volatility24h),
         // Liquidity drop penalty: detect TVL drop from peak (TheGraph poolHourData)
         liquidityDropPenalty: this.calculateLiquidityDropPenalty(pool),
-        // Inconsistency between sources (set by consensus when multiple providers)
-        inconsistencyPenalty: 0,
-        // Spread penalty (requires order book data — not available from current APIs)
-        spreadPenalty: 0,
+        // Inconsistency between sources (set by consensus service comparing providers)
+        inconsistencyPenalty: externalPenalties?.inconsistencyPenalty ?? 0,
+        // Execution cost penalty (AMM price impact — replaces order-book spreadPenalty)
+        spreadPenalty: externalPenalties?.executionCostPenalty ?? 0,
       },
     };
   }
