@@ -3,11 +3,11 @@
 ## Status Atual
 **Branch:** `claude/review-pool2026-pr-rO5Zd`
 **Data:** 2026-02-22 UTC
-**Último Commit:** (ver abaixo)
-**Fase:** 15 valores hardcoded/estáticos corrigidos — scoring real end-to-end
+**Último Commit:** (ver git log)
+**Fase:** Todas as 4 limitações técnicas resolvidas — consensus, execution cost, gas dinâmico, TVL tracking implementados com 91 testes
 
 ## Para Continuar (IMPORTANTE)
-**Frase de continuação:** `"Continuar do CHECKPOINT 2026-02-22-A"`
+**Frase de continuação:** `"Continuar do CHECKPOINT 2026-02-22-B"`
 
 ### Correções aplicadas nesta sessão:
 1. ✅ TheGraph marcado como opcional (não causa DEGRADED)
@@ -107,21 +107,58 @@
     - `feeTier: p.feeTier || undefined` (não mais `|| 0.003`)
     - URL Uniswap omite feeTier se desconhecido
 
-### Valores fixos restantes (limitações técnicas — sem API disponível):
-- `inconsistencyPenalty: 0` — precisa consensus multi-provider wired no scoring loop
-- `spreadPenalty: 0` — precisa order book (não disponível em nenhuma API atual)
-- `liquidityDropPenalty: 0` no frontend — API /pools não retorna tvlPeak24h (só /pools-detail)
-- `gasMap` estático — precisaria integrar gas price API (EIP-1559)
+### Sessão 2026-02-22 (continuação) — 4 Limitações Técnicas Resolvidas:
+
+33. ✅ **PARTE A: inconsistencyPenalty real via consensus multi-provider**:
+    - Novo serviço: `consensus.service.ts`
+    - Compara TVL/volume entre DefiLlama (dados já existentes) e GeckoTerminal (batch API `/pools/multi/`)
+    - Divergência → penalidade: ≤10%→0, 10-20%→3, 20-30%→7, 30-50%→10, >50%→15
+    - Cache 5min por batch, rate limit respeitado (30 pools por call)
+    - Wired no `jobs/index.ts`: radar job executa consensus e re-calcula scores com penalidade real
+
+34. ✅ **PARTE B: spreadPenalty substituído por executionCostPenalty (AMM)**:
+    - Novo serviço: `execution-cost.service.ts`
+    - Modelagem por tipo de pool:
+      - STABLE: `impact ≈ tradeSize / (10 × tvl)` (curva flat)
+      - CL (Concentrated Liquidity): fator de concentração derivado de `vol/TVL ratio`
+      - V2 (Constant Product): `impact ≈ tradeSize / (2 × tvl)`
+    - Impact $1K → penalty: <0.1%→0, 0.1-0.5%→2, 0.5-1%→4, 1-3%→6, 3-5%→8, >5%→10
+    - score.service.ts: `spreadPenalty` slot agora recebe `executionCostPenalty` real
+
+35. ✅ **PARTE C: gasMap dinâmico via JSON-RPC (gratuito)**:
+    - Novo serviço: `gas.service.ts`
+    - RPCs públicos gratuitos por chain: ethereum (llamarpc, ankr, publicnode), arbitrum, base, optimism, polygon
+    - `eth_gasPrice` via fetch, cache 60s
+    - Preço do token nativo via CoinGecko free API (cache 5min)
+    - Fallback estático quando RPC falha
+    - Novo endpoint: `GET /api/gas?chain=ethereum` (ou sem param → todas as chains)
+    - Frontend `Simulation.tsx`: busca gas real via API, mostra "RPC ao vivo" (verde) ou "estimativa fixa" (amarelo)
+
+36. ✅ **PARTE D: tvlPeak24h via snapshots in-memory + exposto no /pools**:
+    - Novo serviço: `tvl-tracker.service.ts`
+    - Rolling window 24h: snapshots in-memory (~2MB para 500 pools × 96 snapshots)
+    - `recordTvl()` / `recordBatchTvl()`: grava snapshots (debounce 1min)
+    - `getTvlDrop()`: retorna `{ tvlPeak24h, dropPercent, liquidityDropPenalty }`
+    - Drop → penalty: ≥50%→20, ≥30%→15, ≥20%→10, ≥10%→5
+    - Auto-eviction de dados >25h, max 600 pools
+    - `/pools` endpoint enriquecido com: `tvlPeak24h`, `tvlDropPercent`, `consensusSources`, `consensusDivergence`, `executionCostImpact`
+    - Frontend `client.ts`: calcula `liquidityDropPenalty`, `inconsistencyPenalty`, `executionCostPenalty` reais
+
+37. ✅ **PARTE E: Testes completos**:
+    - `services.test.ts`: 50 testes unitários (execution cost + TVL tracker) — todos passaram
+    - `integration.test.ts`: 41 testes de integração (consensus, gas, execution cost, TVL) — todos passaram
+    - Rodar: `npx tsx src/__tests__/services.test.ts` e `npx tsx src/__tests__/integration.test.ts`
+
+### Valores fixos restantes (nenhuma limitação técnica bloqueante):
+- Todos os 4 problemas técnicos anteriores foram resolvidos (inconsistencyPenalty, spreadPenalty, liquidityDropPenalty, gasMap)
 
 ### Pendente para próxima sessão:
 - [ ] Gráficos mostrando dados iguais (precisa API de preços real-time / histórico)
 - [ ] Code splitting para reduzir bundle (900KB → ~300KB)
-- [ ] `inconsistencyPenalty`: integrar `getPoolWithConsensus()` no scoring
-- [ ] Gas price API para custos dinâmicos
 
-## Arquivos Criados (41 arquivos)
+## Arquivos Criados (47 arquivos)
 
-### Backend (25 arquivos)
+### Backend (31 arquivos)
 - `backend/package.json` - Dependências
 - `backend/tsconfig.json` - Config TypeScript
 - `backend/.env.example` - Template env vars
@@ -147,6 +184,12 @@
 - `backend/src/jobs/index.ts` - Orquestração cron
 - `backend/src/routes/index.ts` - API REST
 - `backend/src/index.ts` - Entry point
+- `backend/src/services/consensus.service.ts` - Consensus multi-provider (DefiLlama + GeckoTerminal)
+- `backend/src/services/execution-cost.service.ts` - AMM price impact (CL/V2/STABLE)
+- `backend/src/services/gas.service.ts` - Dynamic gas via JSON-RPC
+- `backend/src/services/tvl-tracker.service.ts` - TVL 24h snapshots in-memory
+- `backend/src/__tests__/services.test.ts` - 50 unit tests
+- `backend/src/__tests__/integration.test.ts` - 41 integration tests
 
 ### Frontend (17 arquivos)
 - `frontend/package.json` - Dependências
@@ -203,9 +246,9 @@
 
 ## Próximas Melhorias Opcionais
 - [ ] Code splitting para reduzir bundle (900KB → ~300KB) via `build.rollupOptions.output.manualChunks`
-- [ ] Testes unitários (Jest/Vitest)
 - [ ] Documentação de API (Swagger/OpenAPI)
 - [ ] CI/CD pipeline no GitHub Actions
+- [ ] Gráficos de preço real-time / histórico
 
 ## Comandos Úteis
 ```bash
@@ -224,6 +267,11 @@ npm run dev
 # Prisma
 npx prisma generate
 npx prisma db push
+
+# Testes (rodar do diretório backend)
+cd pool-intelligence-pro/backend
+npx tsx src/__tests__/services.test.ts       # 50 testes unitários (offline)
+npx tsx src/__tests__/integration.test.ts    # 41 testes integração (requer rede)
 ```
 
 ## Variáveis de Ambiente Necessárias
@@ -232,3 +280,65 @@ DATABASE_URL=postgresql://...
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_CHAT_ID=...
 ```
+
+---
+
+## RELATÓRIO FINAL — Sessão 2026-02-22 (Partes A-F)
+
+### O que foi feito (resumo)
+
+Resolvidas as **4 últimas limitações técnicas** do sistema de scoring:
+
+| Parte | Problema | Solução | Arquivo |
+|-------|----------|---------|---------|
+| A | `inconsistencyPenalty` sempre 0 | Consensus multi-provider (DefiLlama vs GeckoTerminal batch) | `consensus.service.ts` |
+| B | `spreadPenalty` inapropriado para AMM | `executionCostPenalty` com modelo de price impact por tipo (CL/V2/STABLE) | `execution-cost.service.ts` |
+| C | `gasMap` estático | Gas dinâmico via `eth_gasPrice` JSON-RPC + CoinGecko token prices | `gas.service.ts` |
+| D | `liquidityDropPenalty` sem dados | TVL snapshots 24h in-memory + exposição no `/pools` | `tvl-tracker.service.ts` |
+| E | Sem testes | 91 testes (50 unit + 41 integration) | `__tests__/services.test.ts`, `__tests__/integration.test.ts` |
+
+### Fontes/APIs utilizadas (todas gratuitas)
+
+| API | Uso | Rate Limit |
+|-----|-----|------------|
+| **DefiLlama** | TVL, volume, APR, dados de pools | Sem rate limit oficial |
+| **GeckoTerminal** | Batch pool data (`/pools/multi/`), OHLCV | ~30 req/min |
+| **CoinGecko (free)** | Preço de tokens nativos (ETH, MATIC) para cálculo de gas em USD | 10-30 req/min |
+| **JSON-RPC públicos** | `eth_gasPrice` — Ethereum (llamarpc, ankr, publicnode), Arbitrum, Base, Optimism, Polygon | Sem rate limit restritivo |
+
+### Limites/riscos e mitigações
+
+| Risco | Mitigação |
+|-------|-----------|
+| APIs fora do ar / rate limited | Cache (5min consensus, 60s gas, 30min OHLCV) + fallback estático |
+| GeckoTerminal 403 (rate limit) | Batch de 30 pools por call, retry com backoff, resultado "single source" sem penalty |
+| RPCs públicos instáveis | 3 endpoints por chain, fallback estático se todos falharem |
+| Memória do TVL tracker | Max 600 pools × 96 snapshots ≈ 2MB, eviction automática de dados >25h |
+| Dados de consensus incompletos | Se apenas 1 fonte disponível: penalty=0, reason="single source" |
+| Execution cost é estimativa | Modelo simplificado (não Uniswap v3 SDK completo), mas penalty calibrada conservadoramente |
+
+### Como rodar os testes
+
+```bash
+cd pool-intelligence-pro/backend
+
+# Testes unitários (offline, sem rede)
+npx tsx src/__tests__/services.test.ts
+# Resultado esperado: 50 passed, 0 failed
+
+# Testes de integração (requer acesso à internet)
+npx tsx src/__tests__/integration.test.ts
+# Resultado esperado: ~41 passed (pode variar com rate limits)
+# Se APIs estiverem down: testes são "skipped" (não falham)
+```
+
+### Confirmação de que não quebrou funcionalidades existentes
+
+- ✅ `npm run build` do backend compila sem erros TypeScript
+- ✅ `npm run build` do frontend compila sem erros TypeScript
+- ✅ Todos os endpoints existentes continuam funcionando (`/pools`, `/pools-detail`, `/health`, etc.)
+- ✅ Score calculation mantém a mesma fórmula (health=40, return=35, risk=25) — apenas penalidades agora são reais em vez de 0
+- ✅ `externalPenalties` no `calculateScore()` é optional com default `{}` — backward compatible
+- ✅ Frontend consome novos campos via optional chaining (`p.tvlDropPercent ?? 0`) — não quebra se backend antigo
+- ✅ Novo endpoint `/api/gas` é aditivo (não modifica rotas existentes)
+- ✅ 91 testes passando (50 unit + 41 integration)
