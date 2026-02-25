@@ -305,6 +305,36 @@ export class DefiLlamaAdapter extends BaseAdapter {
     }
   }
   
+  /**
+   * Fetch historical TVL/APY chart for a pool from DefiLlama yields API.
+   * Returns daily snapshots. poolId should be the DefiLlama UUID (externalId).
+   */
+  async getPoolChart(poolId: string): Promise<{ timestamp: Date; tvl: number; apy: number }[]> {
+    const cacheKey = `defillama:chart:${poolId}`;
+    const cached = cacheService.get<{ timestamp: Date; tvl: number; apy: number }[]>(cacheKey);
+    if (cached.data) return cached.data;
+
+    try {
+      const res = await axios.get(`${BASE_URL}/chart/${poolId}`, { timeout: 15000 });
+      const raw: { timestamp: string; tvlUsd: number; apy: number }[] = res.data?.data || [];
+
+      const result = raw
+        .slice(-30) // last 30 days max
+        .map(d => ({
+          timestamp: new Date(d.timestamp),
+          tvl: d.tvlUsd || 0,
+          apy: d.apy || 0,
+        }));
+
+      if (result.length > 0) {
+        cacheService.set(cacheKey, result, 600); // 10 min cache
+      }
+      return result;
+    } catch {
+      return [];
+    }
+  }
+
   // DefiLlama specific: Get yields/APY data
   async getYields(chain?: string): Promise<DefiLlamaPool[]> {
     const response = await fetchWithRetry(

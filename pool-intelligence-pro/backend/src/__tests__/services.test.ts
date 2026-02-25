@@ -72,7 +72,7 @@ function testExecutionCost() {
   assert(noLiq.executionCostPenalty === 10, 'No liquidity: max penalty (10)', `got ${noLiq.executionCostPenalty}`);
 
   // Test 7: Multiple runs should be consistent
-  const results = [];
+  const results: ReturnType<typeof calculateExecutionCost>[] = [];
   for (let i = 0; i < 10; i++) {
     results.push(calculateExecutionCost(5_000_000, 2_000_000, 'CL', 0.003));
   }

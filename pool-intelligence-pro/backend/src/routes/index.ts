@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { getPoolsWithFallback, getPoolWithFallback, getAllProvidersHealth, theGraphAdapter } from '../adapters/index.js';
 import { geckoTerminalAdapter } from '../adapters/geckoterminal.adapter.js';
+import { defiLlamaAdapter } from '../adapters/defillama.adapter.js';
 import { scoreService } from '../services/score.service.js';
 import { cacheService } from '../services/cache.service.js';
 import { logService } from '../services/log.service.js';
@@ -746,6 +747,55 @@ router.get('/pools-detail/:chain/:address', async (req, res) => {
       const result = await getPoolWithFallback(chain, address);
       pool = result.pool;
       provider = result.provider;
+    }
+
+    // ── History fallback: if TheGraph gave no usable history, build from GeckoTerminal + DefiLlama ──
+    const hasUsableHistory = history.length >= 2 && history.some(h => (h.price && h.price > 0) || h.tvl > 0);
+    if (!hasUsableHistory && pool) {
+      try {
+        // Fetch price+volume from GeckoTerminal daily OHLCV (7 days)
+        const geckoHistory = pool.poolAddress.startsWith('0x')
+          ? await geckoTerminalAdapter.getPoolHistory(chain, pool.poolAddress, 7)
+          : [];
+
+        // Fetch TVL history from DefiLlama chart (uses pool UUID)
+        const llamaChart = pool.externalId
+          ? await defiLlamaAdapter.getPoolChart(pool.externalId)
+          : [];
+
+        // Build a TVL lookup by date (YYYY-MM-DD) from DefiLlama
+        const tvlByDate = new Map<string, number>();
+        for (const entry of llamaChart) {
+          const dateKey = new Date(entry.timestamp).toISOString().slice(0, 10);
+          tvlByDate.set(dateKey, entry.tvl);
+        }
+
+        if (geckoHistory.length >= 2) {
+          // Merge: price+volume from GeckoTerminal, TVL from DefiLlama
+          history = geckoHistory.map(gh => {
+            const dateKey = new Date(gh.timestamp).toISOString().slice(0, 10);
+            const tvlFromLlama = tvlByDate.get(dateKey);
+            return {
+              timestamp: gh.timestamp,
+              price: gh.price,
+              tvl: tvlFromLlama ?? gh.tvl,
+              volume24h: gh.volume24h,
+              fees24h: gh.fees24h ?? (gh.volume24h && pool!.feeTier ? gh.volume24h * pool!.feeTier : undefined),
+            };
+          });
+        } else if (llamaChart.length >= 2) {
+          // GeckoTerminal failed but DefiLlama has TVL — use TVL-only chart
+          history = llamaChart.map(lc => ({
+            timestamp: lc.timestamp,
+            price: undefined,
+            tvl: lc.tvl,
+            volume24h: 0,
+            fees24h: undefined,
+          }));
+        }
+      } catch (err) {
+        logService.warn('SYSTEM', 'History fallback failed', { chain, address, error: String(err) });
+      }
     }
 
     if (!pool) {
