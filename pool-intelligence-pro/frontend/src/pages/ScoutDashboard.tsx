@@ -26,20 +26,24 @@ export default function ScoutDashboard() {
   const [pools, setPools] = useState<Pool[]>([]);
   const [activePositions, setActivePositions] = useState<RangePosition[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
       setLoading(true);
+      setError(null);
       try {
         const [poolsRes, positions] = await Promise.all([
           fetchUnifiedPools({ limit: 10, sortBy: 'healthScore', sortDirection: 'desc' }),
-          fetchRangePositions(),
+          fetchRangePositions().catch(() => []),
         ]);
 
         const viewPools = poolsRes.pools.map((p) => unifiedPoolToViewPool(p));
         setPools(viewPools);
         setActivePositions(positions);
       } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Erro ao conectar com a API';
+        setError(msg);
         console.error('Failed to load dashboard data:', err);
       } finally {
         setLoading(false);
@@ -116,6 +120,22 @@ export default function ScoutDashboard() {
       title="Dashboard"
       subtitle="Visao geral do seu portfolio de liquidez"
     >
+      {/* Error Banner */}
+      {error && (
+        <div className="mb-6 rounded-lg p-4 bg-destructive/10 border border-destructive/30">
+          <div className="flex items-center gap-3">
+            <XCircle className="h-5 w-5 text-destructive" />
+            <div className="flex-1">
+              <p className="font-medium text-destructive">Erro ao carregar dados</p>
+              <p className="text-sm text-muted-foreground">{error}</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+              Tentar novamente
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Operation Status Banner */}
       <div className={`mb-6 rounded-lg p-4 flex items-center justify-between ${
         canOperate
