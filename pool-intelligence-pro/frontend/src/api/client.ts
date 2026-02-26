@@ -1,10 +1,44 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://pool-intelligence-api.onrender.com';
+// Resolve API URL: ignore localhost values in production (common misconfiguration)
+function resolveApiUrl(): string {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+    return envUrl;
+  }
+  return 'https://pool-intelligence-api.onrender.com';
+}
+
+const API_URL = resolveApiUrl();
+
+// Export for diagnostics (shown in error messages)
+export const API_BASE_URL = API_URL;
 
 const api = axios.create({
   baseURL: API_URL + '/api',
-  timeout: 30000,
+  timeout: 60000, // 60s for Render free tier cold starts
+});
+
+// Retry interceptor: handles cold starts (Render free tier sleeps after 15min)
+api.interceptors.response.use(undefined, async (error: AxiosError) => {
+  const config = error.config;
+  if (!config) return Promise.reject(error);
+
+  const retryCount = (config as any).__retryCount || 0;
+  const isRetryable =
+    !error.response || // network error (backend sleeping)
+    error.response.status === 502 || // bad gateway (waking up)
+    error.response.status === 503 || // service unavailable
+    error.code === 'ECONNABORTED'; // timeout
+
+  if (isRetryable && retryCount < 2) {
+    (config as any).__retryCount = retryCount + 1;
+    // Wait before retry: 3s first, 8s second (gives cold start time)
+    await new Promise(r => setTimeout(r, retryCount === 0 ? 3000 : 8000));
+    return api.request(config);
+  }
+
+  return Promise.reject(error);
 });
 
 // Types
