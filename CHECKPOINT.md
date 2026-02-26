@@ -3,251 +3,185 @@
 ## Status Atual
 **Branch:** `claude/pool2026-ui-lovable-eSwtR`
 **Data:** 2026-02-26 UTC
-**Último Commit:** `e449c7d`
-**Fase:** UI redesign completo com pool-scout-pro design system ✅
+**Ultimo Commit:** `81d271a`
+**Fase:** Frontend deployed, Backend pendente de deploy
 
 ## Para Continuar (IMPORTANTE)
-**Frase de continuação:** `"Continuar do CHECKPOINT 2026-02-26"`
-
-## MERGE PENDENTE
-A branch `claude/pool2026-ui-lovable-eSwtR` precisa ser mergeada para `main` via GitHub UI:
-- URL: https://github.com/mateusraony/Pool2026prm/pull/new/claude/pool2026-ui-lovable-eSwtR
-- Push direto para `main` bloqueado (403) - precisa criar PR no GitHub e fazer merge
-- Após merge, Render faz deploy automatico (autoDeploy: true)
+**Frase de continuacao:** `"Continuar do CHECKPOINT 2026-02-26-B"`
 
 ---
 
-## Sessão 2026-02-26: UI Redesign com pool-scout-pro
+## DIAGNOSTICO: POR QUE OS DADOS NAO CARREGAM
 
-### O que foi feito (6 commits):
+### Causa raiz identificada:
 
-#### Commit 1: `8033382` - Import base codebase
-- Copiado todo o código existente da branch `liquidity-pool-intelligence` para a nova branch
-- Backend: 25 arquivos (adapters, services, routes, jobs, telegram bot)
-- Frontend original: 17 arquivos (pages, layout, API client)
+O sistema tem 3 componentes que precisam estar rodando no Render:
 
-#### Commit 2: `dff320d` - shadcn/ui component library
-- 49 componentes shadcn/ui importados do pool-scout-pro
-- Componentes: Accordion, AlertDialog, Avatar, Badge, Button, Calendar, Card, Carousel, Chart, Checkbox, Collapsible, Command, ContextMenu, Dialog, Drawer, DropdownMenu, Form, HoverCard, InputOTP, Input, Label, Menubar, NavigationMenu, Pagination, Popover, Progress, RadioGroup, Resizable, ScrollArea, Select, Separator, Sheet, Sidebar, Skeleton, Slider, Sonner, Switch, Table, Tabs, Textarea, Toast, ToggleGroup, Toggle, Tooltip
-- Variantes customizadas no Button: `glow`, `success`, `warning`
-- Configurações: components.json, tsconfig paths, vite aliases
-- 40+ pacotes Radix UI + dependências
+| Componente | Nome no Render | Status | URL |
+|-----------|----------------|--------|-----|
+| Frontend (Static Site) | `pool2026prm` | DEPLOYED | https://pool2026prm.onrender.com |
+| Backend (Web Service) | `pool-intelligence-api` | NAO EXISTE | https://pool-intelligence-api.onrender.com |
+| Database (PostgreSQL) | `pool-intelligence-db` | NAO EXISTE | (internal URL) |
 
-#### Commit 3: `4cf9c1f` - Design system (tailwind + CSS)
-- `tailwind.config.ts`: Tema escuro completo com tokens (sidebar, chart colors, success/warning/danger)
-- `index.css`: CSS variables para dark theme, glass-card effects, gradientes, animações
-- Fontes: Inter + JetBrains Mono
+**O frontend esta no ar, mas o backend API NAO esta deployado no Render.**
 
-#### Commit 4: `31bd41f` - Common components, types, adapters, hooks
-- **Common Components:**
-  - `StatCard.tsx` - Card de estatística com variantes e ícones
-  - `PoolCard.tsx` - Card de pool com métricas e ações
-  - `ActivePoolCard.tsx` - Card de posição ativa com PnL
-  - `RangeChart.tsx` - Gráfico de distribuição de liquidez
-  - `InteractiveRangeChart.tsx` - Gráfico interativo com drag
-- **Types:** `pool.ts` - Pool, ActivePool, FavoritePool, HistoryEntry, RiskConfig, Alert
-- **Data:** `adapters.ts` (UnifiedPool→ViewPool), `constants.ts` (risk config, network colors, dex logos)
-- **Hooks:** `useRiskConfig.ts` (localStorage + backend sync), `useTokenPrice.ts` (CoinGecko + DeFiLlama), `use-mobile.tsx`
-- **Utils:** `lib/utils.ts` (cn helper)
+O frontend chama `https://pool-intelligence-api.onrender.com/api/pools` para buscar dados.
+Se esse servico nao existe, a chamada falha e o frontend mostra tela vazia.
 
-#### Commit 5: `344a898` - Layout, Sidebar, Header
-- **Layout.tsx** - Wrapper com SidebarProvider + Outlet
-- **Sidebar.tsx** - Sidebar colapsável com 5 seções de navegação, responsivo (mobile drawer + desktop collapse)
-- **Header.tsx** - Health check com TanStack Query, status indicator (Online/Degradado/Offline), chain selector
-- **ScoutDashboard.tsx** - Dashboard principal com stats grid, pools ativas, melhor oportunidade, alertas
+### Fluxo de dados:
+```
+Usuario abre pool2026prm.onrender.com
+  -> Frontend (React) carrega
+  -> Frontend chama pool-intelligence-api.onrender.com/api/pools
+  -> ERRO: servico nao existe (connection refused / timeout)
+  -> Frontend mostra tela sem dados
+```
 
-#### Commit 6: `e449c7d` - Scout pages, routing, Toaster, ThemeProvider
-- **7 Scout Pages criadas:**
-  - `ScoutDashboard.tsx` - Dashboard com StatCards, ActivePoolCards, alertas, status de operação
-  - `ScoutRecommended.tsx` - Pools recomendadas com search, filtros (rede/risco/sort), refresh
-  - `ScoutPoolDetail.tsx` - Detalhe com RangeChart, tabs (defensivo/otimizado/agressivo), projeções
-  - `ScoutActivePools.tsx` - Posições ativas com status e métricas
-  - `ScoutFavorites.tsx` - Pool favoritas com status tracking
-  - `ScoutHistory.tsx` - Timeline de operações com localStorage
-  - `ScoutSettings.tsx` - Config de banca, perfil de risco, redes, DEXs, Telegram
-- **App.tsx** - Todas as rotas configuradas (Scout + originais), Toaster adicionado
-- **main.tsx** - ThemeProvider (next-themes) para dark mode
-- **MainLayout.tsx** - Corrigido para evitar duplicação de Sidebar/Header
-- **Removidos:** `toaster.tsx` e `use-toast.ts` (antigo sistema, app usa Sonner)
-- **CSS:** Corrigida ordem do `@import` (antes do `@tailwind`)
-- **`.env.example`** criado
+### O que precisa ser feito (ordem):
 
-### Correções técnicas aplicadas:
-1. ✅ MainLayout.tsx: removida duplicação de Sidebar/Header (causaria layout aninhado)
-2. ✅ Navigation paths: `/scout/recommended` → `/recommended`, `/scout/active` → `/active`, `/scout/settings` → `/scout-settings`
-3. ✅ Toaster (Sonner) adicionado ao App root
-4. ✅ ThemeProvider (next-themes) adicionado ao main.tsx
-5. ✅ CSS @import order fix (eliminado warning de build)
-6. ✅ Removidos arquivos mortos (toaster.tsx, use-toast.ts)
-7. ✅ Build limpo: `tsc` + `vite build` = **zero errors**
+#### Passo 1: Criar o Database no Render
+1. Ir em https://dashboard.render.com
+2. New + -> PostgreSQL
+3. Nome: `pool-intelligence-db`
+4. Region: Oregon
+5. Plan: Free
+6. Criar e copiar a `Internal Database URL`
+
+#### Passo 2: Criar o Backend API no Render
+1. Ir em https://dashboard.render.com
+2. New + -> Web Service
+3. Conectar ao repo `mateusraony/Pool2026prm`
+4. Configurar:
+   - **Name:** `pool-intelligence-api`
+   - **Region:** Oregon
+   - **Branch:** `main`
+   - **Root Directory:** `pool-intelligence-pro/backend`
+   - **Runtime:** Node
+   - **Build Command:** `npm ci --include=dev && npx prisma generate && npm run build`
+   - **Start Command:** `npm start`
+   - **Plan:** Free
+5. Environment Variables:
+   - `NODE_ENV` = `production`
+   - `PORT` = `10000`
+   - `DATABASE_URL` = (colar a Internal Database URL do passo 1)
+   - `TELEGRAM_BOT_TOKEN` = (seu token do BotFather)
+   - `TELEGRAM_CHAT_ID` = (seu chat ID)
+6. Health Check Path: `/health`
+7. Criar servico
+
+#### Passo 3: Configurar VITE_API_URL no Frontend
+1. Ir em https://dashboard.render.com/static/srv-d67io0mr433s73f7bhtg/env
+2. Adicionar variavel: `VITE_API_URL` = `https://pool-intelligence-api.onrender.com`
+3. Salvar e fazer redeploy do frontend
+
+#### Passo 4: Verificar
+- Acessar `https://pool-intelligence-api.onrender.com/health` -> deve retornar `{"status":"ok"}`
+- Acessar `https://pool2026prm.onrender.com` -> deve mostrar pools com dados
+
+### Alternativa: Blueprint (automatiza tudo)
+Em vez dos passos 1-3 manuais, pode usar o render.yaml:
+1. Ir em https://dashboard.render.com
+2. New + -> Blueprint
+3. Conectar repo `mateusraony/Pool2026prm`
+4. O Render detecta o `render.yaml` e cria os 3 servicos automaticamente
+5. So precisa preencher as env vars do Telegram
+
+**ATENCAO:** Isso criaria servicos NOVOS (com nomes diferentes do `pool2026prm` existente).
+Recomendado: fazer manualmente (passos 1-3) para manter o mesmo URL do frontend.
 
 ---
 
-## Histórico Anterior (sessões 2026-02-20/21)
+## Sessao 2026-02-26: Resumo Completo
 
-### Correções do backend:
-1. ✅ TheGraph marcado como opcional (não causa DEGRADED)
-2. ✅ MemoryStore implementado (cache em memória)
-3. ✅ DefiLlama: extração correta do poolAddress
-4. ✅ /favorites: retorna array vazio se DB indisponível
-5. ✅ Frontend: null checks defensivos
-6. ✅ Watchlist job: checa MemoryStore antes de APIs externas
-7. ✅ GeckoTerminal marcado como opcional
-8. ✅ Volume data fix: 3 camadas de enrichment (DefiLlama → GeckoTerminal → estimativa)
-9. ✅ Token prices display nos componentes
-10. ✅ Simulation: cálculos live com modelo lognormal
-11. ✅ Score breakdown dinâmico com dados reais
-12. ✅ volatilityAnn propagado do backend ao frontend
+### Commits na branch (9 total):
+```
+81d271a fix: connect Scout pages to API and add full Telegram integration
+df6686b fix: make Render build robust (skip tsc, add _redirects, --include=dev)
+9f466fc docs: update CHECKPOINT.md with full session 2026-02-26 progress
+e449c7d feat: add Scout pages, routing, Toaster, ThemeProvider, and fix layout
+344a898 feat: update layout, sidebar, and header with new design system
+31bd41f feat: import common components, types, data adapters, and hooks
+4cf9c1f feat: import pool-scout-pro design system (tailwind config, CSS variables, styles)
+dff320d feat: add shadcn/ui component library and update frontend configs
+8033382 chore: import existing Pool2026prm codebase from liquidity-pool-intelligence branch
+```
+
+### O que foi feito nesta sessao:
+1. UI redesign completo com design system pool-scout-pro (tema dark, glass cards, gradientes)
+2. 49 componentes shadcn/ui importados
+3. 7 Scout pages novas (Dashboard, Recommended, PoolDetail, ActivePools, Favorites, History, Settings)
+4. Layout responsivo com Sidebar colapsavel, Header com health check, ThemeProvider
+5. Telegram section completa no ScoutSettings (3 botoes de acao, status, feedback)
+6. Error handling visivel no ScoutDashboard (banner com "Tentar novamente")
+7. Build otimizado para Render (sem tsc, _redirects, --include=dev)
+8. Frontend deployado com sucesso em https://pool2026prm.onrender.com
+
+### O que FALTA para funcionar 100%:
+- [ ] **CRITICO: Deploy do Backend API no Render** (ver instrucoes acima)
+- [ ] **CRITICO: Criar PostgreSQL no Render** (ver instrucoes acima)
+- [ ] **CRITICO: Configurar VITE_API_URL no frontend** (ver instrucoes acima)
+- [ ] Merge do ultimo commit (81d271a) para main (PR no GitHub)
+
+### Melhorias futuras (nao criticas):
+- [ ] Code splitting para reduzir bundle (738KB -> ~300KB)
+- [ ] Testes unitarios (Vitest)
+- [ ] Graficos com dados real-time / historico
 
 ---
 
-## Estrutura Completa do Projeto
+## Arquitetura do Sistema
 
-### Frontend (pool-intelligence-pro/frontend/)
 ```
-src/
-├── api/client.ts                    # API client (497 linhas)
-├── App.tsx                          # Router com 15 rotas
-├── main.tsx                         # Entry + ThemeProvider + React Query
-├── index.css                        # Design tokens + animações
-├── lib/utils.ts                     # cn() helper
-├── types/pool.ts                    # Pool, ActivePool, FavoritePool, etc.
-├── data/
-│   ├── adapters.ts                  # UnifiedPool → ViewPool
-│   └── constants.ts                 # Risk config, colors, logos
-├── hooks/
-│   ├── useRiskConfig.ts             # Risk config + localStorage
-│   ├── useTokenPrice.ts             # CoinGecko + DeFiLlama
-│   └── use-mobile.tsx               # Mobile detection
-├── components/
-│   ├── layout/
-│   │   ├── Layout.tsx               # SidebarProvider + Outlet
-│   │   ├── Sidebar.tsx              # Colapsável, responsivo
-│   │   ├── Header.tsx               # Health check, status
-│   │   └── MainLayout.tsx           # Page title wrapper
-│   ├── common/
-│   │   ├── StatCard.tsx
-│   │   ├── PoolCard.tsx
-│   │   ├── ActivePoolCard.tsx
-│   │   ├── RangeChart.tsx
-│   │   └── InteractiveRangeChart.tsx
-│   └── ui/                          # 49 shadcn/ui components
-│       ├── button.tsx (glow/success/warning variants)
-│       ├── sonner.tsx (toast notifications)
-│       └── ... (47 more)
-└── pages/
-    ├── ScoutDashboard.tsx           # Dashboard principal
-    ├── ScoutRecommended.tsx         # Pools recomendadas
-    ├── ScoutPoolDetail.tsx          # Detalhe da pool
-    ├── ScoutActivePools.tsx         # Posições ativas
-    ├── ScoutFavorites.tsx           # Favoritas
-    ├── ScoutHistory.tsx             # Histórico
-    ├── ScoutSettings.tsx            # Configurações
-    ├── Pools.tsx                    # Pool Intelligence (original)
-    ├── PoolDetail.tsx               # Detalhe (original)
-    ├── TokenAnalyzer.tsx            # Token Analyzer
-    ├── Radar.tsx                    # Radar
-    ├── Positions.tsx                # Posições
-    ├── Recommendations.tsx          # Recomendações (original)
-    ├── Simulation.tsx               # Simulação
-    ├── Watchlist.tsx                # Watchlist
-    ├── Alerts.tsx                   # Alertas
-    ├── Settings.tsx                 # Config sistema
-    └── Status.tsx                   # Status
+                     INTERNET
+                        |
+          +-------------+-------------+
+          |                           |
+  pool2026prm.onrender.com   pool-intelligence-api.onrender.com
+  (Static Site - React)       (Web Service - Node/Express)
+          |                           |
+          |    GET /api/pools         |
+          +-------------------------->|
+          |    GET /api/health        |---> DefiLlama API
+          |    GET /api/pools-detail  |---> GeckoTerminal API
+          |    POST /api/ranges       |---> DexScreener API
+          |    GET /api/settings      |
+          |<--------------------------+
+          |                           |
+          |                    +------+------+
+          |                    | PostgreSQL  |
+          |                    | (Render DB) |
+          |                    +-------------+
 ```
 
-### Backend (pool-intelligence-pro/backend/)
+## Variaveis de Ambiente Necessarias
+
+### Backend (Web Service)
 ```
-src/
-├── index.ts                         # Entry point
-├── config/index.ts                  # Config centralizada
-├── types/index.ts                   # TypeScript types
-├── adapters/
-│   ├── base.adapter.ts
-│   ├── defillama.adapter.ts
-│   ├── geckoterminal.adapter.ts
-│   ├── dexscreener.adapter.ts
-│   ├── thegraph.adapter.ts
-│   └── index.ts                     # Registry + consensus
-├── services/
-│   ├── score.service.ts             # Score 0-100
-│   ├── recommendation.service.ts    # Top 3 IA
-│   ├── calc.service.ts              # Cálculos DeFi
-│   ├── range.service.ts             # Range management
-│   ├── alert.service.ts             # Alertas
-│   ├── cache.service.ts             # Cache TTL
-│   ├── memory-store.service.ts      # MemoryStore
-│   ├── circuit-breaker.service.ts   # Circuit breaker
-│   ├── retry.service.ts             # Retry exponential
-│   ├── log.service.ts               # Logging
-│   ├── notification-settings.service.ts
-│   └── pool-intelligence.service.ts
-├── routes/index.ts                  # API REST (877 linhas)
-├── jobs/
-│   ├── index.ts                     # Orquestração cron
-│   ├── radar.job.ts                 # Descoberta de pools
-│   └── watchlist.job.ts             # Monitoramento
-└── bot/telegram.ts                  # Bot Telegram
+NODE_ENV=production
+PORT=10000
+DATABASE_URL=postgresql://poolintel:SENHA@HOST:5432/poolintel  (Internal URL do Render)
+TELEGRAM_BOT_TOKEN=seu_token_do_botfather
+TELEGRAM_CHAT_ID=seu_chat_id
 ```
 
-### Deploy
+### Frontend (Static Site)
 ```
-render.yaml                          # Render config (API + UI + DB)
-```
-
-## Rotas do Frontend (App.tsx)
-| Path | Page | Descrição |
-|------|------|-----------|
-| `/dashboard` | ScoutDashboard | Dashboard principal (default) |
-| `/recommended` | ScoutRecommended | Pools recomendadas pela IA |
-| `/active` | ScoutActivePools | Posições ativas |
-| `/favorites` | ScoutFavorites | Pools favoritas |
-| `/history` | ScoutHistory | Histórico de operações |
-| `/scout-settings` | ScoutSettings | Configurações de risco |
-| `/pools` | PoolsPage | Pool Intelligence (tabela) |
-| `/pools/:chain/:address` | ScoutPoolDetail | Detalhe com RangeChart |
-| `/token-analyzer` | TokenAnalyzerPage | Análise de tokens |
-| `/radar` | RadarPage | Radar de pools |
-| `/positions` | PositionsPage | Posições |
-| `/recommendations` | RecommendationsPage | Recomendações (original) |
-| `/simulation` | SimulationPage | Simulação |
-| `/watchlist` | WatchlistPage | Watchlist |
-| `/alerts` | AlertsPage | Alertas |
-| `/settings` | SettingsPage | Config sistema |
-| `/status` | StatusPage | Status backend |
-
-## Comandos Úteis
-```bash
-# Frontend
-cd pool-intelligence-pro/frontend
-npm install
-npm run build    # tsc + vite build
-npm run dev      # dev server
-
-# Backend
-cd pool-intelligence-pro/backend
-npm install
-npm run build    # tsc
-npm run dev      # dev server
-
-# Prisma
-npx prisma generate
-npx prisma db push
-```
-
-## Variáveis de Ambiente
-```
-# Backend
-DATABASE_URL=postgresql://...
-TELEGRAM_BOT_TOKEN=...
-TELEGRAM_CHAT_ID=...
-
-# Frontend
 VITE_API_URL=https://pool-intelligence-api.onrender.com
 ```
 
-## Pendente
-- [ ] **MERGE para main** - Criar PR no GitHub e fazer merge para trigger deploy no Render
-- [ ] Code splitting para reduzir bundle (735KB → ~300KB)
-- [ ] Testes unitários (Vitest)
-- [ ] Gráficos com dados real-time / histórico
+## Comandos Uteis
+```bash
+# Frontend
+cd pool-intelligence-pro/frontend
+npm install && npm run build    # vite build (zero errors)
+npm run dev                     # dev server porta 5173
+
+# Backend
+cd pool-intelligence-pro/backend
+npm install && npx prisma generate && npm run build   # tsc (zero errors)
+npm run dev                     # dev server porta 3001
+
+# Verificar API
+curl https://pool-intelligence-api.onrender.com/health
+curl https://pool-intelligence-api.onrender.com/api/pools
+```
