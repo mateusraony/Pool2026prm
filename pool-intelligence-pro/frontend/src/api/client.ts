@@ -242,15 +242,10 @@ export async function fetchUnifiedPools(params?: {
   minTVL?: number;
   minHealth?: number;
 }): Promise<PoolsResponse> {
-  try {
-    const { data } = await api.get('/pools', { params });
-    // Support both old format (data.data) and new format
-    if (data?.pools) return data;
-    return { pools: data?.data || [], total: data?.count || 0, page: null, limit: 50, syncing: false };
-  } catch (e) {
-    console.error('fetchUnifiedPools error:', e);
-    return { pools: [], total: 0, page: null, limit: 50, syncing: false };
-  }
+  const { data } = await api.get('/pools', { params });
+  // Support both old format (data.data) and new format
+  if (data?.pools) return data;
+  return { pools: data?.data || [], total: data?.count || 0, page: null, limit: 50, syncing: false };
 }
 
 export async function fetchTokens(): Promise<string[]> {

@@ -17,22 +17,105 @@ import {
   Save,
   RotateCcw,
   MessageSquare,
-  Loader2
+  Loader2,
+  Send,
+  Bell,
+  Zap,
+  RefreshCw,
+  Check,
+  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import {
+  fetchSettings,
+  testTelegramConnection,
+  testTelegramRecommendations,
+  sendPortfolioReport,
+} from '@/api/client';
 
 export default function ScoutSettings() {
   const { config: savedConfig, loading: configLoading, saveConfig } = useRiskConfig();
   const [config, setConfig] = useState<RiskConfig>(defaultRiskConfig);
-  const [telegramConnected, setTelegramConnected] = useState(false);
+
+  // Telegram state
+  const [telegramEnabled, setTelegramEnabled] = useState(false);
+  const [telegramChatId, setTelegramChatId] = useState<string | null>(null);
+  const [telegramLoading, setTelegramLoading] = useState(true);
+  const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [reportStatus, setReportStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [recTestStatus, setRecTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [recTestMessage, setRecTestMessage] = useState('');
 
   useEffect(() => {
     if (!configLoading && savedConfig) {
       setConfig(savedConfig);
-      setTelegramConnected(savedConfig.telegramEnabled || false);
     }
   }, [savedConfig, configLoading]);
+
+  // Fetch Telegram status from backend
+  useEffect(() => {
+    async function loadTelegramStatus() {
+      try {
+        const settings = await fetchSettings();
+        setTelegramEnabled(settings.telegram?.enabled || false);
+        setTelegramChatId(settings.telegram?.chatId || null);
+      } catch {
+        setTelegramEnabled(false);
+        setTelegramChatId(null);
+      } finally {
+        setTelegramLoading(false);
+      }
+    }
+    loadTelegramStatus();
+  }, []);
+
+  async function handleTestTelegram() {
+    setTestStatus('loading');
+    try {
+      const result = await testTelegramConnection();
+      setTestStatus(result.success ? 'success' : 'error');
+      toast[result.success ? 'success' : 'error'](
+        result.success ? 'Mensagem de teste enviada!' : 'Falha ao enviar teste'
+      );
+    } catch {
+      setTestStatus('error');
+      toast.error('Falha ao conectar com Telegram');
+    }
+    setTimeout(() => setTestStatus('idle'), 3000);
+  }
+
+  async function handleSendReport() {
+    setReportStatus('loading');
+    try {
+      await sendPortfolioReport();
+      setReportStatus('success');
+      toast.success('Relatorio enviado ao Telegram!');
+    } catch {
+      setReportStatus('error');
+      toast.error('Falha ao enviar relatorio');
+    }
+    setTimeout(() => setReportStatus('idle'), 3000);
+  }
+
+  async function handleTestRecommendations() {
+    setRecTestStatus('loading');
+    setRecTestMessage('');
+    try {
+      const result = await testTelegramRecommendations(5, true);
+      if (result.success) {
+        setRecTestStatus('success');
+        setRecTestMessage(result.message || `Enviado ${result.count} recomendacoes`);
+      } else {
+        setRecTestStatus('error');
+        setRecTestMessage(result.error || 'Falha ao enviar recomendacoes');
+      }
+    } catch {
+      setRecTestStatus('error');
+      setRecTestMessage('Erro de conexao com o servidor');
+    }
+    setTimeout(() => setRecTestStatus('idle'), 5000);
+  }
 
   const profiles = [
     {
@@ -310,24 +393,112 @@ export default function ScoutSettings() {
             </div>
             <div>
               <h2 className="text-lg font-semibold">Telegram</h2>
-              <p className="text-sm text-muted-foreground">Receba alertas em tempo real</p>
+              <p className="text-sm text-muted-foreground">Receba alertas e relatorios em tempo real</p>
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className={cn(
-                'pulse-dot',
-                telegramConnected ? 'text-success' : 'text-muted-foreground'
-              )} />
-              <span className="text-sm">
-                {telegramConnected ? 'Conectado' : 'Desconectado'}
-              </span>
+          {/* Status */}
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="font-medium">Status da Integracao</p>
+              <p className="text-sm text-muted-foreground">
+                {telegramLoading
+                  ? 'Verificando...'
+                  : telegramChatId
+                    ? `Chat ID: ${telegramChatId}`
+                    : 'Configure TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID no .env do backend'
+                }
+              </p>
             </div>
-            <Button variant="outline" size="sm">
-              {telegramConnected ? 'Desconectar' : 'Conectar Telegram'}
+            <Badge variant={telegramEnabled ? 'default' : 'destructive'} className={cn(
+              telegramEnabled ? 'bg-success hover:bg-success/90' : ''
+            )}>
+              {telegramEnabled ? 'Conectado' : 'Desconectado'}
+            </Badge>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleTestTelegram}
+              disabled={testStatus === 'loading' || !telegramEnabled}
+              className={cn(
+                testStatus === 'success' && 'border-success text-success',
+                testStatus === 'error' && 'border-destructive text-destructive'
+              )}
+            >
+              {testStatus === 'loading' ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> :
+               testStatus === 'success' ? <Check className="h-4 w-4 mr-2" /> :
+               testStatus === 'error' ? <X className="h-4 w-4 mr-2" /> :
+               <Send className="h-4 w-4 mr-2" />}
+              {testStatus === 'success' ? 'Enviado!' :
+               testStatus === 'error' ? 'Falhou' :
+               'Testar Conexao'}
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSendReport}
+              disabled={reportStatus === 'loading' || !telegramEnabled}
+              className={cn(
+                reportStatus === 'success' && 'border-success text-success',
+                reportStatus === 'error' && 'border-destructive text-destructive'
+              )}
+            >
+              {reportStatus === 'loading' ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> :
+               reportStatus === 'success' ? <Check className="h-4 w-4 mr-2" /> :
+               reportStatus === 'error' ? <X className="h-4 w-4 mr-2" /> :
+               <Bell className="h-4 w-4 mr-2" />}
+              {reportStatus === 'success' ? 'Enviado!' :
+               reportStatus === 'error' ? 'Falhou' :
+               'Enviar Relatorio Agora'}
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleTestRecommendations}
+              disabled={recTestStatus === 'loading' || !telegramEnabled}
+              className={cn(
+                recTestStatus === 'success' && 'border-success text-success',
+                recTestStatus === 'error' && 'border-destructive text-destructive'
+              )}
+            >
+              {recTestStatus === 'loading' ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> :
+               recTestStatus === 'success' ? <Check className="h-4 w-4 mr-2" /> :
+               recTestStatus === 'error' ? <X className="h-4 w-4 mr-2" /> :
+               <Zap className="h-4 w-4 mr-2" />}
+              {recTestStatus === 'success' ? 'Enviado!' :
+               recTestStatus === 'error' ? 'Falhou' :
+               'Testar Recomendacoes'}
             </Button>
           </div>
+
+          {/* Recommendations test result message */}
+          {recTestMessage && (
+            <div className={cn(
+              'p-3 rounded-lg text-sm mb-4',
+              recTestStatus === 'error'
+                ? 'bg-destructive/10 border border-destructive/30 text-destructive'
+                : 'bg-success/10 border border-success/30 text-success'
+            )}>
+              {recTestMessage}
+            </div>
+          )}
+
+          {/* Setup instructions when not configured */}
+          {!telegramEnabled && !telegramLoading && (
+            <div className="bg-warning/10 border border-warning/30 rounded-lg p-3 text-sm text-warning">
+              Para ativar o Telegram, adicione{' '}
+              <code className="bg-secondary px-1.5 py-0.5 rounded text-xs font-mono">TELEGRAM_BOT_TOKEN</code>{' '}
+              e{' '}
+              <code className="bg-secondary px-1.5 py-0.5 rounded text-xs font-mono">TELEGRAM_CHAT_ID</code>{' '}
+              no arquivo <code className="bg-secondary px-1.5 py-0.5 rounded text-xs font-mono">.env</code> do backend.
+            </div>
+          )}
         </div>
 
         {/* Actions */}
