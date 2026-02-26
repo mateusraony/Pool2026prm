@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { StatCard } from '@/components/common/StatCard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
   DollarSign,
@@ -12,55 +12,54 @@ import {
   RefreshCw,
   Plus,
   Loader2,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { fetchRangePositions, type RangePosition } from '@/api/client';
+import { fetchRangePositions, deleteRangePosition, type RangePosition } from '@/api/client';
 import { networkColors } from '@/data/constants';
 
 export default function ScoutActivePools() {
   const navigate = useNavigate();
-  const [positions, setPositions] = useState<RangePosition[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const queryClient = useQueryClient();
 
-  const loadPositions = async () => {
-    try {
-      const data = await fetchRangePositions();
-      setPositions(data.filter((p) => p.isActive));
-    } catch {
-      toast.error('Erro ao carregar posicoes');
-    } finally {
-      setLoading(false);
-    }
+  const { data: allPositions = [], isLoading, isFetching, refetch } = useQuery({
+    queryKey: ['range-positions'],
+    queryFn: fetchRangePositions,
+    refetchInterval: 60000,
+  });
+
+  const positions = allPositions.filter((p: RangePosition) => p.isActive);
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteRangePosition,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['range-positions'] });
+      toast.success('Posicao removida');
+    },
+    onError: () => toast.error('Erro ao remover posicao'),
+  });
+
+  const handleRefresh = () => {
+    refetch();
+    toast.info('Atualizando posicoes...');
   };
 
-  useEffect(() => { loadPositions(); }, []);
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await loadPositions();
-    setRefreshing(false);
-    toast.success('Dados atualizados');
-  };
-
-  const totalCapital = positions.reduce((sum, p) => sum + p.capital, 0);
+  const totalCapital = positions.reduce((sum: number, p: RangePosition) => sum + p.capital, 0);
 
   return (
     <MainLayout title="Pools Ativas" subtitle="Posicoes em monitoramento ativo">
-      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <StatCard label="Posicoes Ativas" value={positions.length} icon={<Activity className="h-5 w-5" />} />
         <StatCard label="Capital Total" value={`$${totalCapital.toLocaleString()}`} icon={<DollarSign className="h-5 w-5" />} />
         <StatCard label="Status" value={positions.length > 0 ? 'Monitorando' : 'Sem posicoes'} icon={<TrendingUp className="h-5 w-5" />} variant="success" />
       </div>
 
-      {/* Actions */}
       <div className="flex items-center justify-between mb-6">
         <Badge variant="secondary">{positions.length} pool{positions.length !== 1 ? 's' : ''} ativa{positions.length !== 1 ? 's' : ''}</Badge>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
-            {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isFetching}>
+            {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           </Button>
           <Button size="sm" onClick={() => navigate('/recommended')}>
             <Plus className="h-4 w-4 mr-1" /> Nova Posicao
@@ -68,7 +67,7 @@ export default function ScoutActivePools() {
         </div>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div className="space-y-4">
           {[...Array(3)].map((_, i) => (
             <div key={i} className="glass-card p-4 space-y-3">
@@ -90,7 +89,7 @@ export default function ScoutActivePools() {
         </div>
       ) : (
         <div className="space-y-4">
-          {positions.map((pos) => (
+          {positions.map((pos: RangePosition) => (
             <div key={pos.id} className="glass-card p-4 animate-slide-up">
               <div className="flex items-start justify-between">
                 <div>
@@ -129,6 +128,12 @@ export default function ScoutActivePools() {
                 <Button variant="outline" size="sm" className="flex-1"
                   onClick={() => navigate(`/pools/${pos.chain}/${pos.poolAddress}`)}>
                   Ver Detalhes
+                </Button>
+                <Button variant="outline" size="sm"
+                  onClick={() => deleteMutation.mutate(pos.id)}
+                  disabled={deleteMutation.isPending}
+                  className="text-destructive hover:text-destructive">
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
             </div>
