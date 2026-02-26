@@ -4,7 +4,7 @@ import { StatCard } from '@/components/common/StatCard';
 import { PoolCard } from '@/components/common/PoolCard';
 import { ActivePoolCard } from '@/components/common/ActivePoolCard';
 import { defaultRiskConfig } from '@/data/constants';
-import { fetchUnifiedPools, fetchRangePositions } from '@/api/client';
+import { fetchUnifiedPools, fetchRangePositions, API_BASE_URL } from '@/api/client';
 import type { RangePosition } from '@/api/client';
 import { unifiedPoolToViewPool } from '@/data/adapters';
 import type { Pool, ActivePool } from '@/types/pool';
@@ -124,10 +124,13 @@ export default function ScoutDashboard() {
       {error && (
         <div className="mb-6 rounded-lg p-4 bg-destructive/10 border border-destructive/30">
           <div className="flex items-center gap-3">
-            <XCircle className="h-5 w-5 text-destructive" />
-            <div className="flex-1">
+            <XCircle className="h-5 w-5 text-destructive shrink-0" />
+            <div className="flex-1 min-w-0">
               <p className="font-medium text-destructive">Erro ao carregar dados</p>
               <p className="text-sm text-muted-foreground">{error}</p>
+              <p className="text-xs text-muted-foreground mt-1 font-mono truncate">
+                API: {API_BASE_URL}/api/pools
+              </p>
             </div>
             <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
               Tentar novamente
