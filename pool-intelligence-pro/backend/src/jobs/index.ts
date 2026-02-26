@@ -13,6 +13,13 @@ import { config } from '../config/index.js';
 import { Pool, Score, Recommendation } from '../types/index.js';
 import { memoryStore } from '../services/memory-store.service.js';
 import { poolIntelligenceService } from '../services/pool-intelligence.service.js';
+import { runBatchConsensus, ConsensusResult } from '../services/consensus.service.js';
+import { tvlTrackerService } from '../services/tvl-tracker.service.js';
+import { calculateExecutionCost } from '../services/execution-cost.service.js';
+
+// Consensus results cache: poolAddress → ConsensusResult
+let latestConsensusResults = new Map<string, ConsensusResult>();
+export function getConsensusResults() { return latestConsensusResults; }
 
 // State legado (mantido para compatibilidade com rotas existentes)
 let latestRadarResults: { pool: Pool; score: Score }[] = [];
@@ -42,12 +49,50 @@ async function radarJobRunner() {
     // Flatten and store top candidates from all chains
     latestRadarResults = results.flatMap(r => r.topCandidates);
 
+    // --- A) Run batch consensus per chain (compare DefiLlama vs GeckoTerminal) ---
+    const newConsensus = new Map<string, ConsensusResult>();
+    for (const result of results) {
+      try {
+        const pools = result.topCandidates.map(c => c.pool);
+        const consensusMap = await runBatchConsensus(result.chain, pools);
+        for (const [addr, cr] of consensusMap) {
+          newConsensus.set(addr, cr);
+        }
+      } catch (err) {
+        logService.warn('SYSTEM', `Consensus check failed for ${result.chain}`, { error: (err as Error).message });
+      }
+    }
+    latestConsensusResults = newConsensus;
+
+    // --- B) Re-score with consensus + execution cost penalties ---
+    for (const r of latestRadarResults) {
+      const addr = r.pool.poolAddress.toLowerCase();
+      const consensus = newConsensus.get(addr);
+      const execCost = calculateExecutionCost(
+        r.pool.tvl,
+        r.pool.volume24h,
+        r.pool.poolType || 'CL',
+        r.pool.feeTier
+      );
+
+      // Recalculate score with real penalties
+      const score = scoreService.calculateScore(r.pool, undefined, {
+        inconsistencyPenalty: consensus?.inconsistencyPenalty ?? 0,
+        executionCostPenalty: execCost.executionCostPenalty,
+      });
+      r.score = score;
+    }
+
     // Popula o MemoryStore com UnifiedPool já enriquecidos
-    // Assim as rotas servem direto da memória sem recalcular
     const unifiedPools = latestRadarResults.map(r =>
       poolIntelligenceService.enrichToUnifiedPool(r.pool, { updatedAt: new Date() })
     );
     memoryStore.setPools(unifiedPools);
+
+    // --- C) Record TVL snapshots for drop tracking ---
+    tvlTrackerService.recordBatchTvl(
+      unifiedPools.map(p => ({ id: p.id, tvl: p.tvlUSD }))
+    );
 
     // Armazena scores por pool no MemoryStore
     for (const r of latestRadarResults) {
@@ -55,6 +100,8 @@ async function radarJobRunner() {
     }
 
     logService.info('SYSTEM', 'Radar job stored ' + latestRadarResults.length + ' candidates', {
+      consensus: { checked: newConsensus.size, withPenalty: Array.from(newConsensus.values()).filter(c => c.inconsistencyPenalty > 0).length },
+      tvlTracker: tvlTrackerService.getStats(),
       memoryStore: memoryStore.getStats(),
     });
   } catch (error) {

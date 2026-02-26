@@ -164,6 +164,34 @@ function transformPool(raw: GraphQLPool, chain: string): Pool {
     fees24h = parseFloat(raw.feesUSD) || 0;
   }
 
+  // ── Compute real volatility from poolHourData close prices ──
+  let volatilityAnn: number | undefined;
+  let tvlPeak24h: number | undefined;
+  if (raw.poolHourData && raw.poolHourData.length >= 3) {
+    const pricePoints: { price: number; timestamp: Date }[] = [];
+    for (const h of raw.poolHourData) {
+      const close = parseFloat(h.close);
+      if (close > 0) {
+        pricePoints.push({ price: close, timestamp: new Date(parseInt(h.periodStartUnix) * 1000) });
+      }
+    }
+    if (pricePoints.length >= 3) {
+      const result = calcService.calcVolatilityAnn(pricePoints, 'hourly');
+      if (result.method === 'log_returns') {
+        volatilityAnn = result.volAnn;
+      }
+    }
+
+    // ── Compute peak TVL from last 24h hourly data for liquidityDropPenalty ──
+    const last24 = raw.poolHourData.slice(0, 24);
+    let maxTvl = 0;
+    for (const h of last24) {
+      const hTvl = parseFloat(h.tvlUSD) || 0;
+      if (hTvl > maxTvl) maxTvl = hTvl;
+    }
+    if (maxTvl > 0) tvlPeak24h = maxTvl;
+  }
+
   const poolType: PoolType = calcService.inferPoolType({
     token0Symbol: raw.token0.symbol,
     token1Symbol: raw.token1.symbol,
@@ -200,6 +228,8 @@ function transformPool(raw: GraphQLPool, chain: string): Pool {
     poolType,
     tickSpacing: raw.tickSpacing ? parseInt(raw.tickSpacing) : undefined,
     bluechip: calcService.isBluechip(raw.token0.symbol, raw.token1.symbol),
+    volatilityAnn,
+    tvlPeak24h,
   };
 
   return pool;

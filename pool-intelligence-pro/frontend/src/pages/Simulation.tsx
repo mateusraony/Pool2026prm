@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TrendingUp, TrendingDown, Clock, Fuel, DollarSign, AlertTriangle, ArrowLeft, ExternalLink, Bell, BellRing, Check } from 'lucide-react';
-import { fetchPool, fetchPools, createRangePosition, fetchRangePositions, deleteRangePosition, Pool, Score } from '../api/client';
+import { fetchPool, fetchPools, createRangePosition, fetchRangePositions, deleteRangePosition, Pool, Score, fetchGasEstimates } from '../api/client';
 import InteractiveChart from '../components/charts/InteractiveChart';
 import clsx from 'clsx';
 
@@ -14,11 +14,38 @@ function formatNum(num: number): string {
 
 type Mode = 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE';
 
-const modeConfig = {
+// Static fallback config (used only when volatility unavailable)
+const modeConfigStatic = {
   DEFENSIVE: { emoji: '🛡️', label: 'Defensivo', rangePercent: 15, color: 'success' },
   NORMAL: { emoji: '⚖️', label: 'Normal', rangePercent: 10, color: 'warning' },
   AGGRESSIVE: { emoji: '🎯', label: 'Agressivo', rangePercent: 5, color: 'danger' },
 };
+
+/**
+ * Compute dynamic range width from real pool volatility.
+ * Mirrors backend calcRangeRecommendation: width = z * volAnn * sqrt(horizonDays/365)
+ * Clamped to [0.3%, 45%] for CL pools, max 3% for stable pools.
+ */
+function getDynamicModeConfig(volAnn: number | undefined, isStable: boolean) {
+  if (!volAnn || volAnn <= 0) return modeConfigStatic;
+
+  const zMap = { DEFENSIVE: 0.8, NORMAL: 1.2, AGGRESSIVE: 1.8 };
+  const horizonDays = 7;
+  const sqrtT = Math.sqrt(horizonDays / 365);
+
+  const calc = (z: number) => {
+    let w = z * volAnn * sqrtT * 100; // convert to %
+    w = Math.max(0.3, Math.min(45, w));
+    if (isStable) w = Math.min(3, w);
+    return Math.round(w * 10) / 10;
+  };
+
+  return {
+    DEFENSIVE: { ...modeConfigStatic.DEFENSIVE, rangePercent: calc(zMap.DEFENSIVE) },
+    NORMAL: { ...modeConfigStatic.NORMAL, rangePercent: calc(zMap.NORMAL) },
+    AGGRESSIVE: { ...modeConfigStatic.AGGRESSIVE, rangePercent: calc(zMap.AGGRESSIVE) },
+  };
+}
 
 function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
   const queryClient = useQueryClient();
@@ -27,8 +54,24 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
   const [customRange, setCustomRange] = useState<{ lower: number; upper: number } | null>(null);
   const [monitorSuccess, setMonitorSuccess] = useState(false);
 
-  // Use pool price or estimate from TVL (more realistic than flat 1000)
-  const currentPrice = pool.price || (pool.tvl > 0 ? Math.max(1, pool.tvl / 50000) : 100);
+  // Fetch dynamic gas estimates from API
+  const { data: gasEstimates } = useQuery({
+    queryKey: ['gas'],
+    queryFn: fetchGasEstimates,
+    staleTime: 60000, // refresh every 60s
+  });
+
+  // Use real pool price from API. When unavailable, show warning instead of fabricating a price.
+  const hasRealPrice = pool.price != null && pool.price > 0;
+  const currentPrice = hasRealPrice ? pool.price! : 1; // placeholder for math when no price
+
+  // Detect stable pair for range clamping
+  const stableTokens = ['USDC', 'USDT', 'DAI', 'FRAX', 'LUSD', 'BUSD'];
+  const isStable = stableTokens.some(s => pool.token0?.symbol?.includes(s)) &&
+                   stableTokens.some(s => pool.token1?.symbol?.includes(s));
+
+  // Dynamic mode config based on real volatility
+  const modeConfig = getDynamicModeConfig(pool.volatilityAnn, isStable);
   const config = modeConfig[mode];
 
   // Check if this pool is already being monitored
@@ -97,9 +140,11 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
     const rangeWidth = ((rangeUpper - rangeLower) / currentPrice) * 100;
 
     // --- LIVE CALCULATIONS BASED ON REAL POOL VOLATILITY ---
-    // Uses pool.volatilityAnn from backend (calculated from price data).
-    // If unavailable, uses a conservative default of 0.40 (40% annualized).
-    const volAnn = pool.volatilityAnn || 0.40;
+    // Uses pool.volatilityAnn from backend (calculated from OHLCV price data).
+    // If unavailable, use type-aware estimate: stable pairs ~5%, crypto pairs ~50%
+    const volAnn = (pool.volatilityAnn && pool.volatilityAnn > 0)
+      ? pool.volatilityAnn
+      : (isStable ? 0.05 : 0.50);
 
     // Time in range (7 days): probability price stays within [rangeLower, rangeUpper]
     // Uses lognormal model: P(out) = 2 * (1 - Φ(d)), where d = ln(upper/price) / (σ√T)
@@ -134,11 +179,13 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
     const weeklyVol = volAnn * sqrtT;
     const ilPercent = Math.max(0, 0.5 * weeklyVol * weeklyVol * concentrationFactor * 100);
 
-    // Gas costs: realistic L1/L2 values (entry + exit round trip)
-    const gasMap: Record<string, number> = {
+    // Gas costs: dynamic from API (JSON-RPC eth_gasPrice) with static fallback
+    const staticGasMap: Record<string, number> = {
       ethereum: 30, arbitrum: 3, base: 1.5, optimism: 2, polygon: 0.5,
     };
-    const gasEstimate = gasMap[pool.chain] ?? 5;
+    const liveGas = gasEstimates?.[pool.chain];
+    const gasEstimate = liveGas?.roundTripUsd ?? staticGasMap[pool.chain] ?? 5;
+    const gasIsLive = liveGas?.isLive ?? false;
     const gasPercent = (gasEstimate / capital) * 100;
 
     const netReturn = feesPercent - ilPercent - gasPercent;
@@ -155,14 +202,17 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
       apr: netReturn * 52,
       rangeWidth,
       volAnn, // expose for UI display
+      gasIsLive,
     };
-  }, [rangeLower, rangeUpper, capital, score, currentPrice, pool.chain, pool.volatilityAnn, mode]);
+  }, [rangeLower, rangeUpper, capital, score, currentPrice, pool.chain, pool.volatilityAnn, mode, gasEstimates]);
 
   const isPositive = metrics.netReturnPercent >= 0;
 
   // Uniswap URL — feeTier needs to be in bps (e.g. 3000 for 0.3%)
-  const feeTierBps = pool.feeTier ? Math.round(pool.feeTier * 1000000) : 3000;
-  const uniswapUrl = `https://app.uniswap.org/add/${pool.token0?.address ?? ''}/${pool.token1?.address ?? ''}/${feeTierBps}?chain=${pool.chain}`;
+  const feeTierBps = pool.feeTier ? Math.round(pool.feeTier * 1000000) : undefined;
+  const uniswapUrl = feeTierBps
+    ? `https://app.uniswap.org/add/${pool.token0?.address ?? ''}/${pool.token1?.address ?? ''}/${feeTierBps}?chain=${pool.chain}`
+    : `https://app.uniswap.org/add/${pool.token0?.address ?? ''}/${pool.token1?.address ?? ''}?chain=${pool.chain}`;
 
   return (
     <div className="space-y-6">
@@ -208,7 +258,12 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
             </div>
             <div className="stat-card">
               <div className="stat-label">Preco Atual</div>
-              <div className="stat-value font-mono">{'$' + currentPrice.toFixed(2)}</div>
+              <div className="stat-value font-mono">
+                {hasRealPrice
+                  ? '$' + currentPrice.toFixed(2)
+                  : <span className="text-warning-400 text-sm">Sem dados de preco</span>
+                }
+              </div>
             </div>
           </div>
         </div>
@@ -356,7 +411,13 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
             {/* Data source indicator */}
             <div className="text-xs text-dark-500 flex items-center gap-2 px-1">
               <span>Vol. anual: {(metrics.volAnn * 100).toFixed(0)}%</span>
-              <span>{pool.volatilityAnn ? '(dados reais)' : '(estimativa)'}</span>
+              <span className={pool.volatilityAnn && pool.volatilityAnn > 0 ? 'text-success-500' : 'text-warning-500'}>
+                {pool.volatilityAnn && pool.volatilityAnn > 0 ? '(OHLCV real)' : '(estimativa por tipo)'}
+              </span>
+              <span>| Range: ±{config.rangePercent.toFixed(1)}%</span>
+              <span className={metrics.gasIsLive ? 'text-success-500' : ''}>
+                | Gas: {metrics.gasIsLive ? 'RPC ao vivo' : 'estimativa fixa'}
+              </span>
             </div>
 
             <div className={clsx(

@@ -338,14 +338,22 @@ export default function PoolDetailPage() {
   const warnings = pool.warnings || [];
   const healthScore = pool.healthScore ?? 0;
 
-  // Build chart data
-  const chartData = (data.history ?? []).slice(0, 48).reverse().map((h) => ({
+  // Build chart data — keep nulls to detect "no data" per metric
+  const rawHistory = (data.history ?? []).slice(0, 48).reverse();
+  const chartData = rawHistory.map((h) => ({
     ts: new Date(h.timestamp).toISOString(),
-    price: h.price ?? 0,
-    tvl: h.tvl ?? 0,
-    volume: h.volume24h ?? 0,
-    fees: h.fees24h ?? 0,
+    price: (h.price && h.price > 0) ? h.price : null,
+    tvl: (h.tvl && h.tvl > 0) ? h.tvl : null,
+    volume: (h.volume24h && h.volume24h > 0) ? h.volume24h : null,
+    fees: (h.fees24h && h.fees24h > 0) ? h.fees24h : null,
   }));
+  // Check which tabs have real data
+  const hasData = {
+    price: chartData.some(d => d.price != null),
+    tvl: chartData.some(d => d.tvl != null),
+    volume: chartData.some(d => d.volume != null),
+    fees: chartData.some(d => d.fees != null),
+  };
 
   const chartTabs = [
     { key: 'price', label: 'Preço', color: '#6366f1' },
@@ -459,11 +467,15 @@ export default function PoolDetailPage() {
         <div className="p-4">
           {chartData.length === 0 ? (
             <div className="h-28 flex items-center justify-center text-dark-500 text-sm">
-              Dados históricos não disponíveis para esta pool.
+              Dados historicos nao disponiveis para esta pool.
+            </div>
+          ) : !hasData[activeTab] ? (
+            <div className="h-28 flex items-center justify-center text-dark-500 text-sm">
+              Sem dados de {chartTabs.find(t => t.key === activeTab)?.label.toLowerCase()} para esta pool.
             </div>
           ) : (
             <MiniChart
-              data={chartData}
+              data={chartData.filter(d => d[activeTab] != null)}
               dataKey={activeTab}
               color={chartTabs.find(t => t.key === activeTab)?.color ?? '#6366f1'}
             />

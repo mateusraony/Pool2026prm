@@ -182,8 +182,9 @@ export class DefiLlamaAdapter extends BaseAdapter {
       if (!pool.apr || pool.apr <= 0 || !pool.tvl || pool.tvl <= 0) continue;
 
       const fees24hEstimate = (pool.apr / 100 / 365) * pool.tvl;
-      const feeTier = pool.feeTier || 0.003;
-      const volumeEstimate = fees24hEstimate / feeTier;
+      // Only estimate volume if we know the real fee tier — don't assume 0.3%
+      if (!pool.feeTier || pool.feeTier <= 0) continue;
+      const volumeEstimate = fees24hEstimate / pool.feeTier;
 
       // Sanity check: volume should be reasonable (not 100x TVL)
       if (volumeEstimate > 0 && volumeEstimate < pool.tvl * 50) {
@@ -251,6 +252,7 @@ export class DefiLlamaAdapter extends BaseAdapter {
     const volume24h = data.volumeUsd1d || 0;
     const volume7d = data.volumeUsd7d;
     const apr = data.apyBase ?? data.apy; // Prefer base APY (fees only); fall back to total APY
+    const aprReward = data.apyReward ?? undefined; // Incentive/reward APR from protocol
 
     // Estimate fees24h when volume is available but fees aren't
     let fees24h: number | undefined;
@@ -282,6 +284,7 @@ export class DefiLlamaAdapter extends BaseAdapter {
       volume7d,
       fees24h,
       apr,
+      aprReward,
     };
   }
   
@@ -302,6 +305,36 @@ export class DefiLlamaAdapter extends BaseAdapter {
     }
   }
   
+  /**
+   * Fetch historical TVL/APY chart for a pool from DefiLlama yields API.
+   * Returns daily snapshots. poolId should be the DefiLlama UUID (externalId).
+   */
+  async getPoolChart(poolId: string): Promise<{ timestamp: Date; tvl: number; apy: number }[]> {
+    const cacheKey = `defillama:chart:${poolId}`;
+    const cached = cacheService.get<{ timestamp: Date; tvl: number; apy: number }[]>(cacheKey);
+    if (cached.data) return cached.data;
+
+    try {
+      const res = await axios.get(`${BASE_URL}/chart/${poolId}`, { timeout: 15000 });
+      const raw: { timestamp: string; tvlUsd: number; apy: number }[] = res.data?.data || [];
+
+      const result = raw
+        .slice(-30) // last 30 days max
+        .map(d => ({
+          timestamp: new Date(d.timestamp),
+          tvl: d.tvlUsd || 0,
+          apy: d.apy || 0,
+        }));
+
+      if (result.length > 0) {
+        cacheService.set(cacheKey, result, 600); // 10 min cache
+      }
+      return result;
+    } catch {
+      return [];
+    }
+  }
+
   // DefiLlama specific: Get yields/APY data
   async getYields(chain?: string): Promise<DefiLlamaPool[]> {
     const response = await fetchWithRetry(

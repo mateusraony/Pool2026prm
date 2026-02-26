@@ -43,9 +43,13 @@ export class ScoreService {
     };
   }
 
-  calculateScore(pool: Pool, metrics?: PoolWithMetrics['metrics']): Score {
+  calculateScore(
+    pool: Pool,
+    metrics?: PoolWithMetrics['metrics'],
+    externalPenalties?: { inconsistencyPenalty?: number; executionCostPenalty?: number }
+  ): Score {
     try {
-      const breakdown = this.calculateBreakdown(pool, metrics);
+      const breakdown = this.calculateBreakdown(pool, metrics, externalPenalties);
       
       // Calculate component scores
       const healthScore = this.calculateHealthScore(breakdown.health);
@@ -87,7 +91,11 @@ export class ScoreService {
     }
   }
 
-  private calculateBreakdown(pool: Pool, metrics?: PoolWithMetrics['metrics']): ScoreBreakdown {
+  private calculateBreakdown(
+    pool: Pool,
+    metrics?: PoolWithMetrics['metrics'],
+    externalPenalties?: { inconsistencyPenalty?: number; executionCostPenalty?: number }
+  ): ScoreBreakdown {
     // Use pool.volatilityAnn for volatility penalty (if available from enrichment)
     const volatility24h = metrics?.volatility24h ?? (pool.volatilityAnn ? pool.volatilityAnn * 100 : undefined);
 
@@ -111,12 +119,12 @@ export class ScoreService {
       risk: {
         // Volatility penalty (uses real volatilityAnn when available)
         volatilityPenalty: this.calculateVolatilityPenalty(volatility24h),
-        // Liquidity drop penalty (requires historical TVL data — not available)
-        liquidityDropPenalty: 0,
-        // Inconsistency between sources (set by consensus when multiple providers)
-        inconsistencyPenalty: 0,
-        // Spread penalty (requires order book data — not available)
-        spreadPenalty: 0,
+        // Liquidity drop penalty: detect TVL drop from peak (TheGraph poolHourData)
+        liquidityDropPenalty: this.calculateLiquidityDropPenalty(pool),
+        // Inconsistency between sources (set by consensus service comparing providers)
+        inconsistencyPenalty: externalPenalties?.inconsistencyPenalty ?? 0,
+        // Execution cost penalty (AMM price impact — replaces order-book spreadPenalty)
+        spreadPenalty: externalPenalties?.executionCostPenalty ?? 0,
       },
     };
   }
@@ -255,20 +263,25 @@ export class ScoreService {
   }
 
   private estimateApr(pool: Pool): number {
-    // Estimate APR from volume and typical fee
-    // feeTier is in decimal form: 0.003 = 0.3%
+    // Estimate APR from volume and fee tier
     if (pool.tvl === 0) return 0;
 
-    const assumedFeeRate = pool.feeTier || 0.003; // Default 0.3% = 0.003
-    const dailyFees = pool.volume24h * assumedFeeRate;
+    // Only estimate if we know the actual fee tier — don't assume 0.3%
+    if (!pool.feeTier || pool.feeTier <= 0) return 0;
+
+    const dailyFees = pool.volume24h * pool.feeTier;
     const annualizedApr = (dailyFees * 365) / pool.tvl * 100;
 
     return Math.round(annualizedApr * 10) / 10;
   }
 
   private calculateVolatilityPenalty(volatility?: number): number {
-    if (!volatility) return 5; // Default small penalty for unknown
-    
+    if (volatility == null || volatility <= 0) {
+      // Unknown volatility — apply moderate penalty (not too low, not too high)
+      // This is more honest than assuming low risk (5) for unknown data
+      return 10;
+    }
+
     // Higher volatility = higher penalty
     if (volatility >= 30) return 25;
     if (volatility >= 20) return 20;
@@ -277,19 +290,44 @@ export class ScoreService {
     return 0;
   }
 
+  /**
+   * Calculate liquidity drop penalty from recent TVL history.
+   * Uses tvlPeak24h (from TheGraph poolHourData) vs current TVL.
+   * A >20% drop from peak signals potential liquidity flight.
+   */
+  private calculateLiquidityDropPenalty(pool: Pool): number {
+    if (!pool.tvlPeak24h || pool.tvlPeak24h <= 0 || pool.tvl <= 0) return 0;
+
+    const dropPercent = ((pool.tvlPeak24h - pool.tvl) / pool.tvlPeak24h) * 100;
+
+    if (dropPercent >= 50) return 20; // Severe liquidity flight
+    if (dropPercent >= 30) return 15;
+    if (dropPercent >= 20) return 10;
+    if (dropPercent >= 10) return 5;
+    return 0;
+  }
+
   private determineMode(pool: Pool, metrics: PoolWithMetrics['metrics'] | undefined, score: number): Mode {
-    const volatility = metrics?.volatility24h || 10;
-    
+    // Use real volatility: metrics > pool.volatilityAnn (annualized, convert to %)
+    // When no data available, default DEFENSIVE (safest assumption)
+    const volatility = metrics?.volatility24h
+      ?? (pool.volatilityAnn && pool.volatilityAnn > 0 ? pool.volatilityAnn * 100 : undefined);
+
+    if (volatility == null) {
+      // Unknown volatility — be conservative. Only allow NORMAL if score is very high.
+      return score >= 75 ? 'NORMAL' : 'DEFENSIVE';
+    }
+
     // High score + low volatility = can be aggressive
     if (score >= 70 && volatility <= MODE_THRESHOLDS.AGGRESSIVE.volatilityMax) {
       return 'AGGRESSIVE';
     }
-    
+
     // Medium score or medium volatility = normal
     if (score >= 50 && volatility <= MODE_THRESHOLDS.NORMAL.volatilityMax) {
       return 'NORMAL';
     }
-    
+
     // Default to defensive
     return 'DEFENSIVE';
   }

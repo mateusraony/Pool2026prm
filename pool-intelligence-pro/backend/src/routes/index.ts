@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { getPoolsWithFallback, getPoolWithFallback, getAllProvidersHealth, theGraphAdapter } from '../adapters/index.js';
+import { geckoTerminalAdapter } from '../adapters/geckoterminal.adapter.js';
+import { defiLlamaAdapter } from '../adapters/defillama.adapter.js';
 import { scoreService } from '../services/score.service.js';
 import { cacheService } from '../services/cache.service.js';
 import { logService } from '../services/log.service.js';
@@ -14,8 +16,12 @@ import {
   getWatchlist,
   addToWatchlist,
   removeFromWatchlist,
-  getMemoryStoreStats
+  getMemoryStoreStats,
+  getConsensusResults,
 } from '../jobs/index.js';
+import { tvlTrackerService } from '../services/tvl-tracker.service.js';
+import { gasService, GasEstimate } from '../services/gas.service.js';
+import { calculateExecutionCost } from '../services/execution-cost.service.js';
 import { memoryStore } from '../services/memory-store.service.js';
 import { config } from '../config/index.js';
 import { poolIntelligenceService } from '../services/pool-intelligence.service.js';
@@ -118,7 +124,27 @@ router.get('/pools', async (req, res) => {
     const sortKey = (validSortKeys.includes(sortBy as SortKey) ? sortBy : 'tvl') as SortKey;
     pools = poolIntelligenceService.sortPools(pools, sortKey, (sortDirection as string) === 'asc' ? 'asc' : 'desc');
 
-    // ── 4. Paginação ──
+    // ── 4. Enrich with TVL drop + consensus data ──
+    const consensusResults = getConsensusResults();
+    for (const pool of pools) {
+      // TVL drop from 24h snapshots
+      const tvlDrop = tvlTrackerService.getTvlDrop(pool.id, pool.tvlUSD);
+      if (tvlDrop.dataPoints > 0) {
+        pool.tvlPeak24h = tvlDrop.tvlPeak24h;
+        pool.tvlDropPercent = tvlDrop.dropPercent;
+      }
+      // Consensus data
+      const consensus = consensusResults.get(pool.poolAddress.toLowerCase());
+      if (consensus) {
+        pool.consensusSources = consensus.sources.length;
+        pool.consensusDivergence = Math.round(consensus.maxDivergence * 10) / 10;
+      }
+      // Execution cost impact
+      const execCost = calculateExecutionCost(pool.tvlUSD, pool.volume24hUSD, pool.poolType);
+      pool.executionCostImpact = execCost.impact1000;
+    }
+
+    // ── 5. Paginação ──
     const total = pools.length;
     const lim = limitStr ? Math.min(parseInt(limitStr as string), 200) : 50;
     const pg = page ? parseInt(page as string) : null;
@@ -663,6 +689,25 @@ router.post('/ranges/check', async (req, res) => {
 });
 
 // ============================================
+// GAS ESTIMATES
+// ============================================
+
+router.get('/gas', async (req, res) => {
+  try {
+    const { chain } = req.query;
+    if (chain && typeof chain === 'string') {
+      const estimate = await gasService.getGasEstimate(chain);
+      return res.json({ success: true, data: estimate });
+    }
+    const allEstimates = await gasService.getAllGasEstimates();
+    res.json({ success: true, data: allEstimates });
+  } catch (error) {
+    logService.error('SYSTEM', 'GET /gas failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// ============================================
 // POOL INTELLIGENCE — NEW ENDPOINTS
 // ============================================
 
@@ -704,8 +749,65 @@ router.get('/pools-detail/:chain/:address', async (req, res) => {
       provider = result.provider;
     }
 
+    // ── History fallback: if TheGraph gave no usable history, build from GeckoTerminal + DefiLlama ──
+    const hasUsableHistory = history.length >= 2 && history.some(h => (h.price && h.price > 0) || h.tvl > 0);
+    if (!hasUsableHistory && pool) {
+      try {
+        // Fetch price+volume from GeckoTerminal daily OHLCV (7 days)
+        const geckoHistory = pool.poolAddress.startsWith('0x')
+          ? await geckoTerminalAdapter.getPoolHistory(chain, pool.poolAddress, 7)
+          : [];
+
+        // Fetch TVL history from DefiLlama chart (uses pool UUID)
+        const llamaChart = pool.externalId
+          ? await defiLlamaAdapter.getPoolChart(pool.externalId)
+          : [];
+
+        // Build a TVL lookup by date (YYYY-MM-DD) from DefiLlama
+        const tvlByDate = new Map<string, number>();
+        for (const entry of llamaChart) {
+          const dateKey = new Date(entry.timestamp).toISOString().slice(0, 10);
+          tvlByDate.set(dateKey, entry.tvl);
+        }
+
+        if (geckoHistory.length >= 2) {
+          // Merge: price+volume from GeckoTerminal, TVL from DefiLlama
+          history = geckoHistory.map(gh => {
+            const dateKey = new Date(gh.timestamp).toISOString().slice(0, 10);
+            const tvlFromLlama = tvlByDate.get(dateKey);
+            return {
+              timestamp: gh.timestamp,
+              price: gh.price,
+              tvl: tvlFromLlama ?? gh.tvl,
+              volume24h: gh.volume24h,
+              fees24h: gh.fees24h ?? (gh.volume24h && pool!.feeTier ? gh.volume24h * pool!.feeTier : undefined),
+            };
+          });
+        } else if (llamaChart.length >= 2) {
+          // GeckoTerminal failed but DefiLlama has TVL — use TVL-only chart
+          history = llamaChart.map(lc => ({
+            timestamp: lc.timestamp,
+            price: undefined,
+            tvl: lc.tvl,
+            volume24h: 0,
+            fees24h: undefined,
+          }));
+        }
+      } catch (err) {
+        logService.warn('SYSTEM', 'History fallback failed', { chain, address, error: String(err) });
+      }
+    }
+
     if (!pool) {
       return res.status(404).json({ success: false, error: 'Pool not found' });
+    }
+
+    // Enrich with real volatility from GeckoTerminal hourly OHLCV if adapter didn't provide it
+    if (!pool.volatilityAnn && pool.poolAddress.startsWith('0x')) {
+      const realVol = await geckoTerminalAdapter.fetchVolatility(chain, pool.poolAddress);
+      if (realVol != null) {
+        pool.volatilityAnn = realVol;
+      }
     }
 
     const unified = poolIntelligenceService.enrichToUnifiedPool(pool, { updatedAt: new Date() });

@@ -26,6 +26,8 @@ export interface Pool {
   tickSpacing?: number;
   bluechip?: boolean;
   volatilityAnn?: number; // Annualized volatility for live calculations
+  aprReward?: number;     // Incentive/reward APR from protocol (DefiLlama apyReward)
+  tvlPeak24h?: number;    // Peak TVL in last 24h (from TheGraph poolHourData)
 }
 
 export interface Token {
@@ -85,6 +87,17 @@ export interface UnifiedPool {
   bluechip: boolean;             // both tokens are bluechip
   warnings: string[];
   updatedAt: string;             // ISO string
+
+  // TVL drop tracking (from tvlTrackerService — 24h rolling window)
+  tvlPeak24h?: number;          // peak TVL in last 24h
+  tvlDropPercent?: number;      // drop from peak (0-100%)
+
+  // Consensus data
+  consensusSources?: number;    // number of data sources compared
+  consensusDivergence?: number; // max divergence % between sources
+
+  // Execution cost
+  executionCostImpact?: number; // estimated $1K price impact (%)
 
   // Raw fields for compatibility
   apr?: number;

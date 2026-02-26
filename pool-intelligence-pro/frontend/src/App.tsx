@@ -1,17 +1,28 @@
-import { Component, ReactNode } from 'react';
+import { Component, ReactNode, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/layout/Layout';
-import RadarPage from './pages/Radar';
-import PositionsPage from './pages/Positions';
-import RecommendationsPage from './pages/Recommendations';
-import SimulationPage from './pages/Simulation';
-import WatchlistPage from './pages/Watchlist';
-import AlertsPage from './pages/Alerts';
-import SettingsPage from './pages/Settings';
-import StatusPage from './pages/Status';
-import PoolsPage from './pages/Pools';
-import PoolDetailPage from './pages/PoolDetail';
-import TokenAnalyzerPage from './pages/TokenAnalyzer';
+import { RefreshCw } from 'lucide-react';
+
+// Lazy-loaded pages — each becomes its own chunk
+const PoolsPage = lazy(() => import('./pages/Pools'));
+const PoolDetailPage = lazy(() => import('./pages/PoolDetail'));
+const TokenAnalyzerPage = lazy(() => import('./pages/TokenAnalyzer'));
+const RadarPage = lazy(() => import('./pages/Radar'));
+const PositionsPage = lazy(() => import('./pages/Positions'));
+const RecommendationsPage = lazy(() => import('./pages/Recommendations'));
+const SimulationPage = lazy(() => import('./pages/Simulation'));
+const WatchlistPage = lazy(() => import('./pages/Watchlist'));
+const AlertsPage = lazy(() => import('./pages/Alerts'));
+const SettingsPage = lazy(() => import('./pages/Settings'));
+const StatusPage = lazy(() => import('./pages/Status'));
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center py-24">
+      <RefreshCw className="w-6 h-6 animate-spin text-primary-500" />
+    </div>
+  );
+}
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   constructor(props: { children: ReactNode }) {
@@ -44,24 +55,34 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   }
 }
 
+function LazyPage({ children }: { children: ReactNode }) {
+  return (
+    <ErrorBoundary>
+      <Suspense fallback={<PageLoader />}>
+        {children}
+      </Suspense>
+    </ErrorBoundary>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Navigate to="/pools" replace />} />
-          <Route path="pools" element={<ErrorBoundary><PoolsPage /></ErrorBoundary>} />
-          <Route path="pools/:chain/:address" element={<ErrorBoundary><PoolDetailPage /></ErrorBoundary>} />
-          <Route path="token-analyzer" element={<ErrorBoundary><TokenAnalyzerPage /></ErrorBoundary>} />
-          <Route path="radar" element={<ErrorBoundary><RadarPage /></ErrorBoundary>} />
-          <Route path="positions" element={<ErrorBoundary><PositionsPage /></ErrorBoundary>} />
-          <Route path="recommendations" element={<ErrorBoundary><RecommendationsPage /></ErrorBoundary>} />
-          <Route path="simulation" element={<ErrorBoundary><SimulationPage /></ErrorBoundary>} />
-          <Route path="simulation/:chain/:address" element={<ErrorBoundary><SimulationPage /></ErrorBoundary>} />
-          <Route path="watchlist" element={<ErrorBoundary><WatchlistPage /></ErrorBoundary>} />
-          <Route path="alerts" element={<ErrorBoundary><AlertsPage /></ErrorBoundary>} />
-          <Route path="settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
-          <Route path="status" element={<ErrorBoundary><StatusPage /></ErrorBoundary>} />
+          <Route path="pools" element={<LazyPage><PoolsPage /></LazyPage>} />
+          <Route path="pools/:chain/:address" element={<LazyPage><PoolDetailPage /></LazyPage>} />
+          <Route path="token-analyzer" element={<LazyPage><TokenAnalyzerPage /></LazyPage>} />
+          <Route path="radar" element={<LazyPage><RadarPage /></LazyPage>} />
+          <Route path="positions" element={<LazyPage><PositionsPage /></LazyPage>} />
+          <Route path="recommendations" element={<LazyPage><RecommendationsPage /></LazyPage>} />
+          <Route path="simulation" element={<LazyPage><SimulationPage /></LazyPage>} />
+          <Route path="simulation/:chain/:address" element={<LazyPage><SimulationPage /></LazyPage>} />
+          <Route path="watchlist" element={<LazyPage><WatchlistPage /></LazyPage>} />
+          <Route path="alerts" element={<LazyPage><AlertsPage /></LazyPage>} />
+          <Route path="settings" element={<LazyPage><SettingsPage /></LazyPage>} />
+          <Route path="status" element={<LazyPage><StatusPage /></LazyPage>} />
         </Route>
       </Routes>
     </BrowserRouter>
