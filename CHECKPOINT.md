@@ -1,161 +1,253 @@
 # CHECKPOINT - Pool Intelligence Pro
 
 ## Status Atual
-**Branch:** `claude/liquidity-pool-intelligence-8LhDk`
-**Data:** 2026-02-21 UTC
-**Último Commit:** `617d0f0`
-**Fase:** Dados mockados removidos, tudo online ✅
+**Branch:** `claude/pool2026-ui-lovable-eSwtR`
+**Data:** 2026-02-26 UTC
+**Último Commit:** `e449c7d`
+**Fase:** UI redesign completo com pool-scout-pro design system ✅
 
 ## Para Continuar (IMPORTANTE)
-**Frase de continuação:** `"Continuar do CHECKPOINT 2026-02-20-C"`
+**Frase de continuação:** `"Continuar do CHECKPOINT 2026-02-26"`
 
-### Correções aplicadas nesta sessão:
+## MERGE PENDENTE
+A branch `claude/pool2026-ui-lovable-eSwtR` precisa ser mergeada para `main` via GitHub UI:
+- URL: https://github.com/mateusraony/Pool2026prm/pull/new/claude/pool2026-ui-lovable-eSwtR
+- Push direto para `main` bloqueado (403) - precisa criar PR no GitHub e fazer merge
+- Após merge, Render faz deploy automatico (autoDeploy: true)
+
+---
+
+## Sessão 2026-02-26: UI Redesign com pool-scout-pro
+
+### O que foi feito (6 commits):
+
+#### Commit 1: `8033382` - Import base codebase
+- Copiado todo o código existente da branch `liquidity-pool-intelligence` para a nova branch
+- Backend: 25 arquivos (adapters, services, routes, jobs, telegram bot)
+- Frontend original: 17 arquivos (pages, layout, API client)
+
+#### Commit 2: `dff320d` - shadcn/ui component library
+- 49 componentes shadcn/ui importados do pool-scout-pro
+- Componentes: Accordion, AlertDialog, Avatar, Badge, Button, Calendar, Card, Carousel, Chart, Checkbox, Collapsible, Command, ContextMenu, Dialog, Drawer, DropdownMenu, Form, HoverCard, InputOTP, Input, Label, Menubar, NavigationMenu, Pagination, Popover, Progress, RadioGroup, Resizable, ScrollArea, Select, Separator, Sheet, Sidebar, Skeleton, Slider, Sonner, Switch, Table, Tabs, Textarea, Toast, ToggleGroup, Toggle, Tooltip
+- Variantes customizadas no Button: `glow`, `success`, `warning`
+- Configurações: components.json, tsconfig paths, vite aliases
+- 40+ pacotes Radix UI + dependências
+
+#### Commit 3: `4cf9c1f` - Design system (tailwind + CSS)
+- `tailwind.config.ts`: Tema escuro completo com tokens (sidebar, chart colors, success/warning/danger)
+- `index.css`: CSS variables para dark theme, glass-card effects, gradientes, animações
+- Fontes: Inter + JetBrains Mono
+
+#### Commit 4: `31bd41f` - Common components, types, adapters, hooks
+- **Common Components:**
+  - `StatCard.tsx` - Card de estatística com variantes e ícones
+  - `PoolCard.tsx` - Card de pool com métricas e ações
+  - `ActivePoolCard.tsx` - Card de posição ativa com PnL
+  - `RangeChart.tsx` - Gráfico de distribuição de liquidez
+  - `InteractiveRangeChart.tsx` - Gráfico interativo com drag
+- **Types:** `pool.ts` - Pool, ActivePool, FavoritePool, HistoryEntry, RiskConfig, Alert
+- **Data:** `adapters.ts` (UnifiedPool→ViewPool), `constants.ts` (risk config, network colors, dex logos)
+- **Hooks:** `useRiskConfig.ts` (localStorage + backend sync), `useTokenPrice.ts` (CoinGecko + DeFiLlama), `use-mobile.tsx`
+- **Utils:** `lib/utils.ts` (cn helper)
+
+#### Commit 5: `344a898` - Layout, Sidebar, Header
+- **Layout.tsx** - Wrapper com SidebarProvider + Outlet
+- **Sidebar.tsx** - Sidebar colapsável com 5 seções de navegação, responsivo (mobile drawer + desktop collapse)
+- **Header.tsx** - Health check com TanStack Query, status indicator (Online/Degradado/Offline), chain selector
+- **ScoutDashboard.tsx** - Dashboard principal com stats grid, pools ativas, melhor oportunidade, alertas
+
+#### Commit 6: `e449c7d` - Scout pages, routing, Toaster, ThemeProvider
+- **7 Scout Pages criadas:**
+  - `ScoutDashboard.tsx` - Dashboard com StatCards, ActivePoolCards, alertas, status de operação
+  - `ScoutRecommended.tsx` - Pools recomendadas com search, filtros (rede/risco/sort), refresh
+  - `ScoutPoolDetail.tsx` - Detalhe com RangeChart, tabs (defensivo/otimizado/agressivo), projeções
+  - `ScoutActivePools.tsx` - Posições ativas com status e métricas
+  - `ScoutFavorites.tsx` - Pool favoritas com status tracking
+  - `ScoutHistory.tsx` - Timeline de operações com localStorage
+  - `ScoutSettings.tsx` - Config de banca, perfil de risco, redes, DEXs, Telegram
+- **App.tsx** - Todas as rotas configuradas (Scout + originais), Toaster adicionado
+- **main.tsx** - ThemeProvider (next-themes) para dark mode
+- **MainLayout.tsx** - Corrigido para evitar duplicação de Sidebar/Header
+- **Removidos:** `toaster.tsx` e `use-toast.ts` (antigo sistema, app usa Sonner)
+- **CSS:** Corrigida ordem do `@import` (antes do `@tailwind`)
+- **`.env.example`** criado
+
+### Correções técnicas aplicadas:
+1. ✅ MainLayout.tsx: removida duplicação de Sidebar/Header (causaria layout aninhado)
+2. ✅ Navigation paths: `/scout/recommended` → `/recommended`, `/scout/active` → `/active`, `/scout/settings` → `/scout-settings`
+3. ✅ Toaster (Sonner) adicionado ao App root
+4. ✅ ThemeProvider (next-themes) adicionado ao main.tsx
+5. ✅ CSS @import order fix (eliminado warning de build)
+6. ✅ Removidos arquivos mortos (toaster.tsx, use-toast.ts)
+7. ✅ Build limpo: `tsc` + `vite build` = **zero errors**
+
+---
+
+## Histórico Anterior (sessões 2026-02-20/21)
+
+### Correções do backend:
 1. ✅ TheGraph marcado como opcional (não causa DEGRADED)
 2. ✅ MemoryStore implementado (cache em memória)
-3. ✅ Botão "Copiar Logs" na página Status
-4. ✅ DefiLlama: extração correta do poolAddress
-5. ✅ /favorites: retorna array vazio se DB indisponível
-6. ✅ Frontend: null checks defensivos em todas as navegações
+3. ✅ DefiLlama: extração correta do poolAddress
+4. ✅ /favorites: retorna array vazio se DB indisponível
+5. ✅ Frontend: null checks defensivos
+6. ✅ Watchlist job: checa MemoryStore antes de APIs externas
+7. ✅ GeckoTerminal marcado como opcional
+8. ✅ Volume data fix: 3 camadas de enrichment (DefiLlama → GeckoTerminal → estimativa)
+9. ✅ Token prices display nos componentes
+10. ✅ Simulation: cálculos live com modelo lognormal
+11. ✅ Score breakdown dinâmico com dados reais
+12. ✅ volatilityAnn propagado do backend ao frontend
 
-### Correções sessão 2026-02-20:
-7. ✅ Watchlist job: checa MemoryStore antes de APIs externas (UUIDs DefiLlama não falhavam mais)
-8. ✅ GeckoTerminal marcado como opcional (não causa DEGRADED)
-9. ✅ getPoolWithFallback: MemoryStore first, skip non-0x addresses
-10. ✅ **Volume data fix**: DefiLlama `volumeUsd1d` frequentemente `null` — agora 3 camadas de enrichment:
-    - Camada 1: DefiLlama `volumeUsd1d` (quando disponível)
-    - Camada 2: GeckoTerminal batch API (`/pools/multi/`) para pools com 0x address
-    - Camada 3: Estimativa reversa via APY: `volume = (apr/100/365*tvl) / feeTier`
-11. ✅ `fees24h` agora calculado como `volume24h * feeTier` quando não fornecido
-12. ✅ Health check mostra nota "Opcional" para provedores não-críticos
+---
 
-### Correções sessão 2026-02-21:
-13. ✅ **Token prices display**: Preços dos tokens exibidos ao lado de cada pool (Radar, Simulation, Watchlist)
-14. ✅ **Simulation live calculations**: `timeInRange` e `IL` agora calculados com modelo lognormal usando `volatilityAnn` real do pool (não mais hardcoded)
-15. ✅ **ageScore dinâmico**: Substituído `ageScore: 50` fixo por `estimateAgeScore()` derivado de TVL, volume e bluechip
-16. ✅ **Score breakdown dinâmico**: Frontend agora calcula liquidityStability, volumeConsistency, feeEfficiency a partir dos dados reais do pool
-17. ✅ **volatilityAnn propagado**: Adicionado ao tipo Pool e passado do backend ao frontend via API
-18. ✅ **Volatility penalty com dados reais**: score.service.ts agora usa pool.volatilityAnn quando disponível
+## Estrutura Completa do Projeto
 
-### Valores fixos restantes (limitações de dados, não corrigíveis sem novas APIs):
-- `liquidityDropPenalty: 0` — precisa histórico de TVL (não disponível)
-- `inconsistencyPenalty: 0` — precisa múltiplas fontes com preços diferentes
-- `spreadPenalty: 0` — precisa order book (não disponível na DefiLlama)
-- `aprIncentive: 0` — precisa API de incentivos de farming
+### Frontend (pool-intelligence-pro/frontend/)
+```
+src/
+├── api/client.ts                    # API client (497 linhas)
+├── App.tsx                          # Router com 15 rotas
+├── main.tsx                         # Entry + ThemeProvider + React Query
+├── index.css                        # Design tokens + animações
+├── lib/utils.ts                     # cn() helper
+├── types/pool.ts                    # Pool, ActivePool, FavoritePool, etc.
+├── data/
+│   ├── adapters.ts                  # UnifiedPool → ViewPool
+│   └── constants.ts                 # Risk config, colors, logos
+├── hooks/
+│   ├── useRiskConfig.ts             # Risk config + localStorage
+│   ├── useTokenPrice.ts             # CoinGecko + DeFiLlama
+│   └── use-mobile.tsx               # Mobile detection
+├── components/
+│   ├── layout/
+│   │   ├── Layout.tsx               # SidebarProvider + Outlet
+│   │   ├── Sidebar.tsx              # Colapsável, responsivo
+│   │   ├── Header.tsx               # Health check, status
+│   │   └── MainLayout.tsx           # Page title wrapper
+│   ├── common/
+│   │   ├── StatCard.tsx
+│   │   ├── PoolCard.tsx
+│   │   ├── ActivePoolCard.tsx
+│   │   ├── RangeChart.tsx
+│   │   └── InteractiveRangeChart.tsx
+│   └── ui/                          # 49 shadcn/ui components
+│       ├── button.tsx (glow/success/warning variants)
+│       ├── sonner.tsx (toast notifications)
+│       └── ... (47 more)
+└── pages/
+    ├── ScoutDashboard.tsx           # Dashboard principal
+    ├── ScoutRecommended.tsx         # Pools recomendadas
+    ├── ScoutPoolDetail.tsx          # Detalhe da pool
+    ├── ScoutActivePools.tsx         # Posições ativas
+    ├── ScoutFavorites.tsx           # Favoritas
+    ├── ScoutHistory.tsx             # Histórico
+    ├── ScoutSettings.tsx            # Configurações
+    ├── Pools.tsx                    # Pool Intelligence (original)
+    ├── PoolDetail.tsx               # Detalhe (original)
+    ├── TokenAnalyzer.tsx            # Token Analyzer
+    ├── Radar.tsx                    # Radar
+    ├── Positions.tsx                # Posições
+    ├── Recommendations.tsx          # Recomendações (original)
+    ├── Simulation.tsx               # Simulação
+    ├── Watchlist.tsx                # Watchlist
+    ├── Alerts.tsx                   # Alertas
+    ├── Settings.tsx                 # Config sistema
+    └── Status.tsx                   # Status
+```
 
-### Pendente para próxima sessão:
-- [ ] Gráficos mostrando dados iguais (precisa API de preços real-time / histórico)
-- [ ] Code splitting para reduzir bundle (900KB → ~300KB)
+### Backend (pool-intelligence-pro/backend/)
+```
+src/
+├── index.ts                         # Entry point
+├── config/index.ts                  # Config centralizada
+├── types/index.ts                   # TypeScript types
+├── adapters/
+│   ├── base.adapter.ts
+│   ├── defillama.adapter.ts
+│   ├── geckoterminal.adapter.ts
+│   ├── dexscreener.adapter.ts
+│   ├── thegraph.adapter.ts
+│   └── index.ts                     # Registry + consensus
+├── services/
+│   ├── score.service.ts             # Score 0-100
+│   ├── recommendation.service.ts    # Top 3 IA
+│   ├── calc.service.ts              # Cálculos DeFi
+│   ├── range.service.ts             # Range management
+│   ├── alert.service.ts             # Alertas
+│   ├── cache.service.ts             # Cache TTL
+│   ├── memory-store.service.ts      # MemoryStore
+│   ├── circuit-breaker.service.ts   # Circuit breaker
+│   ├── retry.service.ts             # Retry exponential
+│   ├── log.service.ts               # Logging
+│   ├── notification-settings.service.ts
+│   └── pool-intelligence.service.ts
+├── routes/index.ts                  # API REST (877 linhas)
+├── jobs/
+│   ├── index.ts                     # Orquestração cron
+│   ├── radar.job.ts                 # Descoberta de pools
+│   └── watchlist.job.ts             # Monitoramento
+└── bot/telegram.ts                  # Bot Telegram
+```
 
-## Arquivos Criados (41 arquivos)
+### Deploy
+```
+render.yaml                          # Render config (API + UI + DB)
+```
 
-### Backend (25 arquivos)
-- `backend/package.json` - Dependências
-- `backend/tsconfig.json` - Config TypeScript
-- `backend/.env.example` - Template env vars
-- `backend/prisma/schema.prisma` - Schema DB (15 models)
-- `backend/src/config/index.ts` - Configuração centralizada
-- `backend/src/types/index.ts` - Interfaces TypeScript
-- `backend/src/adapters/base.adapter.ts` - Classe base adapter
-- `backend/src/adapters/defillama.adapter.ts` - DefiLlama API
-- `backend/src/adapters/geckoterminal.adapter.ts` - GeckoTerminal API
-- `backend/src/adapters/dexscreener.adapter.ts` - DexScreener API
-- `backend/src/adapters/index.ts` - Registry + consensus
-- `backend/src/services/cache.service.ts` - Cache com TTL
-- `backend/src/services/circuit-breaker.service.ts` - Circuit breaker
-- `backend/src/services/retry.service.ts` - Retry exponential
-- `backend/src/services/log.service.ts` - Logging estruturado
-- `backend/src/services/score.service.ts` - Score 0-100
-- `backend/src/services/recommendation.service.ts` - Top 3 IA
-- `backend/src/services/alert.service.ts` - Alertas antifalha
-- `backend/src/services/memory-store.service.ts` - MemoryStore (cache em memória)
-- `backend/src/bot/telegram.ts` - Bot Telegram
-- `backend/src/jobs/radar.job.ts` - Loop A: descoberta
-- `backend/src/jobs/watchlist.job.ts` - Loop B: monitoramento
-- `backend/src/jobs/index.ts` - Orquestração cron
-- `backend/src/routes/index.ts` - API REST
-- `backend/src/index.ts` - Entry point
-
-### Frontend (17 arquivos)
-- `frontend/package.json` - Dependências
-- `frontend/tsconfig.json` - Config TypeScript
-- `frontend/tsconfig.node.json` - Config Node
-- `frontend/vite.config.ts` - Config Vite
-- `frontend/tailwind.config.js` - Config Tailwind
-- `frontend/postcss.config.js` - Config PostCSS
-- `frontend/index.html` - HTML entry
-- `frontend/src/main.tsx` - React entry
-- `frontend/src/index.css` - Estilos globais
-- `frontend/src/App.tsx` - Roteamento
-- `frontend/src/vite-env.d.ts` - Vite types
-- `frontend/src/api/client.ts` - Cliente API
-- `frontend/src/components/layout/Layout.tsx` - Layout wrapper
-- `frontend/src/components/layout/Sidebar.tsx` - Navegação
-- `frontend/src/components/layout/Header.tsx` - Header
-- `frontend/src/pages/Radar.tsx` - 📡 Radar
-- `frontend/src/pages/Recommendations.tsx` - 🧠 Recomendações
-- `frontend/src/pages/Simulation.tsx` - 🧪 Simulação
-- `frontend/src/pages/Watchlist.tsx` - 👀 Watchlist
-- `frontend/src/pages/Alerts.tsx` - 🚨 Alertas
-- `frontend/src/pages/Status.tsx` - 🩺 Status
-
-### Deploy (1 arquivo)
-- `render.yaml` - Configuração Render (API + UI + DB)
-
-## 5 Loops Implementados
-1. ✅ **Loop A - Radar:** Descobre pools via DefiLlama → GeckoTerminal
-2. ✅ **Loop B - Watchlist:** Monitora pools da watchlist
-3. ✅ **Loop C - Score:** Calcula score 0-100 institucional
-4. ✅ **Loop D - Recomendações:** Gera Top 3 com probabilidades
-5. ✅ **Loop E - Alertas:** Envia via Telegram com cooldown
-
-## Arquitetura Antifalha
-- ✅ Circuit Breaker (open/half-open/closed)
-- ✅ Retry com exponential backoff + jitter
-- ✅ Cache em memória com TTL
-- ✅ Fallback entre providers
-- ✅ Consensus validation
-- ✅ **MemoryStore** — cache em memória para pools (max 500, ~600KB RAM)
-  - Pools já enriquecidos (sem recálculo a cada request)
-  - Scores e recomendações em cache
-  - Evicção automática horária
-  - Hit rate visível na página Status
-
-## Próximos Passos (ordem)
-1. [x] Testar build do backend: `cd backend && npm install && npm run build` ✅ Zero erros
-2. [x] Testar build do frontend: `cd frontend && npm install && npm run build` ✅ Zero erros TypeScript (aviso bundle 900KB - não crítico)
-3. [x] Corrigir erros de TypeScript se houver ✅ Nenhum erro encontrado
-4. [x] Commit incremental das mudanças ✅ Branch já atualizado
-5. [x] Push para o branch ✅ `origin/claude/liquidity-pool-intelligence-8LhDk`
-6. [ ] Verificar deploy no Render - Aguardando configuração de env vars
-
-## Próximas Melhorias Opcionais
-- [ ] Code splitting para reduzir bundle (900KB → ~300KB) via `build.rollupOptions.output.manualChunks`
-- [ ] Testes unitários (Jest/Vitest)
-- [ ] Documentação de API (Swagger/OpenAPI)
-- [ ] CI/CD pipeline no GitHub Actions
+## Rotas do Frontend (App.tsx)
+| Path | Page | Descrição |
+|------|------|-----------|
+| `/dashboard` | ScoutDashboard | Dashboard principal (default) |
+| `/recommended` | ScoutRecommended | Pools recomendadas pela IA |
+| `/active` | ScoutActivePools | Posições ativas |
+| `/favorites` | ScoutFavorites | Pools favoritas |
+| `/history` | ScoutHistory | Histórico de operações |
+| `/scout-settings` | ScoutSettings | Configurações de risco |
+| `/pools` | PoolsPage | Pool Intelligence (tabela) |
+| `/pools/:chain/:address` | ScoutPoolDetail | Detalhe com RangeChart |
+| `/token-analyzer` | TokenAnalyzerPage | Análise de tokens |
+| `/radar` | RadarPage | Radar de pools |
+| `/positions` | PositionsPage | Posições |
+| `/recommendations` | RecommendationsPage | Recomendações (original) |
+| `/simulation` | SimulationPage | Simulação |
+| `/watchlist` | WatchlistPage | Watchlist |
+| `/alerts` | AlertsPage | Alertas |
+| `/settings` | SettingsPage | Config sistema |
+| `/status` | StatusPage | Status backend |
 
 ## Comandos Úteis
 ```bash
-# Backend
-cd pool-intelligence-pro/backend
-npm install
-npm run build
-npm run dev
-
 # Frontend
 cd pool-intelligence-pro/frontend
 npm install
-npm run build
-npm run dev
+npm run build    # tsc + vite build
+npm run dev      # dev server
+
+# Backend
+cd pool-intelligence-pro/backend
+npm install
+npm run build    # tsc
+npm run dev      # dev server
 
 # Prisma
 npx prisma generate
 npx prisma db push
 ```
 
-## Variáveis de Ambiente Necessárias
+## Variáveis de Ambiente
 ```
+# Backend
 DATABASE_URL=postgresql://...
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_CHAT_ID=...
+
+# Frontend
+VITE_API_URL=https://pool-intelligence-api.onrender.com
 ```
+
+## Pendente
+- [ ] **MERGE para main** - Criar PR no GitHub e fazer merge para trigger deploy no Render
+- [ ] Code splitting para reduzir bundle (735KB → ~300KB)
+- [ ] Testes unitários (Vitest)
+- [ ] Gráficos com dados real-time / histórico
