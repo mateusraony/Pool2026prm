@@ -144,7 +144,7 @@ export default function ScoutDashboard() {
           </div>
         </div>
         {canOperate && (
-          <Button onClick={() => navigate('/scout/recommended')}>
+          <Button onClick={() => navigate('/recommended')}>
             Ver Recomendadas
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
@@ -183,7 +183,7 @@ export default function ScoutDashboard() {
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Pools Ativas</h2>
-            <Button variant="ghost" size="sm" onClick={() => navigate('/scout/active')}>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/active')}>
               Ver todas
               <ArrowRight className="ml-1 h-4 w-4" />
             </Button>
@@ -196,7 +196,7 @@ export default function ScoutDashboard() {
               <p className="text-sm text-muted-foreground mb-4">
                 Comece explorando as pools recomendadas pela IA
               </p>
-              <Button onClick={() => navigate('/scout/recommended')}>
+              <Button onClick={() => navigate('/recommended')}>
                 Explorar Pools
               </Button>
             </div>
