@@ -3,11 +3,18 @@
 ## Status Atual
 **Branch:** `claude/pool2026-ui-lovable-eSwtR`
 **Data:** 2026-02-26 UTC
-**Ultimo Commit:** `81d271a`
-**Fase:** Frontend deployed, Backend pendente de deploy
+**Ultimo Commit:** `1d4f3ba`
+**Fase:** Frontend + API client robustos, pronto para conectar ao backend existente
 
 ## Para Continuar (IMPORTANTE)
-**Frase de continuacao:** `"Continuar do CHECKPOINT 2026-02-26-B"`
+**Frase de continuacao:** `"Continuar do CHECKPOINT 2026-02-26-C"`
+
+## Ultimo fix aplicado (1d4f3ba):
+- API client ignora VITE_API_URL=localhost em producao (aponta automaticamente para pool-intelligence-api.onrender.com)
+- Timeout 60s (era 30s) para cold starts do Render free tier
+- Retry automatico 2x em erros de rede/502/503 (3s + 8s backoff)
+- Error banner mostra a URL real da API para diagnostico
+- Telegram completo no ScoutSettings (testar conexao, enviar relatorio, testar recomendacoes)
 
 ---
 
