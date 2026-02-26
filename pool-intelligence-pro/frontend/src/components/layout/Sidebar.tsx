@@ -1,20 +1,54 @@
 import { useState, createContext, useContext } from 'react';
 import { NavLink } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Menu, X } from 'lucide-react';
-import clsx from 'clsx';
+import { cn } from '@/lib/utils';
 
-const navItems = [
-  { path: '/pools', icon: '🏊', label: 'Pool Intelligence' },
-  { path: '/token-analyzer', icon: '🔍', label: 'Token Analyzer' },
-  { path: '/radar', icon: '📡', label: 'Radar' },
-  { path: '/positions', icon: '💼', label: 'Minhas Posições' },
-  { path: '/recommendations', icon: '🧠', label: 'Recomendações' },
-  { path: '/simulation', icon: '🧪', label: 'Simulação' },
-  { path: '/watchlist', icon: '⭐', label: 'Watchlist' },
-  { path: '/alerts', icon: '🚨', label: 'Alertas' },
-  { path: '/settings', icon: '⚙️', label: 'Configurações' },
-  { path: '/status', icon: '🩺', label: 'Status' },
+const navSections = [
+  {
+    title: 'Dashboard',
+    items: [
+      { path: '/dashboard', icon: '📊', label: 'Dashboard' },
+    ],
+  },
+  {
+    title: 'Análise',
+    items: [
+      { path: '/pools', icon: '🏊', label: 'Pool Intelligence' },
+      { path: '/token-analyzer', icon: '🔍', label: 'Token Analyzer' },
+      { path: '/radar', icon: '📡', label: 'Radar' },
+      { path: '/recommended', icon: '🧠', label: 'Recomendadas' },
+      { path: '/manual', icon: '🧪', label: 'Análise Manual' },
+    ],
+  },
+  {
+    title: 'Operações',
+    items: [
+      { path: '/positions', icon: '💼', label: 'Posições' },
+      { path: '/active', icon: '🟢', label: 'Pools Ativas' },
+      { path: '/simulation', icon: '📐', label: 'Simulação' },
+    ],
+  },
+  {
+    title: 'Gerenciamento',
+    items: [
+      { path: '/watchlist', icon: '⭐', label: 'Watchlist' },
+      { path: '/favorites', icon: '❤️', label: 'Favoritas' },
+      { path: '/history', icon: '📜', label: 'Histórico' },
+      { path: '/alerts', icon: '🚨', label: 'Alertas' },
+    ],
+  },
+  {
+    title: 'Sistema',
+    items: [
+      { path: '/scout-settings', icon: '⚙️', label: 'Configurações' },
+      { path: '/settings', icon: '🔧', label: 'Config. Sistema' },
+      { path: '/status', icon: '🩺', label: 'Status' },
+    ],
+  },
 ];
+
+// Flat list for backward compat
+const allNavItems = navSections.flatMap((s) => s.items);
 
 // Context for sidebar state
 export const SidebarContext = createContext<{
@@ -44,17 +78,88 @@ export function useSidebar() {
   return useContext(SidebarContext);
 }
 
-// Mobile menu button for header
 export function MobileMenuButton() {
   const { isMobileOpen, setIsMobileOpen } = useSidebar();
 
   return (
     <button
       onClick={() => setIsMobileOpen(!isMobileOpen)}
-      className="lg:hidden p-2 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors"
+      className="lg:hidden p-2 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"
     >
       {isMobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
     </button>
+  );
+}
+
+function SidebarContent({ collapsed, onNavClick }: { collapsed: boolean; onNavClick?: () => void }) {
+  return (
+    <>
+      {/* Logo */}
+      <div className={cn(
+        'p-4 border-b border-border flex items-center',
+        collapsed ? 'justify-center' : 'gap-2'
+      )}>
+        <span className="text-2xl">🌊</span>
+        {!collapsed && (
+          <div>
+            <h1 className="text-lg font-bold text-foreground">Pool Intelligence</h1>
+            <p className="text-[10px] text-muted-foreground">Enterprise DeFi Analytics</p>
+          </div>
+        )}
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 p-2 space-y-4 overflow-y-auto scrollbar-thin">
+        {navSections.map((section) => (
+          <div key={section.title}>
+            {!collapsed && (
+              <p className="px-3 mb-1 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                {section.title}
+              </p>
+            )}
+            <div className="space-y-0.5">
+              {section.items.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  onClick={onNavClick}
+                  className={({ isActive }) =>
+                    cn(
+                      'flex items-center gap-3 px-3 py-2 rounded-lg transition-all text-sm',
+                      isActive
+                        ? 'bg-primary/15 text-primary font-medium'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
+                      collapsed && 'justify-center px-2'
+                    )
+                  }
+                  title={collapsed ? item.label : undefined}
+                >
+                  <span className="text-base flex-shrink-0">{item.icon}</span>
+                  {!collapsed && (
+                    <span className="truncate">{item.label}</span>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        ))}
+      </nav>
+
+      {/* Footer */}
+      <div className={cn(
+        'p-4 border-t border-border',
+        collapsed && 'p-2 text-center'
+      )}>
+        {collapsed ? (
+          <span className="text-[10px] text-muted-foreground">v3.0</span>
+        ) : (
+          <div className="text-xs text-muted-foreground">
+            <p>v3.0.0 Pro</p>
+            <p className="mt-0.5 text-[10px]">Pool Intelligence + Scout Pro</p>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -66,155 +171,54 @@ export default function Sidebar() {
       {/* Mobile overlay */}
       {isMobileOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
           onClick={() => setIsMobileOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
+      {/* Desktop sidebar */}
       <aside
-        className={clsx(
-          'bg-gray-900 border-r border-gray-800 flex flex-col z-50 transition-all duration-300',
-          // Desktop
+        className={cn(
+          'bg-sidebar border-r border-sidebar-border flex-col z-50 transition-all duration-300 relative',
           'hidden lg:flex',
-          isCollapsed ? 'lg:w-16' : 'lg:w-64',
-          // Mobile - fixed overlay
-          isMobileOpen && 'fixed inset-y-0 left-0 w-64 flex lg:relative'
+          isCollapsed ? 'lg:w-16' : 'lg:w-60'
         )}
       >
-        {/* Logo */}
-        <div className={clsx(
-          'p-4 border-b border-gray-800 flex items-center',
-          isCollapsed ? 'justify-center' : 'justify-between'
-        )}>
-          {isCollapsed ? (
-            <span className="text-2xl">🌊</span>
-          ) : (
-            <div>
-              <h1 className="text-xl font-bold text-white flex items-center gap-2">
-                <span className="text-2xl">🌊</span>
-                Pool Intelligence
-              </h1>
-              <p className="text-xs text-gray-500 mt-1">Enterprise DeFi Analytics</p>
-            </div>
+        <SidebarContent collapsed={isCollapsed} />
+
+        {/* Collapse toggle */}
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className={cn(
+            'absolute -right-3 top-6 hidden lg:flex p-1 rounded-full bg-secondary border border-border',
+            'hover:bg-primary/20 transition-colors shadow-lg z-10'
           )}
-
-          {/* Collapse button - desktop only */}
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className={clsx(
-              'hidden lg:flex p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors',
-              isCollapsed && 'absolute -right-3 top-6 shadow-lg'
-            )}
-          >
-            {isCollapsed ? (
-              <ChevronRight className="w-4 h-4" />
-            ) : (
-              <ChevronLeft className="w-4 h-4" />
-            )}
-          </button>
-
-          {/* Close button - mobile only */}
-          <button
-            onClick={() => setIsMobileOpen(false)}
-            className="lg:hidden p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              onClick={() => setIsMobileOpen(false)}
-              className={({ isActive }) =>
-                clsx(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
-                  isActive
-                    ? 'bg-primary-600 text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800',
-                  isCollapsed && 'justify-center px-2'
-                )
-              }
-              title={isCollapsed ? item.label : undefined}
-            >
-              <span className="text-lg flex-shrink-0">{item.icon}</span>
-              {!isCollapsed && (
-                <span className="text-sm font-medium truncate">{item.label}</span>
-              )}
-            </NavLink>
-          ))}
-        </nav>
-
-        {/* Footer */}
-        <div className={clsx(
-          'p-4 border-t border-gray-800',
-          isCollapsed && 'p-2 text-center'
-        )}>
+        >
           {isCollapsed ? (
-            <span className="text-xs text-gray-600">v1.0</span>
+            <ChevronRight className="w-3.5 h-3.5" />
           ) : (
-            <div className="text-xs text-gray-600">
-              <p>v1.0.0 Pro</p>
-              <p className="mt-1">Free Tier - Render</p>
-            </div>
+            <ChevronLeft className="w-3.5 h-3.5" />
           )}
-        </div>
+        </button>
       </aside>
 
-      {/* Mobile sidebar (visible when open) */}
+      {/* Mobile sidebar */}
       <aside
-        className={clsx(
-          'fixed inset-y-0 left-0 w-64 bg-gray-900 border-r border-gray-800 flex flex-col z-50 transition-transform duration-300 lg:hidden',
+        className={cn(
+          'fixed inset-y-0 left-0 w-64 bg-sidebar border-r border-sidebar-border flex flex-col z-50 transition-transform duration-300 lg:hidden',
           isMobileOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        {/* Logo */}
-        <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-white flex items-center gap-2">
-              <span className="text-2xl">🌊</span>
-              Pool Intelligence
-            </h1>
-            <p className="text-xs text-gray-500 mt-1">Enterprise DeFi</p>
-          </div>
-          <button
-            onClick={() => setIsMobileOpen(false)}
-            className="p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              onClick={() => setIsMobileOpen(false)}
-              className={({ isActive }) =>
-                clsx(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
-                  isActive
-                    ? 'bg-primary-600 text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                )
-              }
-            >
-              <span className="text-lg">{item.icon}</span>
-              <span className="text-sm font-medium">{item.label}</span>
-            </NavLink>
-          ))}
-        </nav>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-gray-800 text-xs text-gray-600">
-          <p>v1.0.0 Pro</p>
-        </div>
+        <SidebarContent
+          collapsed={false}
+          onNavClick={() => setIsMobileOpen(false)}
+        />
+        <button
+          onClick={() => setIsMobileOpen(false)}
+          className="absolute top-4 right-4 p-1.5 rounded-lg bg-secondary hover:bg-secondary/80 lg:hidden"
+        >
+          <X className="w-4 h-4" />
+        </button>
       </aside>
     </>
   );
