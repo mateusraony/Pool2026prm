@@ -2,193 +2,144 @@
 
 ## Status Atual
 **Branch:** `claude/pool2026-ui-lovable-eSwtR`
-**Data:** 2026-02-26 UTC
-**Ultimo Commit:** `1d4f3ba`
-**Fase:** Frontend + API client robustos, pronto para conectar ao backend existente
+**Data:** 2026-02-27 UTC
+**Ultimo Commit:** `93e5ef8`
+**Fase:** TODAS as correções aplicadas — pronto para merge e deploy
 
 ## Para Continuar (IMPORTANTE)
-**Frase de continuacao:** `"Continuar do CHECKPOINT 2026-02-26-C"`
-
-## Ultimo fix aplicado (1d4f3ba):
-- API client ignora VITE_API_URL=localhost em producao (aponta automaticamente para pool-intelligence-api.onrender.com)
-- Timeout 60s (era 30s) para cold starts do Render free tier
-- Retry automatico 2x em erros de rede/502/503 (3s + 8s backoff)
-- Error banner mostra a URL real da API para diagnostico
-- Telegram completo no ScoutSettings (testar conexao, enviar relatorio, testar recomendacoes)
+**Frase de continuacao:** `"Continuar do CHECKPOINT 2026-02-27-B"`
 
 ---
 
-## DIAGNOSTICO: POR QUE OS DADOS NAO CARREGAM
+## O QUE FOI CORRIGIDO NESTA SESSAO
 
-### Causa raiz identificada:
+### Problema 1: TELA BRANCA (crash)
+**Causa:** `ActivePoolCard.tsx` linha 42 chamava `formatDistanceToNow(new Date('Entrada'))`
+- `new Date('Entrada')` gera Invalid Date → crash → tela branca
+- **Fix:** Safe date parsing com try/catch, exibe string original se não for data válida
+- **Fix 2:** ScoutDashboard.tsx agora usa `pos.createdAt` (ISO date) ao invés de `'Entrada'`
 
-O sistema tem 3 componentes que precisam estar rodando no Render:
+### Problema 2: ROTA /manual INEXISTENTE
+**Causa:** Sidebar tinha link para `/manual` mas não existia página → 404 → tela branca
+- **Fix:** Removido do Sidebar.tsx
 
-| Componente | Nome no Render | Status | URL |
-|-----------|----------------|--------|-----|
-| Frontend (Static Site) | `pool2026prm` | DEPLOYED | https://pool2026prm.onrender.com |
-| Backend (Web Service) | `pool-intelligence-api` | NAO EXISTE | https://pool-intelligence-api.onrender.com |
-| Database (PostgreSQL) | `pool-intelligence-db` | NAO EXISTE | (internal URL) |
+### Problema 3: PÁGINAS DUPLICADAS
+**Causa:** 5 páginas antigas tinham equivalente Scout, causando confusão no sidebar
+- **Fix:** App.tsx limpo:
+  - Removidos imports: PoolDetail (órfão), Positions, Watchlist, Settings, Recommendations
+  - Adicionados redirects: /positions→/active, /watchlist→/favorites, /settings→/scout-settings, /recommendations→/recommended
+- **Fix:** Sidebar.tsx limpo:
+  - Removidos: /manual, /positions (duplicava /active), /watchlist (duplicava /favorites), /settings (duplicava /scout-settings)
 
-**O frontend esta no ar, mas o backend API NAO esta deployado no Render.**
-
-O frontend chama `https://pool-intelligence-api.onrender.com/api/pools` para buscar dados.
-Se esse servico nao existe, a chamada falha e o frontend mostra tela vazia.
-
-### Fluxo de dados:
-```
-Usuario abre pool2026prm.onrender.com
-  -> Frontend (React) carrega
-  -> Frontend chama pool-intelligence-api.onrender.com/api/pools
-  -> ERRO: servico nao existe (connection refused / timeout)
-  -> Frontend mostra tela sem dados
-```
-
-### O que precisa ser feito (ordem):
-
-#### Passo 1: Criar o Database no Render
-1. Ir em https://dashboard.render.com
-2. New + -> PostgreSQL
-3. Nome: `pool-intelligence-db`
-4. Region: Oregon
-5. Plan: Free
-6. Criar e copiar a `Internal Database URL`
-
-#### Passo 2: Criar o Backend API no Render
-1. Ir em https://dashboard.render.com
-2. New + -> Web Service
-3. Conectar ao repo `mateusraony/Pool2026prm`
-4. Configurar:
-   - **Name:** `pool-intelligence-api`
-   - **Region:** Oregon
-   - **Branch:** `main`
-   - **Root Directory:** `pool-intelligence-pro/backend`
-   - **Runtime:** Node
-   - **Build Command:** `npm ci --include=dev && npx prisma generate && npm run build`
-   - **Start Command:** `npm start`
-   - **Plan:** Free
-5. Environment Variables:
-   - `NODE_ENV` = `production`
-   - `PORT` = `10000`
-   - `DATABASE_URL` = (colar a Internal Database URL do passo 1)
-   - `TELEGRAM_BOT_TOKEN` = (seu token do BotFather)
-   - `TELEGRAM_CHAT_ID` = (seu chat ID)
-6. Health Check Path: `/health`
-7. Criar servico
-
-#### Passo 3: Configurar VITE_API_URL no Frontend
-1. Ir em https://dashboard.render.com/static/srv-d67io0mr433s73f7bhtg/env
-2. Adicionar variavel: `VITE_API_URL` = `https://pool-intelligence-api.onrender.com`
-3. Salvar e fazer redeploy do frontend
-
-#### Passo 4: Verificar
-- Acessar `https://pool-intelligence-api.onrender.com/health` -> deve retornar `{"status":"ok"}`
-- Acessar `https://pool2026prm.onrender.com` -> deve mostrar pools com dados
-
-### Alternativa: Blueprint (automatiza tudo)
-Em vez dos passos 1-3 manuais, pode usar o render.yaml:
-1. Ir em https://dashboard.render.com
-2. New + -> Blueprint
-3. Conectar repo `mateusraony/Pool2026prm`
-4. O Render detecta o `render.yaml` e cria os 3 servicos automaticamente
-5. So precisa preencher as env vars do Telegram
-
-**ATENCAO:** Isso criaria servicos NOVOS (com nomes diferentes do `pool2026prm` existente).
-Recomendado: fazer manualmente (passos 1-3) para manter o mesmo URL do frontend.
+### Problema 4: DADOS NAO CARREGAM (sessao anterior)
+**Causa:** Scout pages usavam useState/useEffect sem retry; cold start do Render matava a conexão
+- **Fix:** TODAS Scout pages convertidas para React Query com auto-retry 3x + cache
+- **Fix:** API client com retry interceptor 2x em erros de rede/502/503 + timeout 60s
 
 ---
 
-## Sessao 2026-02-26: Resumo Completo
+## ESTADO FINAL DAS PAGINAS
 
-### Commits na branch (9 total):
-```
-81d271a fix: connect Scout pages to API and add full Telegram integration
-df6686b fix: make Render build robust (skip tsc, add _redirects, --include=dev)
-9f466fc docs: update CHECKPOINT.md with full session 2026-02-26 progress
-e449c7d feat: add Scout pages, routing, Toaster, ThemeProvider, and fix layout
-344a898 feat: update layout, sidebar, and header with new design system
-31bd41f feat: import common components, types, data adapters, and hooks
-4cf9c1f feat: import pool-scout-pro design system (tailwind config, CSS variables, styles)
-dff320d feat: add shadcn/ui component library and update frontend configs
-8033382 chore: import existing Pool2026prm codebase from liquidity-pool-intelligence branch
-```
+### Scout Pages (navegação principal)
+| Rota | Página | Status |
+|------|--------|--------|
+| /dashboard | ScoutDashboard | ✅ React Query, alertas reais, exposição por rede |
+| /recommended | ScoutRecommended | ✅ React Query, addFavorite via API |
+| /active | ScoutActivePools | ✅ React Query, delete position mutation |
+| /favorites | ScoutFavorites | ✅ React Query, remove favorite mutation |
+| /pools/:chain/:address | ScoutPoolDetail | ✅ React Query, favoritar mutation, error diagnostics |
+| /history | ScoutHistory | ✅ localStorage (operações locais) |
+| /scout-settings | ScoutSettings | ✅ Telegram completo (3 botões) |
 
-### O que foi feito nesta sessao:
-1. UI redesign completo com design system pool-scout-pro (tema dark, glass cards, gradientes)
-2. 49 componentes shadcn/ui importados
-3. 7 Scout pages novas (Dashboard, Recommended, PoolDetail, ActivePools, Favorites, History, Settings)
-4. Layout responsivo com Sidebar colapsavel, Header com health check, ThemeProvider
-5. Telegram section completa no ScoutSettings (3 botoes de acao, status, feedback)
-6. Error handling visivel no ScoutDashboard (banner com "Tentar novamente")
-7. Build otimizado para Render (sem tsc, _redirects, --include=dev)
-8. Frontend deployado com sucesso em https://pool2026prm.onrender.com
+### Páginas Utilitárias (funcionalidade única)
+| Rota | Página | Status |
+|------|--------|--------|
+| /pools | PoolsPage | ✅ Pool Intelligence com filtros |
+| /token-analyzer | TokenAnalyzerPage | ✅ Análise por token |
+| /radar | RadarPage | ✅ Descoberta de pools |
+| /simulation | SimulationPage | ✅ Simulador de range |
+| /alerts | AlertsPage | ✅ Gestão de alertas |
+| /status | StatusPage | ✅ Health do sistema |
 
-### O que FALTA para funcionar 100%:
-- [ ] **CRITICO: Deploy do Backend API no Render** (ver instrucoes acima)
-- [ ] **CRITICO: Criar PostgreSQL no Render** (ver instrucoes acima)
-- [ ] **CRITICO: Configurar VITE_API_URL no frontend** (ver instrucoes acima)
-- [ ] Merge do ultimo commit (81d271a) para main (PR no GitHub)
-
-### Melhorias futuras (nao criticas):
-- [ ] Code splitting para reduzir bundle (738KB -> ~300KB)
-- [ ] Testes unitarios (Vitest)
-- [ ] Graficos com dados real-time / historico
+### Redirects (rotas antigas → Scout)
+| Rota Antiga | Redireciona Para |
+|-------------|-----------------|
+| /positions | /active |
+| /watchlist | /favorites |
+| /settings | /scout-settings |
+| /recommendations | /recommended |
 
 ---
 
-## Arquitetura do Sistema
+## SIDEBAR ORGANIZADO
 
 ```
-                     INTERNET
-                        |
-          +-------------+-------------+
-          |                           |
-  pool2026prm.onrender.com   pool-intelligence-api.onrender.com
-  (Static Site - React)       (Web Service - Node/Express)
-          |                           |
-          |    GET /api/pools         |
-          +-------------------------->|
-          |    GET /api/health        |---> DefiLlama API
-          |    GET /api/pools-detail  |---> GeckoTerminal API
-          |    POST /api/ranges       |---> DexScreener API
-          |    GET /api/settings      |
-          |<--------------------------+
-          |                           |
-          |                    +------+------+
-          |                    | PostgreSQL  |
-          |                    | (Render DB) |
-          |                    +-------------+
+Dashboard
+  📊 Dashboard
+
+Análise
+  🧠 Recomendadas
+  🏊 Pool Intelligence
+  🔍 Token Analyzer
+  📡 Radar
+
+Operações
+  🟢 Pools Ativas
+  📐 Simulação
+
+Gerenciamento
+  ❤️ Favoritas
+  📜 Histórico
+  🚨 Alertas
+
+Sistema
+  ⚙️ Configurações
+  🩺 Status
 ```
 
-## Variaveis de Ambiente Necessarias
+---
 
-### Backend (Web Service)
+## ARQUIVOS MODIFICADOS (COMPLETO)
+
+### Sessão atual (commit 93e5ef8)
+- `App.tsx` — Removidas 5 páginas duplicadas, adicionados 4 redirects
+- `ActivePoolCard.tsx` — Safe date parsing (fix crash)
+- `Sidebar.tsx` — Removidos 4 itens (manual, positions, watchlist, settings)
+- `ScoutDashboard.tsx` — lastAction usa createdAt real
+
+### Sessões anteriores (commits aae1371 + 5083298)
+- `ScoutDashboard.tsx` — React Query completo
+- `ScoutRecommended.tsx` — React Query completo
+- `ScoutActivePools.tsx` — React Query completo
+- `ScoutFavorites.tsx` — React Query completo
+- `ScoutPoolDetail.tsx` — React Query completo
+- `ScoutSettings.tsx` — Telegram completo
+- `client.ts` — API client robusto (retry, timeout, URL resolution)
+- `package.json` — build sem tsc
+- `_redirects` — SPA routing
+- `render.yaml` — npm ci --include=dev
+
+---
+
+## PARA DEPLOY
+
+O usuario precisa:
+1. Criar PR: https://github.com/mateusraony/Pool2026prm/compare/main...claude/pool2026-ui-lovable-eSwtR
+2. Mergear a PR
+3. No Render: "Clear build cache & deploy" no serviço pool2026prm
+4. Verificar: https://pool2026prm.onrender.com
+
+## ARQUITETURA
+
 ```
-NODE_ENV=production
-PORT=10000
-DATABASE_URL=postgresql://poolintel:SENHA@HOST:5432/poolintel  (Internal URL do Render)
-TELEGRAM_BOT_TOKEN=seu_token_do_botfather
-TELEGRAM_CHAT_ID=seu_chat_id
-```
+pool2026prm.onrender.com (Static Site)
+  → React + Vite + React Query
+  → Retry automático 3x + cache + refetch
 
-### Frontend (Static Site)
-```
-VITE_API_URL=https://pool-intelligence-api.onrender.com
-```
+pool-intelligence-api.onrender.com (Web Service)
+  → Node/Express + Prisma
+  → PostgreSQL + APIs externas
 
-## Comandos Uteis
-```bash
-# Frontend
-cd pool-intelligence-pro/frontend
-npm install && npm run build    # vite build (zero errors)
-npm run dev                     # dev server porta 5173
-
-# Backend
-cd pool-intelligence-pro/backend
-npm install && npx prisma generate && npm run build   # tsc (zero errors)
-npm run dev                     # dev server porta 3001
-
-# Verificar API
-curl https://pool-intelligence-api.onrender.com/health
-curl https://pool-intelligence-api.onrender.com/api/pools
+Fluxo de dados:
+Frontend → API client (retry 2x) → React Query (retry 3x) → Backend → DB/APIs
 ```

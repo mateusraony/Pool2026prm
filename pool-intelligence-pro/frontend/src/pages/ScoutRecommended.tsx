@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { PoolCard } from '@/components/common/PoolCard';
 import { Button } from '@/components/ui/button';
@@ -17,12 +18,13 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useRiskConfig } from '@/hooks/useRiskConfig';
 import { Skeleton } from '@/components/ui/skeleton';
-import { fetchUnifiedPools } from '@/api/client';
+import { fetchUnifiedPools, addFavorite } from '@/api/client';
 import { unifiedPoolToViewPool } from '@/data/adapters';
 import type { Pool } from '@/types/pool';
 
 export default function ScoutRecommended() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [networkFilter, setNetworkFilter] = useState('all');
   const [riskFilter, setRiskFilter] = useState('all');
@@ -30,63 +32,41 @@ export default function ScoutRecommended() {
 
   const { config, loading: configLoading } = useRiskConfig();
 
-  const [allPools, setAllPools] = useState<Pool[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [lastFetched, setLastFetched] = useState<Date | null>(null);
+  // React Query: auto-retry 3x, refetch every 2min, stale after 30s
+  const { data: poolsData, isLoading, error: fetchError, dataUpdatedAt, refetch, isFetching } = useQuery({
+    queryKey: ['recommended-pools'],
+    queryFn: () => fetchUnifiedPools({ limit: 50, sortBy: 'healthScore', sortDirection: 'desc' }),
+    refetchInterval: 120000,
+    staleTime: 30000,
+  });
 
-  const loadPools = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetchUnifiedPools({
-        limit: 50,
-        sortBy: 'healthScore',
-        sortDirection: 'desc',
-      });
-      const viewPools = res.pools.map((p) => unifiedPoolToViewPool(p));
-      setAllPools(viewPools);
-      setLastFetched(new Date());
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Erro ao buscar pools';
-      setError(msg);
-      toast.error(msg);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const allPools = useMemo(() => {
+    if (!poolsData?.pools) return [];
+    return poolsData.pools.map((p) => unifiedPoolToViewPool(p));
+  }, [poolsData]);
 
-  useEffect(() => {
-    loadPools();
-  }, [loadPools]);
+  const lastFetched = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
+  const error = fetchError ? (fetchError instanceof Error ? fetchError.message : 'Erro ao buscar pools') : null;
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await loadPools();
-    } finally {
-      setRefreshing(false);
-    }
+  const handleRefresh = () => {
+    refetch();
+    toast.info('Atualizando pools...');
   };
 
   // Apply filters and sorting locally
   const pools = useMemo(() => {
     let filtered = [...allPools];
 
-    // Network filter
     if (networkFilter !== 'all') {
       filtered = filtered.filter(
         (p) => p.network.toLowerCase() === networkFilter.toLowerCase()
       );
     }
 
-    // Risk filter
     if (riskFilter !== 'all') {
       filtered = filtered.filter((p) => p.risk === riskFilter);
     }
 
-    // Search
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       filtered = filtered.filter(
@@ -97,7 +77,6 @@ export default function ScoutRecommended() {
       );
     }
 
-    // Sort
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'score':
@@ -118,15 +97,28 @@ export default function ScoutRecommended() {
     return filtered;
   }, [allPools, networkFilter, riskFilter, searchQuery, sortBy]);
 
-  const handleFavorite = (poolId: string) => {
-    toast.success('Pool adicionada a Lista de Analise');
+  const handleFavorite = async (pool: Pool) => {
+    try {
+      await addFavorite({
+        poolId: pool.id,
+        chain: pool.chain || pool.network,
+        poolAddress: pool.poolAddress || '',
+        token0Symbol: pool.token0,
+        token1Symbol: pool.token1,
+        protocol: pool.dex,
+      });
+      queryClient.invalidateQueries({ queryKey: ['favorites'] });
+      toast.success('Pool adicionada aos favoritos');
+    } catch {
+      toast.error('Erro ao favoritar pool');
+    }
   };
 
   const handleMonitor = (pool: Pool) => {
     navigate(`/pools/${pool.chain}/${pool.poolAddress}`);
   };
 
-  const isLoading = loading || configLoading;
+  const loading = isLoading || configLoading;
 
   return (
     <MainLayout
@@ -136,7 +128,6 @@ export default function ScoutRecommended() {
       {/* Filters Bar */}
       <div className="glass-card p-4 mb-6">
         <div className="flex flex-col md:flex-row gap-4">
-          {/* Search */}
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -147,7 +138,6 @@ export default function ScoutRecommended() {
             />
           </div>
 
-          {/* Filters */}
           <div className="flex gap-2 flex-wrap">
             <Select value={networkFilter} onValueChange={setNetworkFilter}>
               <SelectTrigger className="w-[140px]">
@@ -192,9 +182,9 @@ export default function ScoutRecommended() {
               variant="outline"
               size="icon"
               onClick={handleRefresh}
-              disabled={refreshing}
+              disabled={isFetching}
             >
-              {refreshing ? (
+              {isFetching ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <RefreshCw className="h-4 w-4" />
@@ -203,7 +193,6 @@ export default function ScoutRecommended() {
           </div>
         </div>
 
-        {/* Active Filters */}
         <div className="flex gap-2 mt-3 flex-wrap items-center">
           <Badge variant="secondary" className="gap-1">
             <Zap className="h-3 w-3" />
@@ -215,20 +204,12 @@ export default function ScoutRecommended() {
             </span>
           )}
           {networkFilter !== 'all' && (
-            <Badge
-              variant="outline"
-              className="cursor-pointer"
-              onClick={() => setNetworkFilter('all')}
-            >
+            <Badge variant="outline" className="cursor-pointer" onClick={() => setNetworkFilter('all')}>
               {networkFilter} x
             </Badge>
           )}
           {riskFilter !== 'all' && (
-            <Badge
-              variant="outline"
-              className="cursor-pointer"
-              onClick={() => setRiskFilter('all')}
-            >
+            <Badge variant="outline" className="cursor-pointer" onClick={() => setRiskFilter('all')}>
               Risco: {riskFilter} x
             </Badge>
           )}
@@ -264,7 +245,7 @@ export default function ScoutRecommended() {
       )}
 
       {/* Loading State */}
-      {isLoading ? (
+      {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => (
             <div key={i} className="glass-card p-4 space-y-3">
@@ -285,18 +266,9 @@ export default function ScoutRecommended() {
           <p className="text-sm text-muted-foreground mb-4">
             {error ? 'Erro ao carregar pools do servidor' : 'Tente ajustar os filtros ou atualizar os dados'}
           </p>
-          <Button onClick={handleRefresh} disabled={refreshing}>
-            {refreshing ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Atualizando...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Buscar pools da API
-              </>
-            )}
+          <Button onClick={handleRefresh} disabled={isFetching}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Buscar pools da API
           </Button>
         </div>
       ) : (
@@ -311,7 +283,7 @@ export default function ScoutRecommended() {
                       (config.totalBanca / 100),
               }}
               onViewDetails={() => navigate(`/pools/${pool.chain}/${pool.poolAddress}`)}
-              onFavorite={() => handleFavorite(pool.id)}
+              onFavorite={() => handleFavorite(pool)}
               onMonitor={() => handleMonitor(pool)}
               className={cn(
                 index === 0 && 'ring-2 ring-primary/50'

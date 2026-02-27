@@ -39,7 +39,14 @@ export function ActivePoolCard({
           <span className="text-sm font-medium">{status.label}</span>
         </div>
         <span className="text-xs text-muted-foreground">
-          Última ação: {formatDistanceToNow(new Date(pool.lastAction), { addSuffix: true, locale: ptBR })}
+          Última ação: {(() => {
+            try {
+              const d = new Date(pool.lastAction);
+              return isNaN(d.getTime()) ? pool.lastAction : formatDistanceToNow(d, { addSuffix: true, locale: ptBR });
+            } catch {
+              return pool.lastAction;
+            }
+          })()}
         </span>
       </div>
 

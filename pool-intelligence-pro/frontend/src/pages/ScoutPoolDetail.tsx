@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RangeChart } from '@/components/common/RangeChart';
 import { StatCard } from '@/components/common/StatCard';
@@ -13,14 +14,15 @@ import {
   Activity,
   TrendingUp,
   Shield,
-  Clock,
   DollarSign,
   BarChart3,
   Loader2,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { fetchPoolDetail, addFavorite } from '@/api/client';
+import { fetchPoolDetail, addFavorite, API_BASE_URL } from '@/api/client';
 import { unifiedPoolToViewPool } from '@/data/adapters';
 import { networkColors, dexLogos } from '@/data/constants';
 import type { Pool } from '@/types/pool';
@@ -28,25 +30,44 @@ import type { Pool } from '@/types/pool';
 export default function ScoutPoolDetail() {
   const { chain, address } = useParams<{ chain: string; address: string }>();
   const navigate = useNavigate();
-  const [pool, setPool] = useState<Pool | null>(null);
+  const queryClient = useQueryClient();
   const [selectedRange, setSelectedRange] = useState<'defensive' | 'optimized' | 'aggressive'>('optimized');
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!chain || !address) return;
-    setLoading(true);
-    fetchPoolDetail(chain, address)
-      .then((data) => {
-        if (data) {
-          const viewPool = unifiedPoolToViewPool(data.pool, data.score, data.ranges);
-          setPool(viewPool);
-        }
-      })
-      .catch(() => toast.error('Erro ao carregar pool'))
-      .finally(() => setLoading(false));
-  }, [chain, address]);
+  // React Query: auto-retry 3x, cache, background refetch
+  const { data: pool, isLoading, error, refetch, isFetching } = useQuery<Pool | null>({
+    queryKey: ['scout-pool-detail', chain, address],
+    queryFn: async () => {
+      if (!chain || !address) return null;
+      const data = await fetchPoolDetail(chain, address);
+      if (data) {
+        return unifiedPoolToViewPool(data.pool, data.score, data.ranges);
+      }
+      return null;
+    },
+    enabled: !!chain && !!address,
+    staleTime: 60000,
+    refetchInterval: 120000, // refresh every 2 min
+  });
 
-  if (loading) {
+  // Mutation: add to favorites
+  const favoriteMutation = useMutation({
+    mutationFn: (p: Pool) =>
+      addFavorite({
+        poolId: p.id,
+        chain: p.chain || '',
+        poolAddress: p.poolAddress || '',
+        token0Symbol: p.token0,
+        token1Symbol: p.token1,
+        protocol: p.protocol,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['favorites'] });
+      toast.success('Pool adicionada a favoritas');
+    },
+    onError: () => toast.error('Erro ao favoritar pool'),
+  });
+
+  if (isLoading) {
     return (
       <MainLayout title="Carregando..." subtitle="">
         <div className="space-y-4">
@@ -55,6 +76,26 @@ export default function ScoutPoolDetail() {
           <div className="grid grid-cols-4 gap-4">
             {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24" />)}
           </div>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <MainLayout title="Erro" subtitle="">
+        <div className="glass-card p-8 text-center space-y-4">
+          <AlertCircle className="h-12 w-12 mx-auto text-destructive" />
+          <h3 className="text-xl font-semibold">Erro ao carregar pool</h3>
+          <p className="text-sm text-muted-foreground">
+            API: {API_BASE_URL} — {(error as Error).message}
+          </p>
+          <Button onClick={() => refetch()}>
+            <RefreshCw className="h-4 w-4 mr-2" /> Tentar novamente
+          </Button>
+          <Button variant="ghost" onClick={() => navigate(-1)}>
+            <ArrowLeft className="h-4 w-4 mr-2" /> Voltar
+          </Button>
         </div>
       </MainLayout>
     );
@@ -80,14 +121,19 @@ export default function ScoutPoolDetail() {
         <Button variant="ghost" onClick={() => navigate(-1)}>
           <ArrowLeft className="h-4 w-4 mr-2" /> Voltar
         </Button>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => {
-            if (pool.chain && pool.poolAddress) {
-              addFavorite({ poolId: pool.id, chain: pool.chain, poolAddress: pool.poolAddress, token0Symbol: pool.token0, token1Symbol: pool.token1, protocol: pool.protocol });
-              toast.success('Pool adicionada a favoritas');
-            }
-          }}>
-            <Star className="h-4 w-4 mr-1" /> Favoritar
+        <div className="flex gap-2 items-center">
+          {isFetching && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          <Button
+            variant="outline"
+            onClick={() => favoriteMutation.mutate(pool)}
+            disabled={favoriteMutation.isPending}
+          >
+            {favoriteMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <Star className="h-4 w-4 mr-1" />
+            )}
+            Favoritar
           </Button>
           <Button onClick={() => navigate(`/simulation/${pool.chain}/${pool.poolAddress}`)}>
             <Activity className="h-4 w-4 mr-1" /> Simular
