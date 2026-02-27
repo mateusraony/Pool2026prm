@@ -13,17 +13,15 @@ const navSections = [
   {
     title: 'Análise',
     items: [
+      { path: '/recommended', icon: '🧠', label: 'Recomendadas' },
       { path: '/pools', icon: '🏊', label: 'Pool Intelligence' },
       { path: '/token-analyzer', icon: '🔍', label: 'Token Analyzer' },
       { path: '/radar', icon: '📡', label: 'Radar' },
-      { path: '/recommended', icon: '🧠', label: 'Recomendadas' },
-      { path: '/manual', icon: '🧪', label: 'Análise Manual' },
     ],
   },
   {
     title: 'Operações',
     items: [
-      { path: '/positions', icon: '💼', label: 'Posições' },
       { path: '/active', icon: '🟢', label: 'Pools Ativas' },
       { path: '/simulation', icon: '📐', label: 'Simulação' },
     ],
@@ -31,7 +29,6 @@ const navSections = [
   {
     title: 'Gerenciamento',
     items: [
-      { path: '/watchlist', icon: '⭐', label: 'Watchlist' },
       { path: '/favorites', icon: '❤️', label: 'Favoritas' },
       { path: '/history', icon: '📜', label: 'Histórico' },
       { path: '/alerts', icon: '🚨', label: 'Alertas' },
@@ -41,7 +38,6 @@ const navSections = [
     title: 'Sistema',
     items: [
       { path: '/scout-settings', icon: '⚙️', label: 'Configurações' },
-      { path: '/settings', icon: '🔧', label: 'Config. Sistema' },
       { path: '/status', icon: '🩺', label: 'Status' },
     ],
   },

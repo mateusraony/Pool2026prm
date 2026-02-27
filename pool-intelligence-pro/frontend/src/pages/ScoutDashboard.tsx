@@ -101,7 +101,7 @@ export default function ScoutDashboard() {
         feesAccrued: 0,
         ilActual: 0,
         status: pos.isActive ? 'ok' as const : 'attention' as const,
-        lastAction: 'Entrada',
+        lastAction: pos.createdAt || new Date().toISOString(),
         rangeSelected: pos.mode.toLowerCase() as 'defensive' | 'optimized' | 'aggressive',
       };
     });
