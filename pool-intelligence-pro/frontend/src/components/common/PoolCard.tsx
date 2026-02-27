@@ -127,27 +127,27 @@ export function PoolCard({
       {/* Actions */}
       {showActions && (
         <div className="mt-4 flex gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             className="flex-1"
-            onClick={onViewDetails}
+            onClick={() => onViewDetails?.()}
           >
             <Eye className="h-4 w-4 mr-1" />
             Detalhes
           </Button>
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="sm"
-            onClick={onFavorite}
+            onClick={() => onFavorite?.()}
           >
             <Star className="h-4 w-4" />
           </Button>
-          <Button 
-            variant="glow" 
-            size="sm" 
+          <Button
+            variant="glow"
+            size="sm"
             className="flex-1"
-            onClick={onMonitor}
+            onClick={() => onMonitor?.()}
           >
             <Activity className="h-4 w-4 mr-1" />
             Monitorar

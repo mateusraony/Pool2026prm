@@ -57,6 +57,6 @@ export function scoreToRisk(score: number): 'low' | 'medium' | 'high' {
  * Capitalize first letter of a chain/protocol name.
  */
 export function capitalize(s: string): string {
-  if (!s) return s;
+  if (!s) return '';
   return s.charAt(0).toUpperCase() + s.slice(1);
 }

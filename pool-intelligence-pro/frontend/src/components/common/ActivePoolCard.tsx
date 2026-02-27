@@ -124,26 +124,26 @@ export function ActivePoolCard({
 
         {/* Actions */}
         <div className="mt-4 flex gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             className="flex-1"
-            onClick={onRebalance}
+            onClick={() => onRebalance?.()}
           >
             <RefreshCw className="h-4 w-4 mr-1" />
             Rebalancear
           </Button>
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="sm"
-            onClick={onAdjust}
+            onClick={() => onAdjust?.()}
           >
             <Settings className="h-4 w-4" />
           </Button>
-          <Button 
-            variant="destructive" 
+          <Button
+            variant="destructive"
             size="sm"
-            onClick={onExit}
+            onClick={() => onExit?.()}
           >
             <XCircle className="h-4 w-4 mr-1" />
             Sair
