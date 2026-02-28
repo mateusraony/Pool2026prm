@@ -72,7 +72,7 @@ export default function AlertsPage() {
 
   const getPoolName = (poolId?: string): string => {
     if (!poolId) return 'Global';
-    const pool = pools?.find(p => p?.pool?.externalId === poolId);
+    const pool = pools?.find(p => (p?.pool?.poolAddress || p?.pool?.externalId) === poolId);
     if (pool?.pool?.token0?.symbol && pool?.pool?.token1?.symbol) {
       return pool.pool.token0.symbol + '/' + pool.pool.token1.symbol;
     }
@@ -245,8 +245,8 @@ export default function AlertsPage() {
                 >
                   <option value="">🌐 Global (todas as pools)</option>
                   {pools?.slice(0, 30).map((item) => (
-                    <option key={item.pool.externalId} value={item.pool.externalId}>
-                      {item.pool.token0.symbol}/{item.pool.token1.symbol} - {item.pool.protocol}
+                    <option key={item.pool.poolAddress || item.pool.externalId} value={item.pool.poolAddress || item.pool.externalId}>
+                      {item.pool.token0?.symbol ?? '?'}/{item.pool.token1?.symbol ?? '?'} - {item.pool.protocol}
                     </option>
                   ))}
                 </select>

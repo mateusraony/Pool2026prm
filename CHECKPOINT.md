@@ -2,40 +2,69 @@
 
 ## Status Atual
 **Branch:** `claude/pool2026-ui-lovable-eSwtR`
-**Data:** 2026-02-27 UTC
-**Ultimo Commit:** `515e9d3` (fix: resolve all crash-causing bugs found in deep audit)
-**Fase:** 1 commit precisa ir para main via PR
+**Data:** 2026-02-28 UTC
+**Fase:** OBJETIVO 1 (Frontend) e OBJETIVO 2 (Backend) COMPLETOS
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-02-27-C"`
+**Frase:** `"Continuar do CHECKPOINT 2026-02-28-B"`
 
 ---
 
-## AUDITORIA COMPLETA FEITA
+## OBJETIVO 1 — FRONTEND (COMPLETO)
 
-### CRITICAL — Corrigidos
-1. **RangeChart.tsx** — Divisao por zero quando `rangeWidth=0` → tela branca
-   - Fix: guard `if (rangeWidth <= 0)` retorna mensagem ao inves de crashar
-2. **ActivePoolCard.tsx** — `formatDistanceToNow(new Date('Entrada'))` → Invalid Date → crash
-   - Fix: try/catch com fallback para string original
+### T1: feeTier ambiguity — FEITO
+- Criadas `feeTierToBps()` e `feeTierToPercent()` em `constants.ts`
+- Regra: se feeTier > 1 → assume bps; senao → fracao × 1_000_000
+- Aplicado em: Simulation.tsx, PoolDetail.tsx, adapters.ts
 
-### HIGH — Corrigidos
-3. **Alerts.tsx** — `pool.pool.token0.symbol` sem null check → crash
-   - Fix: optional chaining `pool?.pool?.token0?.symbol`
-4. **adapters.ts** — `capitalize(undefined)` retornava undefined
-   - Fix: fallback `p.protocol || 'Unknown'`
-5. **constants.ts** — `capitalize('')` retornava string vazia ao inves de undefined
-   - Fix: `return ''` ao inves de `return s`
-6. **PoolCard.tsx** — callbacks opcionais sem null check
-   - Fix: `onClick={() => onViewDetails?.()}`
-7. **ActivePoolCard.tsx** — callbacks opcionais sem null check
-   - Fix: `onClick={() => onRebalance?.()}`
+### T2: Eliminar preco estimado por TVL — FEITO
+- Removido `pool.tvl / 50000` como fallback de preco
+- Novo: usa `pool.price` → `token0.priceUsd/token1.priceUsd` → 0
+- Quando preco = 0: mostra aviso "Preco indisponivel" e oculta simulacao
 
-### Sessao anterior — Corrigidos
-8. **Todas Scout pages** convertidas para React Query
-9. **App.tsx** limpo (removidas paginas duplicadas)
-10. **Sidebar** limpo (removida rota /manual inexistente)
-11. **API client** robusto (retry 2x, timeout 60s, fallback URL)
+### T3: Motor de calculo unificado com /range-calc — FEITO
+- Simulation.tsx agora faz `useQuery` para `POST /range-calc`
+- Usa dados do servidor (timeInRange, feeEstimate, ilRisk) quando disponivel
+- Mantem calculo local como fallback (backend offline)
+- Indicador visual: "API" (verde) ou "Local" (amarelo)
+
+### T4: Navegacao padronizada com poolAddress — FEITO
+- Todas as `navigate()` usam `poolAddress` como primario
+- Removidos fallbacks para `externalId` na navegacao
+- Arquivos: Simulation.tsx, Radar.tsx, Watchlist.tsx, Alerts.tsx, Recommendations.tsx, TokenAnalyzer.tsx
+
+### T5: Validacao de resposta da API — FEITO
+- `validatePool()` checa campos essenciais (chain, poolAddress, tvl, tokens)
+- `safePool()` aplica defaults seguros para evitar crashes
+- Aplicado em: fetchPools, fetchPool, fetchPoolDetail
+
+---
+
+## OBJETIVO 2 — BACKEND (COMPLETO)
+
+### T1: API_CONTRACT.md — FEITO
+- Documentacao completa de todos os endpoints em `pool-intelligence-pro/API_CONTRACT.md`
+- Inclui formatos de request/response para cada endpoint
+
+### T2: Padronizar respostas de erro — FEITO
+- Todos os endpoints ja seguiam `{success: false, error: "message"}`
+- Error handler global em `index.ts` retorna mesmo formato
+- Verificado: nenhum endpoint escapa do padrao
+
+### T3: Validacao Zod nos POST — FEITO
+- Criado `routes/validation.ts` com schemas Zod para todos POST/PUT
+- Middleware `validate()` aplicado em: watchlist, alerts, ranges, range-calc, favorites, notes, telegram test-recommendations, settings/notifications
+- Validacao retorna `{success: false, error: "campo: mensagem"}`
+
+### T4: Consistencia GET /api/pools — FEITO
+- Resposta segue: `{success: true, pools, total, page, limit, syncing, timestamp}`
+- Adicionado `success: true` que faltava
+- Timestamp padronizado para ISO string
+
+### T5: Verificar endpoints criticos — FEITO
+- Verificados todos 30 endpoints contra o frontend client.ts
+- Nenhum mismatch critico encontrado
+- Paths, field names e response shapes compativeis
 
 ---
 
@@ -44,23 +73,23 @@
 ### Scout (navegacao principal, React Query)
 | Rota | Pagina | Status |
 |------|--------|--------|
-| /dashboard | ScoutDashboard | ✅ |
-| /recommended | ScoutRecommended | ✅ |
-| /active | ScoutActivePools | ✅ |
-| /favorites | ScoutFavorites | ✅ |
-| /pools/:chain/:addr | ScoutPoolDetail | ✅ |
-| /history | ScoutHistory | ✅ localStorage |
-| /scout-settings | ScoutSettings | ✅ Telegram |
+| /dashboard | ScoutDashboard | OK |
+| /recommended | ScoutRecommended | OK |
+| /active | ScoutActivePools | OK |
+| /favorites | ScoutFavorites | OK |
+| /pools/:chain/:addr | ScoutPoolDetail | OK |
+| /history | ScoutHistory | OK localStorage |
+| /scout-settings | ScoutSettings | OK Telegram |
 
 ### Utilitarias (funcionalidade unica, React Query)
 | Rota | Pagina | Status |
 |------|--------|--------|
-| /pools | Pools | ✅ |
-| /token-analyzer | TokenAnalyzer | ✅ |
-| /radar | Radar | ✅ |
-| /simulation | Simulation | ✅ |
-| /alerts | Alerts | ✅ |
-| /status | Status | ✅ |
+| /pools | Pools | OK |
+| /token-analyzer | TokenAnalyzer | OK |
+| /radar | Radar | OK |
+| /simulation | Simulation | OK (com /range-calc API) |
+| /alerts | Alerts | OK |
+| /status | Status | OK |
 
 ### Redirects
 /positions → /active | /watchlist → /favorites | /settings → /scout-settings
@@ -68,6 +97,5 @@
 ---
 
 ## PARA DEPLOY
-1. Criar PR: https://github.com/mateusraony/Pool2026prm/compare/main...claude/pool2026-ui-lovable-eSwtR
-2. Mergear
-3. Render: "Clear build cache & deploy"
+1. Mergear PR do branch `claude/pool2026-ui-lovable-eSwtR` para `main`
+2. Render: "Clear build cache & deploy" (se nao fizer auto-deploy)

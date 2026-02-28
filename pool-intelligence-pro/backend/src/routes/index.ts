@@ -21,6 +21,11 @@ import { config } from '../config/index.js';
 import { poolIntelligenceService } from '../services/pool-intelligence.service.js';
 import { calcRangeRecommendation, calcUserFees, calcILRisk } from '../services/calc.service.js';
 import { Pool, UnifiedPool } from '../types/index.js';
+import {
+  validate,
+  watchlistSchema, alertSchema, rangePositionSchema, rangeCalcSchema,
+  favoriteSchema, noteSchema, telegramTestRecsSchema, notificationSettingsSchema,
+} from './validation.js';
 
 const prisma = new PrismaClient();
 
@@ -127,6 +132,7 @@ router.get('/pools', async (req, res) => {
       : pools.slice(0, lim);
 
     res.json({
+      success: true,
       pools,
       total,
       page: pg,
@@ -134,7 +140,7 @@ router.get('/pools', async (req, res) => {
       fromMemory,
       syncing: !!cacheService.get(`thegraph_fetching_${chain || 'all'}`).data,
       tokenFilters: notificationSettingsService.getTokenFilters(),
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     logService.error('SYSTEM', 'GET /pools failed', { error });
@@ -284,14 +290,9 @@ router.get('/watchlist', async (req, res) => {
 });
 
 // Add to watchlist
-router.post('/watchlist', async (req, res) => {
+router.post('/watchlist', validate(watchlistSchema), async (req, res) => {
   try {
     const { poolId, chain, address } = req.body;
-    
-    if (!poolId || !chain || !address) {
-      return res.status(400).json({ success: false, error: 'Missing required fields' });
-    }
-    
     addToWatchlist({ poolId, chain, address });
     
     res.json({
@@ -363,7 +364,7 @@ router.get('/settings', async (req, res) => {
 });
 
 // Update notification settings
-router.put('/settings/notifications', async (req, res) => {
+router.put('/settings/notifications', validate(notificationSettingsSchema), async (req, res) => {
   try {
     const updated = notificationSettingsService.updateSettings(req.body);
     res.json({
@@ -401,9 +402,9 @@ router.post('/settings/telegram/test', async (req, res) => {
 });
 
 // Send top recommendations via Telegram (real data test)
-router.post('/settings/telegram/test-recommendations', async (req, res) => {
+router.post('/settings/telegram/test-recommendations', validate(telegramTestRecsSchema), async (req, res) => {
   try {
-    const { limit = 5, useTokenFilter = true } = req.body;
+    const { limit, useTokenFilter } = req.body;
     let recommendations = getLatestRecommendations();
 
     if (recommendations.length === 0) {
@@ -511,14 +512,9 @@ router.get('/alerts', async (req, res) => {
 });
 
 // Create alert rule
-router.post('/alerts', async (req, res) => {
+router.post('/alerts', validate(alertSchema), async (req, res) => {
   try {
     const { poolId, type, threshold } = req.body;
-
-    if (!type || threshold === undefined) {
-      return res.status(400).json({ success: false, error: 'Missing required fields' });
-    }
-
     const id = Date.now().toString();
     alertService.addRule(id, {
       type,
@@ -578,38 +574,25 @@ router.get('/ranges', async (req, res) => {
 });
 
 // Create range position to monitor
-router.post('/ranges', async (req, res) => {
+router.post('/ranges', validate(rangePositionSchema), async (req, res) => {
   try {
     const {
+      poolId, chain, poolAddress, token0Symbol, token1Symbol,
+      rangeLower, rangeUpper, entryPrice, capital, mode, alertThreshold,
+    } = req.body;
+
+    const position = rangeMonitorService.createPosition({
       poolId,
       chain,
-      poolAddress,
+      poolAddress: poolAddress || poolId,
       token0Symbol,
       token1Symbol,
       rangeLower,
       rangeUpper,
-      entryPrice,
+      entryPrice: entryPrice || (rangeLower + rangeUpper) / 2,
       capital,
       mode,
       alertThreshold,
-    } = req.body;
-
-    if (!poolId || !rangeLower || !rangeUpper) {
-      return res.status(400).json({ success: false, error: 'Missing required fields: poolId, rangeLower, rangeUpper' });
-    }
-
-    const position = rangeMonitorService.createPosition({
-      poolId,
-      chain: chain || 'ethereum',
-      poolAddress: poolAddress || poolId,
-      token0Symbol: token0Symbol || 'TOKEN0',
-      token1Symbol: token1Symbol || 'TOKEN1',
-      rangeLower: Number(rangeLower),
-      rangeUpper: Number(rangeUpper),
-      entryPrice: Number(entryPrice) || (Number(rangeLower) + Number(rangeUpper)) / 2,
-      capital: Number(capital) || 1000,
-      mode: mode || 'NORMAL',
-      alertThreshold: Number(alertThreshold) || 5, // Default 5% from edge
     });
 
     res.json({
@@ -764,13 +747,9 @@ router.get('/pools-detail/:chain/:address', async (req, res) => {
 });
 
 // POST /api/range-calc — standalone range calculator
-router.post('/range-calc', async (req, res) => {
+router.post('/range-calc', validate(rangeCalcSchema), async (req, res) => {
   try {
-    const { price, volAnn = 0.40, horizonDays = 7, riskMode = 'NORMAL', tickSpacing, poolType = 'CL', capital = 1000, tvl, fees24h } = req.body;
-
-    if (!price || price <= 0) {
-      return res.status(400).json({ success: false, error: 'price is required and must be > 0' });
-    }
+    const { price, volAnn, horizonDays, riskMode, tickSpacing, poolType, capital, tvl, fees24h } = req.body;
 
     const ranges = {
       DEFENSIVE: calcRangeRecommendation({ price, volAnn, horizonDays, riskMode: 'DEFENSIVE', tickSpacing, poolType }),
@@ -805,12 +784,9 @@ router.get('/favorites', async (req, res) => {
   }
 });
 
-router.post('/favorites', async (req, res) => {
+router.post('/favorites', validate(favoriteSchema), async (req, res) => {
   try {
-    const { poolId, chain, poolAddress, token0Symbol = '', token1Symbol = '', protocol = '' } = req.body;
-    if (!poolId || !chain || !poolAddress) {
-      return res.status(400).json({ success: false, error: 'poolId, chain, poolAddress are required' });
-    }
+    const { poolId, chain, poolAddress, token0Symbol, token1Symbol, protocol } = req.body;
     const fav = await prisma.favorite.upsert({
       where: { poolId },
       create: { poolId, chain, poolAddress, token0Symbol, token1Symbol, protocol },
@@ -850,12 +826,9 @@ router.get('/notes', async (req, res) => {
   }
 });
 
-router.post('/notes', async (req, res) => {
+router.post('/notes', validate(noteSchema), async (req, res) => {
   try {
-    const { poolId, text, tags = [] } = req.body;
-    if (!poolId || !text) {
-      return res.status(400).json({ success: false, error: 'poolId and text are required' });
-    }
+    const { poolId, text, tags } = req.body;
     const note = await prisma.note.create({ data: { poolId, text, tags } });
     res.json({ success: true, data: note });
   } catch (error) {

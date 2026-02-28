@@ -36,8 +36,7 @@ function PoolCard({ pool, score, index, isWatched, isAdding, onAddToWatchlist }:
   onAddToWatchlist: () => void;
 }) {
   const navigate = useNavigate();
-  // Defensive: use externalId as fallback if poolAddress is undefined
-  const poolAddress = pool.poolAddress || pool.externalId || 'unknown';
+  const poolAddress = pool.poolAddress || 'unknown';
   const poolPath = '/simulation/' + pool.chain + '/' + poolAddress;
 
   return (
@@ -192,14 +191,14 @@ export default function RadarPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {pools.map((item, index) => (
             <PoolCard
-              key={item.pool.externalId}
+              key={item.pool.poolAddress || item.pool.externalId}
               pool={item.pool}
               score={item.score}
               index={index}
-              isWatched={watchedIds.has(item.pool.externalId)}
-              isAdding={addMutation.isPending && addMutation.variables?.poolId === item.pool.externalId}
+              isWatched={watchedIds.has(item.pool.poolAddress || item.pool.externalId)}
+              isAdding={addMutation.isPending && addMutation.variables?.poolId === (item.pool.poolAddress || item.pool.externalId)}
               onAddToWatchlist={() => addMutation.mutate({
-                poolId: item.pool.externalId,
+                poolId: item.pool.poolAddress || item.pool.externalId,
                 chain: item.pool.chain,
                 address: item.pool.poolAddress,
               })}

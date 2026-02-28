@@ -2,7 +2,8 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TrendingUp, TrendingDown, Clock, Fuel, DollarSign, AlertTriangle, ArrowLeft, ExternalLink, Bell, BellRing, Check } from 'lucide-react';
-import { fetchPool, fetchPools, createRangePosition, fetchRangePositions, deleteRangePosition, Pool, Score } from '../api/client';
+import { fetchPool, fetchPools, createRangePosition, fetchRangePositions, deleteRangePosition, calcRange, Pool, Score } from '../api/client';
+import { feeTierToBps, feeTierToPercent } from '../data/constants';
 import InteractiveChart from '../components/charts/InteractiveChart';
 import clsx from 'clsx';
 
@@ -27,8 +28,12 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
   const [customRange, setCustomRange] = useState<{ lower: number; upper: number } | null>(null);
   const [monitorSuccess, setMonitorSuccess] = useState(false);
 
-  // Use pool price or estimate from TVL (more realistic than flat 1000)
-  const currentPrice = pool.price || (pool.tvl > 0 ? Math.max(1, pool.tvl / 50000) : 100);
+  // Real price: use pool.price from backend, or derive from token prices ratio
+  const derivedPrice = (pool.token0?.priceUsd && pool.token1?.priceUsd && pool.token1.priceUsd > 0)
+    ? pool.token0.priceUsd / pool.token1.priceUsd
+    : undefined;
+  const currentPrice = pool.price || derivedPrice || 0;
+  const priceUnavailable = currentPrice === 0;
   const config = modeConfig[mode];
 
   // Check if this pool is already being monitored
@@ -37,12 +42,13 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
     queryFn: fetchRangePositions,
   });
 
-  const isMonitoring = rangePositions?.some(p => p.poolId === pool.externalId && p.isActive);
+  const poolId = pool.poolAddress || pool.externalId;
+  const isMonitoring = rangePositions?.some(p => p.poolId === poolId && p.isActive);
 
   // Create range monitor mutation
   const createMonitorMutation = useMutation({
     mutationFn: () => createRangePosition({
-      poolId: pool.externalId,
+      poolId,
       chain: pool.chain,
       poolAddress: pool.poolAddress,
       token0Symbol: pool.token0?.symbol ?? '???',
@@ -71,7 +77,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
 
   const handleMonitorRange = () => {
     if (isMonitoring) {
-      const position = rangePositions?.find(p => p.poolId === pool.externalId && p.isActive);
+      const position = rangePositions?.find(p => p.poolId === poolId && p.isActive);
       if (position) {
         deleteMonitorMutation.mutate(position.id);
       }
@@ -93,22 +99,68 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
     setCustomRange(null); // Reset custom range when mode changes
   };
 
-  const metrics = useMemo(() => {
-    const rangeWidth = ((rangeUpper - rangeLower) / currentPrice) * 100;
+  // Server-side range calculation via /range-calc API
+  const { data: serverCalc } = useQuery({
+    queryKey: ['range-calc', pool.chain, pool.poolAddress, mode, capital, currentPrice],
+    queryFn: () => calcRange({
+      price: currentPrice,
+      volAnn: pool.volatilityAnn || 0.40,
+      horizonDays: 7,
+      riskMode: mode,
+      poolType: 'CL',
+      capital,
+      tvl: pool.tvl,
+      fees24h: pool.fees24h,
+    }),
+    enabled: currentPrice > 0,
+    staleTime: 60_000,
+  });
 
-    // --- LIVE CALCULATIONS BASED ON REAL POOL VOLATILITY ---
-    // Uses pool.volatilityAnn from backend (calculated from price data).
-    // If unavailable, uses a conservative default of 0.40 (40% annualized).
+  const metrics = useMemo(() => {
+    const rangeWidth = currentPrice > 0 ? ((rangeUpper - rangeLower) / currentPrice) * 100 : 0;
     const volAnn = pool.volatilityAnn || 0.40;
 
-    // Time in range (7 days): probability price stays within [rangeLower, rangeUpper]
-    // Uses lognormal model: P(out) = 2 * (1 - Φ(d)), where d = ln(upper/price) / (σ√T)
+    // Gas costs: realistic L1/L2 values (entry + exit round trip)
+    const gasMap: Record<string, number> = {
+      ethereum: 30, arbitrum: 3, base: 1.5, optimism: 2, polygon: 0.5,
+    };
+    const gasEstimate = gasMap[pool.chain] ?? 5;
+    const gasPercent = capital > 0 ? (gasEstimate / capital) * 100 : 0;
+
+    // Prefer server-side calculations, fall back to local math
+    if (serverCalc) {
+      const selected = serverCalc.ranges[mode] || serverCalc.selected;
+      const timeInRange = Math.round((1 - (selected?.probOutOfRange ?? 0.3)) * 100);
+      const feesPercent = capital > 0 && serverCalc.feeEstimate
+        ? (serverCalc.feeEstimate.expectedFees7d / capital) * 100
+        : 0;
+      const ilPercent = serverCalc.ilRisk
+        ? serverCalc.ilRisk.ilRiskScore
+        : 0;
+      const netReturn = feesPercent - ilPercent - gasPercent;
+
+      return {
+        feesPercent,
+        feesUsd: (feesPercent / 100) * capital,
+        ilPercent,
+        ilUsd: (ilPercent / 100) * capital,
+        timeInRange: Math.max(0, Math.min(100, timeInRange)),
+        gasEstimate,
+        netReturnPercent: netReturn,
+        netReturnUsd: (netReturn / 100) * capital,
+        apr: netReturn * 52,
+        rangeWidth,
+        volAnn,
+        source: 'server' as const,
+      };
+    }
+
+    // --- LOCAL FALLBACK (when API is unavailable) ---
     const horizonDays = 7;
     const sqrtT = Math.sqrt(horizonDays / 365);
     const halfWidth = rangeUpper > currentPrice && currentPrice > 0
       ? Math.log(rangeUpper / currentPrice) / (volAnn * sqrtT)
-      : 2; // fallback: ~95% in range
-    // Standard normal CDF approximation (Abramowitz & Stegun)
+      : 2;
     const absCDF = (z: number): number => {
       const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741;
       const a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
@@ -121,25 +173,14 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
     const probOut = Math.max(0, Math.min(1, 2 * (1 - absCDF(halfWidth))));
     const timeInRange = Math.round((1 - probOut) * 100);
 
-    // Fee calculation: APR × portion of time in range
     const annualApr = score?.breakdown?.return?.aprEstimate ?? pool.apr ?? 0;
     const weeklyFeeRate = annualApr / 52;
     const feesPercent = weeklyFeeRate * (timeInRange / 100);
 
-    // Impermanent Loss (IL): uses real volatility, not hardcoded values
-    // Weekly IL ≈ 0.5 * (σ²) * T * concentration_factor
-    // concentration_factor scales with how narrow the range is
-    const widthFraction = rangeWidth / 100; // e.g. 0.10 for ±10%
+    const widthFraction = rangeWidth / 100;
     const concentrationFactor = widthFraction > 0 ? Math.min(5, 0.10 / widthFraction) : 1;
     const weeklyVol = volAnn * sqrtT;
     const ilPercent = Math.max(0, 0.5 * weeklyVol * weeklyVol * concentrationFactor * 100);
-
-    // Gas costs: realistic L1/L2 values (entry + exit round trip)
-    const gasMap: Record<string, number> = {
-      ethereum: 30, arbitrum: 3, base: 1.5, optimism: 2, polygon: 0.5,
-    };
-    const gasEstimate = gasMap[pool.chain] ?? 5;
-    const gasPercent = (gasEstimate / capital) * 100;
 
     const netReturn = feesPercent - ilPercent - gasPercent;
 
@@ -154,14 +195,15 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
       netReturnUsd: (netReturn / 100) * capital,
       apr: netReturn * 52,
       rangeWidth,
-      volAnn, // expose for UI display
+      volAnn,
+      source: 'local' as const,
     };
-  }, [rangeLower, rangeUpper, capital, score, currentPrice, pool.chain, pool.volatilityAnn, mode]);
+  }, [rangeLower, rangeUpper, capital, score, currentPrice, pool.chain, pool.volatilityAnn, mode, serverCalc]);
 
   const isPositive = metrics.netReturnPercent >= 0;
 
-  // Uniswap URL — feeTier needs to be in bps (e.g. 3000 for 0.3%)
-  const feeTierBps = pool.feeTier ? Math.round(pool.feeTier * 1000000) : 3000;
+  // Uniswap URL — feeTier normalized to bps (handles both fraction and bps input)
+  const feeTierBps = feeTierToBps(pool.feeTier);
   const uniswapUrl = `https://app.uniswap.org/add/${pool.token0?.address ?? ''}/${pool.token1?.address ?? ''}/${feeTierBps}?chain=${pool.chain}`;
 
   return (
@@ -185,7 +227,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-dark-400 text-sm">Fee Tier:</span>
-              <span className="font-mono font-semibold">{pool.feeTier ? (pool.feeTier * 100).toFixed(2) + '%' : 'N/A'}</span>
+              <span className="font-mono font-semibold">{pool.feeTier ? feeTierToPercent(pool.feeTier).toFixed(2) + '%' : 'N/A'}</span>
             </div>
           </div>
 
@@ -208,23 +250,43 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
             </div>
             <div className="stat-card">
               <div className="stat-label">Preco Atual</div>
-              <div className="stat-value font-mono">{'$' + currentPrice.toFixed(2)}</div>
+              <div className="stat-value font-mono">
+                {priceUnavailable
+                  ? <span className="text-warning-400">Indisponivel</span>
+                  : '$' + currentPrice.toFixed(2)}
+              </div>
+              {derivedPrice && !pool.price && (
+                <div className="text-[10px] text-dark-500">via tokens</div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
+      {/* Price warning */}
+      {priceUnavailable && (
+        <div className="bg-danger-500/10 border border-danger-500/30 rounded-xl p-4 flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-danger-400 flex-shrink-0" />
+          <div>
+            <p className="font-medium text-danger-400">Preco indisponivel para esta pool</p>
+            <p className="text-sm text-dark-400">A simulacao nao pode ser realizada sem dados de preco reais. Tente novamente em alguns minutos.</p>
+          </div>
+        </div>
+      )}
+
       {/* Interactive Chart */}
-      <InteractiveChart
-        currentPrice={currentPrice}
-        minPrice={currentPrice * 0.5}
-        maxPrice={currentPrice * 1.5}
-        rangeLower={rangeLower}
-        rangeUpper={rangeUpper}
-        onRangeChange={handleRangeChange}
-        token0Symbol={pool.token0?.symbol ?? '???'}
-        token1Symbol={pool.token1?.symbol ?? '???'}
-      />
+      {!priceUnavailable && (
+        <InteractiveChart
+          currentPrice={currentPrice}
+          minPrice={currentPrice * 0.5}
+          maxPrice={currentPrice * 1.5}
+          rangeLower={rangeLower}
+          rangeUpper={rangeUpper}
+          onRangeChange={handleRangeChange}
+          token0Symbol={pool.token0?.symbol ?? '???'}
+          token1Symbol={pool.token1?.symbol ?? '???'}
+        />
+      )}
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Controls */}
@@ -357,6 +419,9 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
             <div className="text-xs text-dark-500 flex items-center gap-2 px-1">
               <span>Vol. anual: {(metrics.volAnn * 100).toFixed(0)}%</span>
               <span>{pool.volatilityAnn ? '(dados reais)' : '(estimativa)'}</span>
+              <span className={metrics.source === 'server' ? 'text-success-500' : 'text-warning-500'}>
+                {metrics.source === 'server' ? '● API' : '● Local'}
+              </span>
             </div>
 
             <div className={clsx(
@@ -486,8 +551,8 @@ export default function SimulationPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {pools.slice(0, 6).map((item) => (
               <button
-                key={item.pool.externalId}
-                onClick={() => navigate('/simulation/' + item.pool.chain + '/' + (item.pool.poolAddress || item.pool.externalId || 'unknown'))}
+                key={item.pool.poolAddress || item.pool.externalId}
+                onClick={() => navigate('/simulation/' + item.pool.chain + '/' + (item.pool.poolAddress || 'unknown'))}
                 className="card hover:border-primary-500/50 transition-all text-left"
               >
                 <div className="p-4">

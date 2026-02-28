@@ -101,6 +101,41 @@ export interface HealthData {
   timestamp: string;
 }
 
+// ============================================
+// RESPONSE VALIDATION
+// ============================================
+
+/** Check essential fields on a pool object. Returns warnings for missing data. */
+function validatePool(pool: any, source: string): string[] {
+  const warnings: string[] = [];
+  if (!pool) {
+    warnings.push(`[${source}] pool object is null/undefined`);
+    return warnings;
+  }
+  if (!pool.chain) warnings.push(`[${source}] missing chain`);
+  if (!pool.poolAddress && !pool.externalId) warnings.push(`[${source}] missing poolAddress and externalId`);
+  if (pool.tvl == null && pool.tvlUSD == null) warnings.push(`[${source}] missing tvl`);
+  if (!pool.token0 && !pool.baseToken) warnings.push(`[${source}] missing token0 info`);
+  if (!pool.token1 && !pool.quoteToken) warnings.push(`[${source}] missing token1 info`);
+  if (warnings.length > 0) {
+    console.warn('Pool validation warnings:', warnings);
+  }
+  return warnings;
+}
+
+/** Ensure pool has safe defaults for essential fields to prevent crashes. */
+function safePool<T extends Record<string, any>>(pool: T): T {
+  return {
+    ...pool,
+    chain: pool.chain || 'unknown',
+    poolAddress: pool.poolAddress || pool.externalId || '',
+    tvl: pool.tvl ?? pool.tvlUSD ?? 0,
+    volume24h: pool.volume24h ?? pool.volume24hUSD ?? 0,
+    token0: pool.token0 || { symbol: pool.baseToken || '?', address: '', decimals: 18 },
+    token1: pool.token1 || { symbol: pool.quoteToken || '?', address: '', decimals: 18 },
+  };
+}
+
 // API functions
 export async function fetchHealth(): Promise<HealthData> {
   const { data } = await api.get('/health');
@@ -113,7 +148,11 @@ export async function fetchPools(chain?: string): Promise<{ pool: Pool; score: S
   const pools = data?.pools || data?.data || [];
   // Converte UnifiedPool para o formato legado se necessário
   return pools.map((p: any) => {
-    if (p.pool && p.score) return p;
+    if (p.pool && p.score) {
+      validatePool(p.pool, 'fetchPools');
+      p.pool = safePool(p.pool);
+      return p;
+    }
     // UnifiedPool → { pool, score }
     // Use aprTotal (computed from fees) → aprFee → apr (adapter APY e.g. DefiLlama) → 0
     const aprEstimate = p.aprTotal || p.aprFee || p.apr || 0;
@@ -127,22 +166,24 @@ export async function fetchPools(chain?: string): Promise<{ pool: Pool; score: S
     const liqScore = tvl >= 10e6 ? 100 : tvl >= 1e6 ? 75 : tvl >= 100000 ? 40 : 20;
     const volConsist = tvl > 0 ? Math.min(100, (vol24h / tvl) * 1000) : 0;
 
+    validatePool(p, 'fetchPools/unified');
+    const poolObj = safePool({
+      externalId: p.id || p.poolAddress,
+      chain: p.chain,
+      protocol: p.protocol,
+      poolAddress: p.poolAddress,
+      token0: p.token0 || { symbol: p.baseToken, address: '', decimals: 18 },
+      token1: p.token1 || { symbol: p.quoteToken, address: '', decimals: 18 },
+      tvl,
+      volume24h: vol24h,
+      fees24h: p.fees24hUSD || p.fees24h || 0,
+      apr: aprEstimate,
+      price: p.price,
+      feeTier: p.feeTier || 0.003,
+      volatilityAnn: p.volatilityAnn || undefined,
+    });
     return {
-      pool: {
-        externalId: p.id || p.poolAddress,
-        chain: p.chain,
-        protocol: p.protocol,
-        poolAddress: p.poolAddress,
-        token0: p.token0 || { symbol: p.baseToken, address: '', decimals: 18 },
-        token1: p.token1 || { symbol: p.quoteToken, address: '', decimals: 18 },
-        tvl,
-        volume24h: vol24h,
-        fees24h: p.fees24hUSD || p.fees24h || 0,
-        apr: aprEstimate,
-        price: p.price,
-        feeTier: p.feeTier || 0.003,
-        volatilityAnn: p.volatilityAnn || undefined,
-      },
+      pool: poolObj,
       score: {
         total: p.healthScore || 50,
         health: p.healthScore || 50,
@@ -162,7 +203,12 @@ export async function fetchPools(chain?: string): Promise<{ pool: Pool; score: S
 
 export async function fetchPool(chain: string, address: string): Promise<{ pool: Pool; score: Score } | null> {
   const { data } = await api.get('/pools/' + chain + '/' + address);
-  return data.data;
+  const result = data.data;
+  if (result?.pool) {
+    validatePool(result.pool, 'fetchPool');
+    result.pool = safePool(result.pool);
+  }
+  return result;
 }
 
 export async function fetchRecommendations(mode?: string, limit?: number): Promise<Recommendation[]> {
@@ -307,7 +353,12 @@ export async function fetchPoolDetail(chain: string, address: string, params?: {
 } | null> {
   try {
     const { data } = await api.get(`/pools-detail/${chain}/${address}`, { params });
-    return data?.data || null;
+    const result = data?.data || null;
+    if (result?.pool) {
+      validatePool(result.pool, 'fetchPoolDetail');
+      result.pool = safePool(result.pool);
+    }
+    return result;
   } catch (e) {
     console.error('fetchPoolDetail error:', e);
     return null;
