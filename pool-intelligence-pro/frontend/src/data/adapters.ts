@@ -45,9 +45,9 @@ export function unifiedPoolToViewPool(
 
   return {
     id: p.id || p.poolAddress,
-    dex: capitalize(p.protocol),
-    network: capitalize(p.chain),
-    pair: `${p.token0?.symbol ?? p.baseToken}/${p.token1?.symbol ?? p.quoteToken}`,
+    dex: capitalize(p.protocol || 'Unknown'),
+    network: capitalize(p.chain || 'Unknown'),
+    pair: `${p.token0?.symbol ?? p.baseToken ?? '?'}/${p.token1?.symbol ?? p.quoteToken ?? '?'}`,
     token0: p.token0?.symbol ?? p.baseToken ?? '',
     token1: p.token1?.symbol ?? p.quoteToken ?? '',
     feeTier: (p.feeTier ?? 0.003) * 100,
