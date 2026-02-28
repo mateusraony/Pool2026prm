@@ -1,12 +1,12 @@
 services:
-  # Backend API
+  # Single service: Backend API + Frontend UI
   - type: web
-    name: pool-intelligence-api
+    name: pool2026prm
     runtime: node
     region: oregon
     plan: free
-    rootDir: pool-intelligence-pro/backend
-    buildCommand: npm ci --include=dev && npx prisma generate && npm run build
+    rootDir: pool-intelligence-pro
+    buildCommand: npm run install:all && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
@@ -22,24 +22,6 @@ services:
       - key: TELEGRAM_CHAT_ID
         sync: false
     healthCheckPath: /health
-    autoDeploy: true
-
-  # Frontend Static Site
-  - type: web
-    name: pool-intelligence-ui
-    runtime: static
-    region: oregon
-    plan: free
-    rootDir: pool-intelligence-pro/frontend
-    buildCommand: npm ci --include=dev && npm run build
-    staticPublishPath: dist
-    envVars:
-      - key: VITE_API_URL
-        value: https://pool-intelligence-api.onrender.com
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
     autoDeploy: true
 
 databases:

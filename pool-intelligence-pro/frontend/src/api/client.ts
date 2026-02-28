@@ -1,12 +1,16 @@
 import axios, { AxiosError } from 'axios';
 
-// Resolve API URL: ignore localhost values in production (common misconfiguration)
+// Resolve API URL:
+// - If VITE_API_URL points to an external service: use it
+// - Otherwise: empty string (same-origin — backend serves frontend)
 function resolveApiUrl(): string {
   const envUrl = import.meta.env.VITE_API_URL;
-  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+  if (envUrl && envUrl !== '/' && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
     return envUrl;
   }
-  return 'https://pool-intelligence-api.onrender.com';
+  // Same-origin: frontend is served by the backend Express server
+  // Relative paths (/api/...) go to the same host automatically
+  return '';
 }
 
 const API_URL = resolveApiUrl();
