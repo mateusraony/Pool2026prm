@@ -3,10 +3,10 @@
 ## Status Atual
 **Branch:** `claude/pool2026-ui-lovable-eSwtR`
 **Data:** 2026-02-28 UTC
-**Fase:** OBJETIVO 1 (Frontend) COMPLETO — Iniciando OBJETIVO 2 (Backend)
+**Fase:** OBJETIVO 1 (Frontend) e OBJETIVO 2 (Backend) COMPLETOS
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-02-28-A"`
+**Frase:** `"Continuar do CHECKPOINT 2026-02-28-B"`
 
 ---
 
@@ -29,7 +29,7 @@
 - Indicador visual: "API" (verde) ou "Local" (amarelo)
 
 ### T4: Navegacao padronizada com poolAddress — FEITO
-- Todas as `navigate()` agora usam `poolAddress` como primario
+- Todas as `navigate()` usam `poolAddress` como primario
 - Removidos fallbacks para `externalId` na navegacao
 - Arquivos: Simulation.tsx, Radar.tsx, Watchlist.tsx, Alerts.tsx, Recommendations.tsx, TokenAnalyzer.tsx
 
@@ -40,13 +40,31 @@
 
 ---
 
-## OBJETIVO 2 — BACKEND (PENDENTE)
+## OBJETIVO 2 — BACKEND (COMPLETO)
 
-### T1: Criar API_CONTRACT.md — PENDENTE
-### T2: Padronizar respostas de erro — PENDENTE
-### T3: Validacao Zod nos POST — PENDENTE
-### T4: Garantir consistencia GET /api/pools — PENDENTE
-### T5: Verificar todos endpoints criticos — PENDENTE
+### T1: API_CONTRACT.md — FEITO
+- Documentacao completa de todos os endpoints em `pool-intelligence-pro/API_CONTRACT.md`
+- Inclui formatos de request/response para cada endpoint
+
+### T2: Padronizar respostas de erro — FEITO
+- Todos os endpoints ja seguiam `{success: false, error: "message"}`
+- Error handler global em `index.ts` retorna mesmo formato
+- Verificado: nenhum endpoint escapa do padrao
+
+### T3: Validacao Zod nos POST — FEITO
+- Criado `routes/validation.ts` com schemas Zod para todos POST/PUT
+- Middleware `validate()` aplicado em: watchlist, alerts, ranges, range-calc, favorites, notes, telegram test-recommendations, settings/notifications
+- Validacao retorna `{success: false, error: "campo: mensagem"}`
+
+### T4: Consistencia GET /api/pools — FEITO
+- Resposta segue: `{success: true, pools, total, page, limit, syncing, timestamp}`
+- Adicionado `success: true` que faltava
+- Timestamp padronizado para ISO string
+
+### T5: Verificar endpoints criticos — FEITO
+- Verificados todos 30 endpoints contra o frontend client.ts
+- Nenhum mismatch critico encontrado
+- Paths, field names e response shapes compativeis
 
 ---
 
@@ -79,5 +97,5 @@
 ---
 
 ## PARA DEPLOY
-1. Push para main
-2. Render: "Clear build cache & deploy"
+1. Mergear PR do branch `claude/pool2026-ui-lovable-eSwtR` para `main`
+2. Render: "Clear build cache & deploy" (se nao fizer auto-deploy)
