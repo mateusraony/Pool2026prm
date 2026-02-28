@@ -5,7 +5,7 @@
 
 import type { Pool } from '@/types/pool';
 import type { UnifiedPool, Score, RangeResult } from '@/api/client';
-import { scoreToRisk, capitalize } from './constants';
+import { scoreToRisk, capitalize, feeTierToPercent } from './constants';
 
 /**
  * Convert a UnifiedPool + Score from the backend API into the UI Pool type.
@@ -50,7 +50,7 @@ export function unifiedPoolToViewPool(
     pair: `${p.token0?.symbol ?? p.baseToken ?? '?'}/${p.token1?.symbol ?? p.quoteToken ?? '?'}`,
     token0: p.token0?.symbol ?? p.baseToken ?? '',
     token1: p.token1?.symbol ?? p.quoteToken ?? '',
-    feeTier: (p.feeTier ?? 0.003) * 100,
+    feeTier: feeTierToPercent(p.feeTier),
     tvl: p.tvlUSD || p.tvl || 0,
     volume24h: p.volume24hUSD || p.volume24h || 0,
     volume7d: (p.volume24hUSD || p.volume24h || 0) * 7,
@@ -101,7 +101,7 @@ export function legacyPoolToViewPool(item: {
     pair: `${p.token0.symbol}/${p.token1.symbol}`,
     token0: p.token0.symbol,
     token1: p.token1.symbol,
-    feeTier: (p.feeTier ?? 0.003) * 100,
+    feeTier: feeTierToPercent(p.feeTier),
     tvl: p.tvl || 0,
     volume24h: p.volume24h || 0,
     volume7d: (p.volume24h || 0) * 7,

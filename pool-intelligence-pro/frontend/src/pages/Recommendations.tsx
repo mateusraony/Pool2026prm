@@ -26,8 +26,7 @@ function RecommendationCard({ rec, index }: { rec: Recommendation; index: number
   const navigate = useNavigate();
   const isPositive = (rec.estimatedGainPercent ?? 0) >= 0;
   const poolName = (rec.pool.token0?.symbol ?? '?') + '/' + (rec.pool.token1?.symbol ?? '?');
-  // Defensive: use externalId as fallback
-  const poolAddress = rec.pool.poolAddress || rec.pool.externalId || 'unknown';
+  const poolAddress = rec.pool.poolAddress || 'unknown';
   const poolPath = '/simulation/' + rec.pool.chain + '/' + poolAddress;
 
   const rankColors = ['from-yellow-500/20 to-orange-500/20', 'from-gray-400/20 to-gray-500/20', 'from-amber-700/20 to-amber-800/20'];
@@ -236,7 +235,7 @@ export default function RecommendationsPage() {
       ) : filteredRecs.length > 0 ? (
         <div className="space-y-6">
           {filteredRecs.map((rec, index) => (
-            <RecommendationCard key={rec.pool.externalId + '-' + index} rec={rec} index={index} />
+            <RecommendationCard key={(rec.pool.poolAddress || rec.pool.externalId) + '-' + index} rec={rec} index={index} />
           ))}
         </div>
       ) : (

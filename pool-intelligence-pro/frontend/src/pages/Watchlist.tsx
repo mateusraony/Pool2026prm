@@ -35,7 +35,7 @@ export default function WatchlistPage() {
 
   // Map watchlist items to pool data
   const watchlistWithDetails = watchlist?.map(item => {
-    const poolData = pools?.find(p => p.pool.externalId === item.poolId);
+    const poolData = pools?.find(p => (p.pool.poolAddress || p.pool.externalId) === item.poolId);
     return { ...item, poolData };
   }) || [];
 
@@ -76,7 +76,7 @@ export default function WatchlistPage() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.05 }}
                 className="card hover:border-primary-500/50 transition-all cursor-pointer"
-                onClick={() => pool && navigate('/simulation/' + pool.chain + '/' + (pool.poolAddress || pool.externalId || 'unknown'))}
+                onClick={() => pool && navigate('/simulation/' + pool.chain + '/' + (pool.poolAddress || 'unknown'))}
               >
                 <div className="p-4">
                   <div className="flex items-center justify-between">

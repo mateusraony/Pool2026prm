@@ -12,6 +12,7 @@ import {
   fetchNotes, createNote, deleteNote,
   calcRange, UnifiedPool, RangeResult, FeeEstimate, ILRiskResult,
 } from '../api/client';
+import { feeTierToBps, feeTierToPercent } from '../data/constants';
 
 // ============================================================
 // HELPERS
@@ -363,8 +364,8 @@ export default function PoolDetailPage() {
     optimism: 'optimism',
   };
   const uniChain = chainMap[poolChain.toLowerCase()] || 'mainnet';
-  // feeTier should be in basis points (500, 3000, 10000) - convert from percentage if needed
-  const feeTierBps = feeTier >= 1 ? Math.round(feeTier * 10000) : feeTier;
+  // feeTier normalized to bps (handles both fraction and bps input)
+  const feeTierBps = feeTierToBps(feeTier);
   const token0Addr = pool.token0?.address || 'ETH';
   const token1Addr = pool.token1?.address || 'ETH';
 
@@ -437,7 +438,7 @@ export default function PoolDetailPage() {
         <MetricCard label="Fees 24h" value={fmt(pool.fees24hUSD)} color="text-green-400" />
         <MetricCard label="Volume 1h" value={fmt(pool.volume1hUSD)} />
         <MetricCard label="Volatilidade Anual" value={fmtPct(volatilityAnn * 100, 0)} color={volatilityAnn > 0.5 ? 'text-red-400' : 'text-yellow-400'} />
-        <MetricCard label="Fee Tier" value={`${(feeTier * 100).toFixed(2)}%`} sub="por swap" />
+        <MetricCard label="Fee Tier" value={`${feeTierToPercent(feeTier).toFixed(2)}%`} sub="por swap" />
       </div>
 
       {/* Charts */}

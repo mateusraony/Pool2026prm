@@ -425,7 +425,7 @@ export default function TokenAnalyzerPage() {
                       key={pool.id}
                       pool={pool}
                       rank={i + 1}
-                      onClick={() => navigate(`/pools/${pool.chain}/${pool.poolAddress || pool.id || 'unknown'}`)}
+                      onClick={() => navigate(`/pools/${pool.chain}/${pool.poolAddress || 'unknown'}`)}
                     />
                   ))}
                 </div>

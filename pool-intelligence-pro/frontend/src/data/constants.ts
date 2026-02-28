@@ -60,3 +60,24 @@ export function capitalize(s: string): string {
   if (!s) return '';
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+
+/**
+ * Normalize feeTier to Uniswap basis points (e.g. 3000 for 0.3%).
+ * Backend returns fraction (0.003), but value might already be bps (3000).
+ * Rule: if feeTier > 1 → already bps; otherwise → fraction × 1_000_000.
+ */
+export function feeTierToBps(feeTier: number | undefined | null): number {
+  if (!feeTier) return 3000;
+  if (feeTier > 1) return Math.round(feeTier);
+  return Math.round(feeTier * 1_000_000);
+}
+
+/**
+ * Normalize feeTier to display percentage (e.g. 0.30 for "0.30%").
+ * Rule: if feeTier > 1 → bps, divide by 10_000; otherwise → fraction × 100.
+ */
+export function feeTierToPercent(feeTier: number | undefined | null): number {
+  if (!feeTier) return 0.3;
+  if (feeTier > 1) return feeTier / 10_000;
+  return feeTier * 100;
+}
