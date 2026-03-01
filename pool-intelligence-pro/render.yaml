@@ -1,12 +1,29 @@
+# ============================================
+# RENDER DEPLOYMENT — pool2026prm
+# ============================================
+# IMPORTANTE: Se o servico foi criado manualmente (nao via Blueprint),
+# voce precisa configurar no dashboard do Render:
+#
+# OPCAO A (recomendada): Root Directory = pool-intelligence-pro/backend
+#   Build Command: npm install && npm run build
+#   Start Command: npm start
+#
+# OPCAO B: Root Directory = pool-intelligence-pro
+#   Build Command: npm run install:all && npm run build
+#   Start Command: npm start
+#
+# Em AMBOS os casos, o backend auto-detecta e builda o frontend.
+# NAO precisa de VITE_API_URL — DELETE essa env var se existir!
+# ============================================
+
 services:
-  # Single service: Backend API + Frontend UI
   - type: web
     name: pool2026prm
     runtime: node
     region: oregon
     plan: free
-    rootDir: pool-intelligence-pro
-    buildCommand: npm run install:all && npm run build
+    rootDir: pool-intelligence-pro/backend
+    buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
