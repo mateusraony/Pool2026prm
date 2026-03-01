@@ -3,11 +3,12 @@
   "version": "2.0.0",
   "private": true,
   "scripts": {
-    "install:all": "cd frontend && npm ci && cd ../backend && npm ci --include=dev",
+    "install:all": "cd frontend && npm install && cd ../backend && npm install",
     "build:frontend": "cd frontend && npm run build",
     "build:backend": "cd backend && npx prisma generate && npm run build",
-    "copy:frontend": "cp -r frontend/dist backend/public",
-    "build": "npm run build:frontend && npm run copy:frontend && npm run build:backend",
-    "start": "cd backend && npm start"
+    "copy:frontend": "rm -rf backend/public && cp -r frontend/dist backend/public",
+    "db:push": "cd backend && npx prisma db push --skip-generate --accept-data-loss 2>/dev/null || echo 'DB push skipped (no DATABASE_URL or DB unavailable)'",
+    "build": "npm run build:frontend && npm run copy:frontend && npm run build:backend && npm run db:push",
+    "start": "cd backend && node dist/index.js"
   }
 }

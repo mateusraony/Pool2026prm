@@ -27,7 +27,15 @@ import {
   favoriteSchema, noteSchema, telegramTestRecsSchema, notificationSettingsSchema,
 } from './validation.js';
 
-const prisma = new PrismaClient();
+// Lazy PrismaClient: only connects when first DB query happens.
+// Prevents server crash if DATABASE_URL is missing or DB is unreachable.
+let _prisma: PrismaClient | null = null;
+function getPrisma(): PrismaClient {
+  if (!_prisma) {
+    _prisma = new PrismaClient();
+  }
+  return _prisma;
+}
 
 const router = Router();
 
@@ -655,7 +663,7 @@ router.get('/tokens', async (req, res) => {
     const tokens = poolIntelligenceService.getTokenList();
     // Also pull from DB if available
     try {
-      const dbTokens = await prisma.token.findMany({ select: { symbol: true }, distinct: ['symbol'], take: 500 });
+      const dbTokens = await getPrisma().token.findMany({ select: { symbol: true }, distinct: ['symbol'], take: 500 });
       const extra = dbTokens.map((t: { symbol: string }) => t.symbol.toUpperCase());
       const merged = Array.from(new Set([...tokens, ...extra])).sort();
       return res.json(merged);
@@ -775,7 +783,7 @@ router.post('/range-calc', validate(rangeCalcSchema), async (req, res) => {
 
 router.get('/favorites', async (req, res) => {
   try {
-    const favorites = await prisma.favorite.findMany({ orderBy: { addedAt: 'desc' } });
+    const favorites = await getPrisma().favorite.findMany({ orderBy: { addedAt: 'desc' } });
     res.json({ success: true, data: favorites });
   } catch (error) {
     // DB might not be configured or table doesn't exist — return empty array gracefully
@@ -787,7 +795,7 @@ router.get('/favorites', async (req, res) => {
 router.post('/favorites', validate(favoriteSchema), async (req, res) => {
   try {
     const { poolId, chain, poolAddress, token0Symbol, token1Symbol, protocol } = req.body;
-    const fav = await prisma.favorite.upsert({
+    const fav = await getPrisma().favorite.upsert({
       where: { poolId },
       create: { poolId, chain, poolAddress, token0Symbol, token1Symbol, protocol },
       update: { addedAt: new Date() },
@@ -802,7 +810,7 @@ router.post('/favorites', validate(favoriteSchema), async (req, res) => {
 router.delete('/favorites/:poolId', async (req, res) => {
   try {
     const { poolId } = req.params;
-    await prisma.favorite.deleteMany({ where: { poolId } });
+    await getPrisma().favorite.deleteMany({ where: { poolId } });
     res.json({ success: true });
   } catch (error) {
     logService.error('SYSTEM', 'DELETE /favorites failed', { error });
@@ -818,7 +826,7 @@ router.get('/notes', async (req, res) => {
   try {
     const { poolId } = req.query;
     const where = poolId ? { poolId: poolId as string } : {};
-    const notes = await prisma.note.findMany({ where, orderBy: { createdAt: 'desc' } });
+    const notes = await getPrisma().note.findMany({ where, orderBy: { createdAt: 'desc' } });
     res.json({ success: true, data: notes });
   } catch (error) {
     logService.error('SYSTEM', 'GET /notes failed', { error });
@@ -829,7 +837,7 @@ router.get('/notes', async (req, res) => {
 router.post('/notes', validate(noteSchema), async (req, res) => {
   try {
     const { poolId, text, tags } = req.body;
-    const note = await prisma.note.create({ data: { poolId, text, tags } });
+    const note = await getPrisma().note.create({ data: { poolId, text, tags } });
     res.json({ success: true, data: note });
   } catch (error) {
     logService.error('SYSTEM', 'POST /notes failed', { error });
@@ -839,7 +847,7 @@ router.post('/notes', validate(noteSchema), async (req, res) => {
 
 router.delete('/notes/:id', async (req, res) => {
   try {
-    await prisma.note.delete({ where: { id: req.params.id } });
+    await getPrisma().note.delete({ where: { id: req.params.id } });
     res.json({ success: true });
   } catch (error) {
     logService.error('SYSTEM', 'DELETE /notes/:id failed', { error });
