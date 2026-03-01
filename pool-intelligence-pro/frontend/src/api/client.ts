@@ -1,12 +1,20 @@
 import axios, { AxiosError } from 'axios';
 
-// Resolve API URL:
-// - If VITE_API_URL points to an external service: use it
-// - Otherwise: empty string (same-origin — backend serves frontend)
+// Resolve API base URL (the part BEFORE /api):
+// In production (Render single-service): empty string → relative /api paths
+// In development: uses Vite proxy, so also empty string
+// Only use VITE_API_URL if explicitly set to a DIFFERENT external service
 function resolveApiUrl(): string {
   const envUrl = import.meta.env.VITE_API_URL;
-  if (envUrl && envUrl !== '/' && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
-    return envUrl;
+  if (
+    envUrl &&
+    envUrl !== '/' &&
+    !envUrl.includes('localhost') &&
+    !envUrl.includes('127.0.0.1') &&
+    !envUrl.includes('pool-intelligence-api') // old service name — ignore
+  ) {
+    // Strip trailing slashes to prevent double-slash (e.g. "https://x.com/" + "/api" → "https://x.com//api")
+    return envUrl.replace(/\/+$/, '');
   }
   // Same-origin: frontend is served by the backend Express server
   // Relative paths (/api/...) go to the same host automatically
@@ -16,7 +24,7 @@ function resolveApiUrl(): string {
 const API_URL = resolveApiUrl();
 
 // Export for diagnostics (shown in error messages)
-export const API_BASE_URL = API_URL;
+export const API_BASE_URL = API_URL || '(same-origin)';
 
 const api = axios.create({
   baseURL: API_URL + '/api',
