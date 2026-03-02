@@ -32,32 +32,6 @@ app.get('/health', (_req, res) => {
 
 // Debug endpoint — shows exactly what the server sees
 app.get('/debug', (_req, res) => {
-  const frontendDbgPath = path.resolve(process.cwd(), 'public');
-  const indexExists = fs.existsSync(path.join(frontendDbgPath, 'index.html'));
-  let files: string[] = [];
-  try { files = fs.readdirSync(frontendDbgPath); } catch { files = ['(dir not found)']; }
-  let assetsFiles: string[] = [];
-  try { assetsFiles = fs.readdirSync(path.join(frontendDbgPath, 'assets')); } catch { assetsFiles = ['(dir not found)']; }
-  res.json({
-    status: 'running',
-    cwd: process.cwd(),
-    nodeEnv: process.env.NODE_ENV,
-    port: process.env.PORT,
-    frontendPath: frontendDbgPath,
-    indexHtmlExists: indexExists,
-    publicFiles: files,
-    assetsFiles: assetsFiles,
-    hasDatabaseUrl: !!process.env.DATABASE_URL,
-    hasViteApiUrl: !!process.env.VITE_API_URL,
-    viteApiUrl: process.env.VITE_API_URL || '(not set)',
-    uptime: process.uptime(),
-    memoryMB: Math.round(process.memoryUsage().rss / 1024 / 1024),
-    timestamp: new Date().toISOString(),
-  });
-});
-
-// Debug endpoint — shows exactly what's happening (visit /debug in browser)
-app.get('/debug', (_req, res) => {
   const frontendDir = path.resolve(process.cwd(), 'public');
   let files: string[] = [];
   let indexExists = false;
@@ -81,7 +55,6 @@ app.get('/debug', (_req, res) => {
     frontendFiles: files,
     assetsFiles: assetsFiles,
     hasDatabaseUrl: !!process.env.DATABASE_URL,
-    routesLoaded: true, // if we get here, routes loaded
     uptime: Math.round(process.uptime()) + 's',
     timestamp: new Date().toISOString(),
   });
