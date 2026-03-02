@@ -76,6 +76,8 @@ export default function App() {
           <Route path="watchlist" element={<Navigate to="/favorites" replace />} />
           <Route path="settings" element={<Navigate to="/scout-settings" replace />} />
           <Route path="recommendations" element={<Navigate to="/recommended" replace />} />
+          {/* 404 fallback */}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>
       </Routes>
       <Toaster />

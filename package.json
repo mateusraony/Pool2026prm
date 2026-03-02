@@ -1,0 +1,10 @@
+{
+  "name": "pool2026prm",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "install:all": "cd pool-intelligence-pro/frontend && NODE_ENV=development npm install --include=dev && cd ../backend && npm install",
+    "build": "npm run install:all && cd pool-intelligence-pro/frontend && npm run build && cd ../backend && rm -rf public && cp -r ../frontend/dist public && npx prisma generate && npx tsc",
+    "start": "cd pool-intelligence-pro/backend && node dist/index.js"
+  }
+}

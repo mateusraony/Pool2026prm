@@ -30,6 +30,63 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Debug endpoint — shows exactly what the server sees
+app.get('/debug', (_req, res) => {
+  const frontendDbgPath = path.resolve(process.cwd(), 'public');
+  const indexExists = fs.existsSync(path.join(frontendDbgPath, 'index.html'));
+  let files: string[] = [];
+  try { files = fs.readdirSync(frontendDbgPath); } catch { files = ['(dir not found)']; }
+  let assetsFiles: string[] = [];
+  try { assetsFiles = fs.readdirSync(path.join(frontendDbgPath, 'assets')); } catch { assetsFiles = ['(dir not found)']; }
+  res.json({
+    status: 'running',
+    cwd: process.cwd(),
+    nodeEnv: process.env.NODE_ENV,
+    port: process.env.PORT,
+    frontendPath: frontendDbgPath,
+    indexHtmlExists: indexExists,
+    publicFiles: files,
+    assetsFiles: assetsFiles,
+    hasDatabaseUrl: !!process.env.DATABASE_URL,
+    hasViteApiUrl: !!process.env.VITE_API_URL,
+    viteApiUrl: process.env.VITE_API_URL || '(not set)',
+    uptime: process.uptime(),
+    memoryMB: Math.round(process.memoryUsage().rss / 1024 / 1024),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Debug endpoint — shows exactly what's happening (visit /debug in browser)
+app.get('/debug', (_req, res) => {
+  const frontendDir = path.resolve(process.cwd(), 'public');
+  let files: string[] = [];
+  let indexExists = false;
+  try {
+    files = fs.readdirSync(frontendDir);
+    indexExists = fs.existsSync(path.join(frontendDir, 'index.html'));
+  } catch { /* dir doesn't exist */ }
+
+  let assetsFiles: string[] = [];
+  try {
+    assetsFiles = fs.readdirSync(path.join(frontendDir, 'assets'));
+  } catch { /* no assets dir */ }
+
+  res.json({
+    status: 'running',
+    cwd: process.cwd(),
+    nodeEnv: process.env.NODE_ENV,
+    port: process.env.PORT,
+    frontendPath: frontendDir,
+    frontendExists: indexExists,
+    frontendFiles: files,
+    assetsFiles: assetsFiles,
+    hasDatabaseUrl: !!process.env.DATABASE_URL,
+    routesLoaded: true, // if we get here, routes loaded
+    uptime: Math.round(process.uptime()) + 's',
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Request logging (skip health checks and static files)
 app.use((req, res, next) => {
   const start = Date.now();
