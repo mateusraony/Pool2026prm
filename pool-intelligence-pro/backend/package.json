@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build:frontend": "if [ -d ../frontend ] && [ ! -f public/index.html ]; then echo '[BUILD] Frontend not found in public/, building...' && cd ../frontend && npm install && npm run build && cd ../backend && rm -rf public && cp -r ../frontend/dist public && echo '[BUILD] Frontend copied to backend/public'; else echo '[BUILD] Frontend already in public/ or no ../frontend dir'; fi",
+    "build:frontend": "if [ -d ../frontend ] && [ ! -f public/index.html ]; then echo '[BUILD] Building frontend...' && cd ../frontend && NODE_ENV=development npm install --include=dev && npm run build && cd ../backend && rm -rf public && cp -r ../frontend/dist public && echo '[BUILD] Frontend built OK -> backend/public'; else echo '[BUILD] Skipped (public/index.html exists or no ../frontend)'; fi",
     "build": "npm run build:frontend && npx prisma generate && tsc",
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
