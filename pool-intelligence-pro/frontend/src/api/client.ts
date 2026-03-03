@@ -479,12 +479,16 @@ export async function fetchSettings(): Promise<{
   return data.data;
 }
 
-export async function updateTelegramConfig(chatId: string): Promise<{
+export async function updateTelegramConfig(params: {
+  chatId?: string;
+  botToken?: string;
+}): Promise<{
   enabled: boolean;
   chatId: string | null;
   hasChatId: boolean;
+  hasBot: boolean;
 }> {
-  const { data } = await api.put('/settings/telegram', { chatId });
+  const { data } = await api.put('/settings/telegram', params);
   return data.data;
 }
 
@@ -493,7 +497,7 @@ export async function updateNotificationSettings(settings: Partial<NotificationS
   return data.data;
 }
 
-export async function testTelegramConnection(): Promise<{ success: boolean }> {
+export async function testTelegramConnection(): Promise<{ success: boolean; error?: string }> {
   const { data } = await api.post('/settings/telegram/test');
   return data;
 }

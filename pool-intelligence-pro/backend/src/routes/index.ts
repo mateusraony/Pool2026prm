@@ -368,20 +368,36 @@ router.get('/settings', async (req, res) => {
         enabled: telegramBot.isEnabled(),
         chatId: chatId ? '***' + chatId.slice(-4) : null,
         hasChatId: !!chatId,
-        hasBot: !!config.telegram.botToken,
+        hasBot: telegramBot.hasBot(),
       },
     },
     timestamp: new Date(),
   });
 });
 
-// Update Telegram Chat ID at runtime
+// Update Telegram Bot Token and/or Chat ID at runtime
 router.put('/settings/telegram', validate(telegramConfigSchema), async (req, res) => {
   try {
-    const { chatId } = req.body;
+    const { chatId, botToken } = req.body;
+    let botName: string | undefined;
+
+    // Update bot token (validates via getMe, creates new TelegramBot instance)
+    if (botToken !== undefined) {
+      const result = await telegramBot.setBotToken(botToken);
+      if (!result.ok && botToken) {
+        return res.status(400).json({
+          success: false,
+          error: `Token invalido: ${result.error}`,
+        });
+      }
+      botName = result.botName;
+    }
+
+    // Update chat ID
     if (chatId !== undefined) {
       telegramBot.setChatId(chatId);
     }
+
     const currentChatId = telegramBot.getChatId();
     res.json({
       success: true,
@@ -389,8 +405,10 @@ router.put('/settings/telegram', validate(telegramConfigSchema), async (req, res
         enabled: telegramBot.isEnabled(),
         chatId: currentChatId ? '***' + currentChatId.slice(-4) : null,
         hasChatId: !!currentChatId,
+        hasBot: telegramBot.hasBot(),
+        botName,
       },
-      message: chatId ? 'Chat ID atualizado' : 'Chat ID removido',
+      message: botName ? `Bot @${botName} conectado!` : 'Telegram configurado',
       timestamp: new Date(),
     });
   } catch (error) {
@@ -425,11 +443,11 @@ router.post('/settings/telegram/test', async (req, res) => {
       `Pool Intelligence Pro está funcionando!\n` +
       `URL do App: ${appUrl}\n\n` +
       `🔗 <a href="${posLink}">Abrir Posições</a>`;
-    const sent = await telegramBot.sendMessage(msg);
-    if (sent) {
+    const result = await telegramBot.sendMessage(msg);
+    if (result.sent) {
       res.json({ success: true, message: 'Test message sent' });
     } else {
-      res.status(400).json({ success: false, error: 'Telegram not configured or failed to send' });
+      res.status(400).json({ success: false, error: result.error || 'Falha ao enviar' });
     }
   } catch (error) {
     logService.error('SYSTEM', 'POST /settings/telegram/test failed', { error });
@@ -495,8 +513,8 @@ router.post('/settings/telegram/test-recommendations', validate(telegramTestRecs
     msg += `💡 <i>Clique em "Simular" para ver detalhes e adicionar ao monitoramento</i>\n`;
     msg += `<a href="${notificationSettingsService.getAppUrl()}">Abrir Pool Intelligence Pro →</a>`;
 
-    const sent = await telegramBot.sendMessage(msg);
-    if (sent) {
+    const result = await telegramBot.sendMessage(msg);
+    if (result.sent) {
       res.json({
         success: true,
         message: `Enviado TOP ${top.length} recomendações para o Telegram`,
@@ -504,7 +522,7 @@ router.post('/settings/telegram/test-recommendations', validate(telegramTestRecs
         tokenFilters,
       });
     } else {
-      res.status(400).json({ success: false, error: 'Telegram não configurado ou falhou ao enviar' });
+      res.status(400).json({ success: false, error: result.error || 'Falha ao enviar' });
     }
   } catch (error) {
     logService.error('SYSTEM', 'POST /settings/telegram/test-recommendations failed', { error });
