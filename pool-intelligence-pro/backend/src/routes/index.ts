@@ -368,20 +368,28 @@ router.get('/settings', async (req, res) => {
         enabled: telegramBot.isEnabled(),
         chatId: chatId ? '***' + chatId.slice(-4) : null,
         hasChatId: !!chatId,
-        hasBot: !!config.telegram.botToken,
+        hasBot: telegramBot.hasBot(),
       },
     },
     timestamp: new Date(),
   });
 });
 
-// Update Telegram Chat ID at runtime
+// Update Telegram Bot Token and/or Chat ID at runtime
 router.put('/settings/telegram', validate(telegramConfigSchema), async (req, res) => {
   try {
-    const { chatId } = req.body;
+    const { chatId, botToken } = req.body;
+
+    // Update bot token (creates new TelegramBot instance)
+    if (botToken !== undefined) {
+      telegramBot.setBotToken(botToken);
+    }
+
+    // Update chat ID
     if (chatId !== undefined) {
       telegramBot.setChatId(chatId);
     }
+
     const currentChatId = telegramBot.getChatId();
     res.json({
       success: true,
@@ -389,8 +397,9 @@ router.put('/settings/telegram', validate(telegramConfigSchema), async (req, res
         enabled: telegramBot.isEnabled(),
         chatId: currentChatId ? '***' + currentChatId.slice(-4) : null,
         hasChatId: !!currentChatId,
+        hasBot: telegramBot.hasBot(),
       },
-      message: chatId ? 'Chat ID atualizado' : 'Chat ID removido',
+      message: 'Telegram configurado',
       timestamp: new Date(),
     });
   } catch (error) {

@@ -6,22 +6,36 @@ import { AlertEvent, Recommendation } from '../types/index.js';
 class TelegramBotService {
   private bot: TelegramBot | null = null;
   private chatId: string;
+  private botToken: string;
 
   constructor() {
     this.chatId = config.telegram.chatId;
+    this.botToken = config.telegram.botToken;
 
-    if (config.telegram.enabled && config.telegram.botToken) {
-      try {
-        this.bot = new TelegramBot(config.telegram.botToken, { polling: false });
-        logService.info('SYSTEM', 'Telegram bot initialized');
-      } catch (error) {
-        logService.error('SYSTEM', 'Failed to initialize Telegram bot', { error });
-      }
+    if (this.botToken) {
+      this.initBot(this.botToken);
+    }
+  }
+
+  private initBot(token: string): boolean {
+    try {
+      this.bot = new TelegramBot(token, { polling: false });
+      this.botToken = token;
+      logService.info('SYSTEM', 'Telegram bot initialized');
+      return true;
+    } catch (error) {
+      logService.error('SYSTEM', 'Failed to initialize Telegram bot', { error });
+      this.bot = null;
+      return false;
     }
   }
 
   isEnabled(): boolean {
     return this.bot !== null && !!this.chatId;
+  }
+
+  hasBot(): boolean {
+    return this.bot !== null;
   }
 
   getChatId(): string {
@@ -31,6 +45,16 @@ class TelegramBotService {
   setChatId(newChatId: string): void {
     this.chatId = newChatId;
     logService.info('SYSTEM', 'Telegram Chat ID updated at runtime', { chatId: newChatId ? '***' + newChatId.slice(-4) : '(empty)' });
+  }
+
+  setBotToken(token: string): boolean {
+    if (!token) {
+      this.bot = null;
+      this.botToken = '';
+      logService.info('SYSTEM', 'Telegram bot token removed');
+      return false;
+    }
+    return this.initBot(token);
   }
 
   async sendMessage(message: string): Promise<boolean> {
