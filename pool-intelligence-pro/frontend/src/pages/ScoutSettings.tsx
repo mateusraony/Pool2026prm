@@ -72,9 +72,10 @@ export default function ScoutSettings() {
   const [recTestStatus, setRecTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [recTestMessage, setRecTestMessage] = useState('');
 
-  // Chat ID management
+  // Telegram config management
+  const [botTokenInput, setBotTokenInput] = useState('');
   const [chatIdInput, setChatIdInput] = useState('');
-  const [chatIdSaving, setChatIdSaving] = useState(false);
+  const [telegramSaving, setTelegramSaving] = useState(false);
 
   // Notification settings
   const [notifSettings, setNotifSettings] = useState<NotificationSettings | null>(null);
@@ -157,35 +158,42 @@ export default function ScoutSettings() {
     }
   }
 
-  // Chat ID handlers
-  async function handleSaveChatId() {
-    const trimmed = chatIdInput.trim();
-    if (!trimmed) return;
-    setChatIdSaving(true);
+  // Telegram config handlers
+  async function handleSaveTelegram() {
+    const token = botTokenInput.trim();
+    const chatId = chatIdInput.trim();
+    if (!token && !chatId) return;
+    setTelegramSaving(true);
     try {
-      const result = await updateTelegramConfig(trimmed);
+      const params: { botToken?: string; chatId?: string } = {};
+      if (token) params.botToken = token;
+      if (chatId) params.chatId = chatId;
+      const result = await updateTelegramConfig(params);
       setTelegramEnabled(result.enabled);
       setTelegramChatId(result.chatId);
-      setChatIdInput('');
-      toast.success('Chat ID atualizado com sucesso!');
+      setTelegramHasBot(result.hasBot);
+      if (token) setBotTokenInput('');
+      if (chatId) setChatIdInput('');
+      toast.success('Telegram configurado com sucesso!');
     } catch {
-      toast.error('Falha ao atualizar Chat ID');
+      toast.error('Falha ao configurar Telegram');
     } finally {
-      setChatIdSaving(false);
+      setTelegramSaving(false);
     }
   }
 
-  async function handleRemoveChatId() {
-    setChatIdSaving(true);
+  async function handleRemoveTelegram() {
+    setTelegramSaving(true);
     try {
-      const result = await updateTelegramConfig('');
+      const result = await updateTelegramConfig({ botToken: '', chatId: '' });
       setTelegramEnabled(result.enabled);
       setTelegramChatId(result.chatId);
-      toast.success('Chat ID removido');
+      setTelegramHasBot(result.hasBot);
+      toast.success('Telegram desconectado');
     } catch {
-      toast.error('Falha ao remover Chat ID');
+      toast.error('Falha ao desconectar Telegram');
     } finally {
-      setChatIdSaving(false);
+      setTelegramSaving(false);
     }
   }
 
@@ -528,11 +536,11 @@ export default function ScoutSettings() {
               <p className="text-sm text-muted-foreground">
                 {telegramLoading
                   ? 'Verificando...'
-                  : telegramChatId
-                    ? `Chat ID: ${telegramChatId}`
-                    : telegramHasBot
-                      ? 'Bot configurado. Adicione o Chat ID abaixo.'
-                      : 'Configure TELEGRAM_BOT_TOKEN no servidor (variavel de ambiente)'
+                  : telegramEnabled
+                    ? `Conectado - Chat ID: ${telegramChatId}`
+                    : !telegramHasBot
+                      ? 'Adicione o Bot Token e Chat ID abaixo para conectar.'
+                      : 'Bot conectado. Adicione o Chat ID abaixo.'
                 }
               </p>
             </div>
@@ -543,36 +551,56 @@ export default function ScoutSettings() {
             </Badge>
           </div>
 
-          {/* Chat ID Management */}
-          <div className="mb-4 p-4 rounded-lg bg-secondary/30 border border-border">
-            <Label className="text-sm font-medium mb-2 block">Chat ID do Telegram</Label>
-            <p className="text-xs text-muted-foreground mb-3">
-              Seu Chat ID do Telegram. Para descobrir, envie /start para @userinfobot no Telegram.
-            </p>
-            <div className="flex gap-2">
+          {/* Bot Token + Chat ID Management */}
+          <div className="mb-4 p-4 rounded-lg bg-secondary/30 border border-border space-y-4">
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Bot Token</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Crie um bot com @BotFather no Telegram e cole o token aqui.
+              </p>
+              <Input
+                type="password"
+                value={botTokenInput}
+                onChange={e => setBotTokenInput(e.target.value)}
+                placeholder={telegramHasBot ? 'Bot configurado (cole novo token para alterar)' : 'Cole o token do BotFather (ex: 123456:ABC-DEF...)'}
+                className="font-mono text-sm"
+              />
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Chat ID</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Envie /start para @userinfobot no Telegram para descobrir seu ID.
+              </p>
               <Input
                 type="text"
                 value={chatIdInput}
                 onChange={e => setChatIdInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSaveChatId()}
+                onKeyDown={e => e.key === 'Enter' && handleSaveTelegram()}
                 placeholder={telegramChatId ? `Atual: ${telegramChatId}` : 'Digite seu Chat ID (ex: 123456789)'}
                 className="font-mono text-sm"
               />
+            </div>
+
+            <div className="flex gap-2">
               <Button
                 size="sm"
-                onClick={handleSaveChatId}
-                disabled={!chatIdInput.trim() || chatIdSaving}
+                onClick={handleSaveTelegram}
+                disabled={(!botTokenInput.trim() && !chatIdInput.trim()) || telegramSaving}
+                className="flex-1"
               >
-                {chatIdSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {telegramSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                Salvar e Conectar
               </Button>
-              {telegramChatId && (
+              {(telegramHasBot || telegramChatId) && (
                 <Button
                   size="sm"
                   variant="destructive"
-                  onClick={handleRemoveChatId}
-                  disabled={chatIdSaving}
+                  onClick={handleRemoveTelegram}
+                  disabled={telegramSaving}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Desconectar
                 </Button>
               )}
             </div>
@@ -652,11 +680,15 @@ export default function ScoutSettings() {
 
           {/* Setup instructions when bot not configured */}
           {!telegramHasBot && !telegramLoading && (
-            <div className="bg-warning/10 border border-warning/30 rounded-lg p-3 text-sm text-warning">
-              Para ativar o Telegram, adicione{' '}
-              <code className="bg-secondary px-1.5 py-0.5 rounded text-xs font-mono">TELEGRAM_BOT_TOKEN</code>{' '}
-              nas variaveis de ambiente do servidor (Render).
-              Depois, configure seu Chat ID acima.
+            <div className="bg-primary/10 border border-primary/30 rounded-lg p-3 text-sm text-primary">
+              <p className="font-medium mb-1">Como configurar:</p>
+              <ol className="list-decimal list-inside space-y-1 text-xs text-muted-foreground">
+                <li>Abra o Telegram e busque por <strong>@BotFather</strong></li>
+                <li>Envie <code className="bg-secondary px-1 py-0.5 rounded">/newbot</code> e siga as instrucoes</li>
+                <li>Copie o <strong>token</strong> gerado e cole acima</li>
+                <li>Busque por <strong>@userinfobot</strong> e envie <code className="bg-secondary px-1 py-0.5 rounded">/start</code></li>
+                <li>Copie seu <strong>Chat ID</strong> e cole acima</li>
+              </ol>
             </div>
           )}
         </div>

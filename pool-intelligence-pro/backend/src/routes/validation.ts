@@ -65,6 +65,7 @@ export const telegramTestRecsSchema = z.object({
 
 export const telegramConfigSchema = z.object({
   chatId: z.string().optional(),
+  botToken: z.string().optional(),
 });
 
 export const notificationSettingsSchema = z.object({
