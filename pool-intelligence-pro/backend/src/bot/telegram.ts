@@ -87,19 +87,19 @@ class TelegramBotService {
 
   // Send alert notification
   async sendAlert(event: AlertEvent): Promise<{ sent: boolean; error?: string }> {
-    const poolName = event.pool 
-      ? event.pool.token0.symbol + '/' + event.pool.token1.symbol 
+    const poolName = event.pool
+      ? event.pool.token0.symbol + '/' + event.pool.token1.symbol
       : 'N/A';
-    
+
     const emoji = this.getAlertEmoji(event.type);
-    
-    const message = 
+
+    const message =
       emoji + ' <b>ALERTA: ' + event.type.replace(/_/g, ' ') + '</b>\n\n' +
       '<b>Pool:</b> ' + poolName + '\n' +
       '<b>Mensagem:</b> ' + event.message + '\n' +
       '<b>Horario:</b> ' + event.timestamp.toISOString() + '\n\n' +
       '<i>Pool Intelligence Pro</i>';
-    
+
     return this.sendMessage(message);
   }
 
@@ -107,8 +107,8 @@ class TelegramBotService {
   async sendRecommendation(rec: Recommendation): Promise<{ sent: boolean; error?: string }> {
     const poolName = rec.pool.token0.symbol + '/' + rec.pool.token1.symbol;
     const modeEmoji = rec.mode === 'DEFENSIVE' ? '🛡' : rec.mode === 'NORMAL' ? '⚖' : '🎯';
-    
-    const message = 
+
+    const message =
       '🏆 <b>TOP ' + rec.rank + ' RECOMENDACAO</b> ' + modeEmoji + '\n\n' +
       '<b>Pool:</b> ' + poolName + ' (' + rec.pool.protocol + ')\n' +
       '<b>Chain:</b> ' + rec.pool.chain + '\n' +
@@ -124,7 +124,7 @@ class TelegramBotService {
       '<b>📝 Analise:</b>\n' +
       rec.commentary.substring(0, 300) + '...\n\n' +
       '<i>Valido ate: ' + rec.validUntil.toISOString() + '</i>';
-    
+
     return this.sendMessage(message);
   }
 
@@ -135,34 +135,34 @@ class TelegramBotService {
     alertsToday: number;
     topRecommendation?: Recommendation;
   }): Promise<{ sent: boolean; error?: string }> {
-    let message = 
+    let message =
       '📊 <b>RESUMO DIARIO</b>\n\n' +
       '<b>Pools analisadas:</b> ' + data.totalPools + '\n' +
       '<b>Na watchlist:</b> ' + data.watchlistCount + '\n' +
       '<b>Alertas hoje:</b> ' + data.alertsToday + '\n\n';
-    
+
     if (data.topRecommendation) {
-      const poolName = data.topRecommendation.pool.token0.symbol + '/' + 
+      const poolName = data.topRecommendation.pool.token0.symbol + '/' +
                        data.topRecommendation.pool.token1.symbol;
-      message += 
+      message +=
         '<b>🏆 Melhor oportunidade:</b>\n' +
         poolName + ' (Score: ' + data.topRecommendation.score.total.toFixed(1) + ')\n\n';
     }
-    
+
     message += '<i>Pool Intelligence Pro</i>';
-    
+
     return this.sendMessage(message);
   }
 
   // Send system health notification
   async sendHealthAlert(status: string, details: string): Promise<{ sent: boolean; error?: string }> {
     const emoji = status === 'HEALTHY' ? '✅' : status === 'DEGRADED' ? '⚠' : '🔴';
-    
-    const message = 
+
+    const message =
       emoji + ' <b>STATUS DO SISTEMA: ' + status + '</b>\n\n' +
       details + '\n\n' +
       '<i>' + new Date().toISOString() + '</i>';
-    
+
     return this.sendMessage(message);
   }
 
