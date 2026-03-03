@@ -9,7 +9,7 @@ class TelegramBotService {
 
   constructor() {
     this.chatId = config.telegram.chatId;
-    
+
     if (config.telegram.enabled && config.telegram.botToken) {
       try {
         this.bot = new TelegramBot(config.telegram.botToken, { polling: false });
@@ -22,6 +22,15 @@ class TelegramBotService {
 
   isEnabled(): boolean {
     return this.bot !== null && !!this.chatId;
+  }
+
+  getChatId(): string {
+    return this.chatId;
+  }
+
+  setChatId(newChatId: string): void {
+    this.chatId = newChatId;
+    logService.info('SYSTEM', 'Telegram Chat ID updated at runtime', { chatId: newChatId ? '***' + newChatId.slice(-4) : '(empty)' });
   }
 
   async sendMessage(message: string): Promise<boolean> {

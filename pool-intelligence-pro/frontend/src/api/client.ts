@@ -473,9 +473,18 @@ export interface NotificationSettings {
 export async function fetchSettings(): Promise<{
   system: { mode: string; capital: number; chains: string[] };
   notifications: NotificationSettings;
-  telegram: { enabled: boolean; chatId: string | null };
+  telegram: { enabled: boolean; chatId: string | null; hasChatId?: boolean; hasBot?: boolean };
 }> {
   const { data } = await api.get('/settings');
+  return data.data;
+}
+
+export async function updateTelegramConfig(chatId: string): Promise<{
+  enabled: boolean;
+  chatId: string | null;
+  hasChatId: boolean;
+}> {
+  const { data } = await api.put('/settings/telegram', { chatId });
   return data.data;
 }
 

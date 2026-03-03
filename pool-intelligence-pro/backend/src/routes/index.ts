@@ -25,6 +25,7 @@ import {
   validate,
   watchlistSchema, alertSchema, rangePositionSchema, rangeCalcSchema,
   favoriteSchema, noteSchema, telegramTestRecsSchema, notificationSettingsSchema,
+  telegramConfigSchema,
 } from './validation.js';
 
 // Lazy PrismaClient: only connects when first DB query happens.
@@ -351,6 +352,7 @@ router.get('/logs', async (req, res) => {
 
 // Get settings (system + notification)
 router.get('/settings', async (req, res) => {
+  const chatId = telegramBot.getChatId();
   res.json({
     success: true,
     data: {
@@ -364,11 +366,37 @@ router.get('/settings', async (req, res) => {
       notifications: notificationSettingsService.getSettings(),
       telegram: {
         enabled: telegramBot.isEnabled(),
-        chatId: config.telegram.chatId ? '***' + config.telegram.chatId.slice(-4) : null,
+        chatId: chatId ? '***' + chatId.slice(-4) : null,
+        hasChatId: !!chatId,
+        hasBot: !!config.telegram.botToken,
       },
     },
     timestamp: new Date(),
   });
+});
+
+// Update Telegram Chat ID at runtime
+router.put('/settings/telegram', validate(telegramConfigSchema), async (req, res) => {
+  try {
+    const { chatId } = req.body;
+    if (chatId !== undefined) {
+      telegramBot.setChatId(chatId);
+    }
+    const currentChatId = telegramBot.getChatId();
+    res.json({
+      success: true,
+      data: {
+        enabled: telegramBot.isEnabled(),
+        chatId: currentChatId ? '***' + currentChatId.slice(-4) : null,
+        hasChatId: !!currentChatId,
+      },
+      message: chatId ? 'Chat ID atualizado' : 'Chat ID removido',
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    logService.error('SYSTEM', 'PUT /settings/telegram failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
 });
 
 // Update notification settings
