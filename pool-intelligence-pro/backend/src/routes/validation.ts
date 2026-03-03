@@ -63,6 +63,10 @@ export const telegramTestRecsSchema = z.object({
   useTokenFilter: z.boolean().optional().default(true),
 });
 
+export const telegramConfigSchema = z.object({
+  chatId: z.string().optional(),
+});
+
 export const notificationSettingsSchema = z.object({
   appUrl: z.string().optional(),
   notifications: z.object({
