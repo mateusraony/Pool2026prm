@@ -7,6 +7,7 @@ import { logService } from '../services/log.service.js';
 import { alertService } from '../services/alert.service.js';
 import { rangeMonitorService } from '../services/range.service.js';
 import { notificationSettingsService } from '../services/notification-settings.service.js';
+import { persistService } from '../services/persist.service.js';
 import { telegramBot } from '../bot/telegram.js';
 import {
   getLatestRadarResults,
@@ -350,7 +351,7 @@ router.get('/logs', async (req, res) => {
   });
 });
 
-// Get settings (system + notification)
+// Get settings (system + notification + risk config)
 router.get('/settings', async (req, res) => {
   const chatId = telegramBot.getChatId();
   res.json({
@@ -370,6 +371,7 @@ router.get('/settings', async (req, res) => {
         hasChatId: !!chatId,
         hasBot: telegramBot.hasBot(),
       },
+      riskConfig: persistService.getRiskConfig() || null,
     },
     timestamp: new Date(),
   });
@@ -379,10 +381,18 @@ router.get('/settings', async (req, res) => {
 router.put('/settings/telegram', validate(telegramConfigSchema), async (req, res) => {
   try {
     const { chatId, botToken } = req.body;
+    let botName: string | undefined;
 
-    // Update bot token (creates new TelegramBot instance)
+    // Update bot token (validates via getMe, creates new TelegramBot instance)
     if (botToken !== undefined) {
-      telegramBot.setBotToken(botToken);
+      const result = await telegramBot.setBotToken(botToken);
+      if (!result.ok && botToken) {
+        return res.status(400).json({
+          success: false,
+          error: `Token invalido: ${result.error}`,
+        });
+      }
+      botName = result.botName;
     }
 
     // Update chat ID
@@ -398,12 +408,29 @@ router.put('/settings/telegram', validate(telegramConfigSchema), async (req, res
         chatId: currentChatId ? '***' + currentChatId.slice(-4) : null,
         hasChatId: !!currentChatId,
         hasBot: telegramBot.hasBot(),
+        botName,
       },
-      message: 'Telegram configurado',
+      message: botName ? `Bot @${botName} conectado!` : 'Telegram configurado',
       timestamp: new Date(),
     });
   } catch (error) {
     logService.error('SYSTEM', 'PUT /settings/telegram failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// Save risk config (persisted to disk)
+router.put('/settings/risk-config', async (req, res) => {
+  try {
+    persistService.setRiskConfig(req.body);
+    res.json({
+      success: true,
+      data: persistService.getRiskConfig(),
+      message: 'Risk config salvo',
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    logService.error('SYSTEM', 'PUT /settings/risk-config failed', { error });
     res.status(500).json({ success: false, error: 'Internal error' });
   }
 });
@@ -434,11 +461,11 @@ router.post('/settings/telegram/test', async (req, res) => {
       `Pool Intelligence Pro está funcionando!\n` +
       `URL do App: ${appUrl}\n\n` +
       `🔗 <a href="${posLink}">Abrir Posições</a>`;
-    const sent = await telegramBot.sendMessage(msg);
-    if (sent) {
+    const result = await telegramBot.sendMessage(msg);
+    if (result.sent) {
       res.json({ success: true, message: 'Test message sent' });
     } else {
-      res.status(400).json({ success: false, error: 'Telegram not configured or failed to send' });
+      res.status(400).json({ success: false, error: result.error || 'Falha ao enviar' });
     }
   } catch (error) {
     logService.error('SYSTEM', 'POST /settings/telegram/test failed', { error });
@@ -504,8 +531,8 @@ router.post('/settings/telegram/test-recommendations', validate(telegramTestRecs
     msg += `💡 <i>Clique em "Simular" para ver detalhes e adicionar ao monitoramento</i>\n`;
     msg += `<a href="${notificationSettingsService.getAppUrl()}">Abrir Pool Intelligence Pro →</a>`;
 
-    const sent = await telegramBot.sendMessage(msg);
-    if (sent) {
+    const result = await telegramBot.sendMessage(msg);
+    if (result.sent) {
       res.json({
         success: true,
         message: `Enviado TOP ${top.length} recomendações para o Telegram`,
@@ -513,7 +540,7 @@ router.post('/settings/telegram/test-recommendations', validate(telegramTestRecs
         tokenFilters,
       });
     } else {
-      res.status(400).json({ success: false, error: 'Telegram não configurado ou falhou ao enviar' });
+      res.status(400).json({ success: false, error: result.error || 'Falha ao enviar' });
     }
   } catch (error) {
     logService.error('SYSTEM', 'POST /settings/telegram/test-recommendations failed', { error });

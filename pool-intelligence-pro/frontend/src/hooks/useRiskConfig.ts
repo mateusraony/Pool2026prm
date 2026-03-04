@@ -1,12 +1,11 @@
 /**
  * Risk configuration hook.
- * Uses localStorage for persistence (no Supabase dependency).
- * Can be extended to sync with the Pool2026prm backend settings API.
+ * Uses localStorage for fast access + syncs with backend for persistence across devices/deploys.
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import type { RiskConfig } from '@/types/pool';
-import { fetchSettings } from '@/api/client';
+import { fetchSettings, saveRiskConfig } from '@/api/client';
 import { toast } from 'sonner';
 
 const STORAGE_KEY = 'pool-intelligence-risk-config';
@@ -36,31 +35,41 @@ export function useRiskConfig() {
       setLoading(true);
       setError(null);
 
-      // First try localStorage
+      // First try localStorage for instant load
       const saved = localStorage.getItem(STORAGE_KEY);
+      let localConfig: RiskConfig | null = null;
       if (saved) {
-        setConfig(JSON.parse(saved));
+        try {
+          localConfig = JSON.parse(saved);
+          setConfig(localConfig!);
+        } catch {
+          // Corrupted localStorage, ignore
+        }
       }
 
-      // Then try to sync with backend settings
+      // Then sync with backend (source of truth)
       try {
         const settings = await fetchSettings();
-        if (settings?.system) {
-          const merged: RiskConfig = {
-            ...config,
-            ...(saved ? JSON.parse(saved) : {}),
-            totalBanca: settings.system.capital || DEFAULT_RISK_CONFIG.totalBanca,
-            profile: settings.system.mode as RiskConfig['profile'] || 'normal',
-            allowedNetworks: settings.system.chains?.map(
-              (c: string) => c.charAt(0).toUpperCase() + c.slice(1)
-            ) || DEFAULT_RISK_CONFIG.allowedNetworks,
+
+        // If backend has persisted riskConfig, use it (overrides localStorage)
+        if (settings.riskConfig) {
+          const backendConfig: RiskConfig = {
+            ...DEFAULT_RISK_CONFIG,
+            ...settings.riskConfig,
             telegramEnabled: settings.telegram?.enabled ?? false,
           };
-          setConfig(merged);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+          setConfig(backendConfig);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(backendConfig));
+        } else if (localConfig) {
+          // Backend has no config yet - push localStorage to backend as initial seed
+          try {
+            await saveRiskConfig(localConfig);
+          } catch {
+            // Non-critical, will be saved on next user action
+          }
         }
       } catch {
-        // Backend not available, use local config
+        // Backend not available, use local config (already set above)
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch config';
@@ -70,18 +79,27 @@ export function useRiskConfig() {
     }
   }, []);
 
-  const saveConfig = useCallback(async (newConfig: RiskConfig) => {
+  const saveConfigFn = useCallback(async (newConfig: RiskConfig) => {
     try {
       setSaving(true);
       setError(null);
 
+      // Save to localStorage immediately (fast)
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig));
       setConfig(newConfig);
-      toast.success('Configurações salvas com sucesso!');
+
+      // Save to backend (persistent across server restarts)
+      try {
+        await saveRiskConfig(newConfig);
+      } catch {
+        // Non-critical: localStorage has it, backend will sync on next load
+      }
+
+      toast.success('Configuracoes salvas com sucesso!');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to save config';
       setError(message);
-      toast.error(`Erro ao salvar configurações: ${message}`);
+      toast.error(`Erro ao salvar configuracoes: ${message}`);
       throw err;
     } finally {
       setSaving(false);
@@ -97,7 +115,7 @@ export function useRiskConfig() {
     loading,
     saving,
     error,
-    saveConfig,
+    saveConfig: saveConfigFn,
     refetch: fetchConfig,
   };
 }

@@ -175,8 +175,9 @@ export default function ScoutSettings() {
       if (token) setBotTokenInput('');
       if (chatId) setChatIdInput('');
       toast.success('Telegram configurado com sucesso!');
-    } catch {
-      toast.error('Falha ao configurar Telegram');
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || 'Falha ao configurar Telegram';
+      toast.error(msg);
     } finally {
       setTelegramSaving(false);
     }
@@ -219,11 +220,12 @@ export default function ScoutSettings() {
       const result = await testTelegramConnection();
       setTestStatus(result.success ? 'success' : 'error');
       toast[result.success ? 'success' : 'error'](
-        result.success ? 'Mensagem de teste enviada!' : 'Falha ao enviar teste'
+        result.success ? 'Mensagem de teste enviada! Verifique seu Telegram.' : (result.error || 'Falha ao enviar teste')
       );
-    } catch {
+    } catch (err: any) {
       setTestStatus('error');
-      toast.error('Falha ao conectar com Telegram');
+      const msg = err?.response?.data?.error || 'Falha ao conectar com Telegram';
+      toast.error(msg);
     }
     setTimeout(() => setTestStatus('idle'), 3000);
   }
