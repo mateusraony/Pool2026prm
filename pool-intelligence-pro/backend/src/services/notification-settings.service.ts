@@ -1,10 +1,11 @@
 /**
  * Notification settings service
- * Stores user preferences for notification types and schedule in memory
- * (persisted via JSON file if available)
+ * Stores user preferences for notification types and schedule.
+ * Persisted to disk via persistService so settings survive server restarts.
  */
 
 import { logService } from './log.service.js';
+import { persistService } from './persist.service.js';
 
 export interface NotificationSettings {
   appUrl: string; // Base URL for deep-links in Telegram messages
@@ -37,14 +38,37 @@ const DEFAULT_SETTINGS: NotificationSettings = {
 };
 
 class NotificationSettingsService {
-  private settings: NotificationSettings = { ...DEFAULT_SETTINGS };
+  private settings: NotificationSettings;
 
   constructor() {
-    this.settings = {
-      ...DEFAULT_SETTINGS,
-      notifications: { ...DEFAULT_SETTINGS.notifications },
-      tokenFilters: [...DEFAULT_SETTINGS.tokenFilters],
-    };
+    // Load from persisted file, fallback to defaults
+    const persisted = persistService.getNotifications();
+    if (persisted) {
+      this.settings = {
+        appUrl: persisted.appUrl || DEFAULT_SETTINGS.appUrl,
+        notifications: { ...DEFAULT_SETTINGS.notifications, ...persisted.notifications },
+        dailyReportHour: persisted.dailyReportHour ?? DEFAULT_SETTINGS.dailyReportHour,
+        dailyReportMinute: persisted.dailyReportMinute ?? DEFAULT_SETTINGS.dailyReportMinute,
+        tokenFilters: persisted.tokenFilters || [],
+      };
+      logService.info('SYSTEM', 'Notification settings loaded from disk');
+    } else {
+      this.settings = {
+        ...DEFAULT_SETTINGS,
+        notifications: { ...DEFAULT_SETTINGS.notifications },
+        tokenFilters: [...DEFAULT_SETTINGS.tokenFilters],
+      };
+    }
+  }
+
+  private persist(): void {
+    persistService.setNotifications({
+      appUrl: this.settings.appUrl,
+      notifications: { ...this.settings.notifications },
+      dailyReportHour: this.settings.dailyReportHour,
+      dailyReportMinute: this.settings.dailyReportMinute,
+      tokenFilters: [...this.settings.tokenFilters],
+    });
   }
 
   getSettings(): NotificationSettings {
@@ -76,6 +100,7 @@ class NotificationSettingsService {
         .filter(t => t.length > 0);
     }
 
+    this.persist();
     logService.info('SYSTEM', 'Notification settings updated', { settings: this.settings });
     return this.getSettings();
   }

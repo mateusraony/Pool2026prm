@@ -1,27 +1,49 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { config } from '../config/index.js';
 import { logService } from '../services/log.service.js';
+import { persistService } from '../services/persist.service.js';
 import { AlertEvent, Recommendation } from '../types/index.js';
 
 class TelegramBotService {
   private bot: TelegramBot | null = null;
   private chatId: string;
+  private botToken: string;
 
   constructor() {
-    this.chatId = config.telegram.chatId;
+    // Priority: persisted file > env vars
+    const persisted = persistService.getTelegram();
+    this.botToken = persisted?.botToken || config.telegram.botToken;
+    this.chatId = persisted?.chatId || config.telegram.chatId;
 
-    if (config.telegram.enabled && config.telegram.botToken) {
-      try {
-        this.bot = new TelegramBot(config.telegram.botToken, { polling: false });
-        logService.info('SYSTEM', 'Telegram bot initialized');
-      } catch (error) {
-        logService.error('SYSTEM', 'Failed to initialize Telegram bot', { error });
-      }
+    if (this.botToken) {
+      this.initBotSync(this.botToken);
     }
+  }
+
+  private initBotSync(token: string): void {
+    try {
+      this.bot = new TelegramBot(token, { polling: false });
+      this.botToken = token;
+      logService.info('SYSTEM', 'Telegram bot initialized');
+    } catch (error) {
+      logService.error('SYSTEM', 'Failed to initialize Telegram bot', { error });
+      this.bot = null;
+    }
+  }
+
+  private persist(): void {
+    persistService.setTelegram({
+      botToken: this.botToken,
+      chatId: this.chatId,
+    });
   }
 
   isEnabled(): boolean {
     return this.bot !== null && !!this.chatId;
+  }
+
+  hasBot(): boolean {
+    return this.bot !== null;
   }
 
   getChatId(): string {
@@ -30,48 +52,76 @@ class TelegramBotService {
 
   setChatId(newChatId: string): void {
     this.chatId = newChatId;
-    logService.info('SYSTEM', 'Telegram Chat ID updated at runtime', { chatId: newChatId ? '***' + newChatId.slice(-4) : '(empty)' });
+    this.persist();
+    logService.info('SYSTEM', 'Telegram Chat ID updated', { chatId: newChatId ? '***' + newChatId.slice(-4) : '(empty)' });
   }
 
-  async sendMessage(message: string): Promise<boolean> {
+  async setBotToken(token: string): Promise<{ ok: boolean; error?: string; botName?: string }> {
+    if (!token) {
+      this.bot = null;
+      this.botToken = '';
+      this.persist();
+      logService.info('SYSTEM', 'Telegram bot token removed');
+      return { ok: true };
+    }
+    try {
+      const testBot = new TelegramBot(token, { polling: false });
+      const me = await testBot.getMe();
+      this.bot = testBot;
+      this.botToken = token;
+      this.persist();
+      logService.info('SYSTEM', `Telegram bot validated: @${me.username}`);
+      return { ok: true, botName: me.username };
+    } catch (error: any) {
+      this.bot = null;
+      this.botToken = '';
+      const msg = error?.response?.body?.description || error?.message || 'Token invalido';
+      logService.error('SYSTEM', 'Telegram bot token validation failed', { error: msg });
+      return { ok: false, error: msg };
+    }
+  }
+
+  async sendMessage(message: string): Promise<{ sent: boolean; error?: string }> {
     if (!this.isEnabled()) {
+      const reason = !this.bot ? 'Bot Token nao configurado' : 'Chat ID nao configurado';
       logService.warn('SYSTEM', 'Telegram bot not enabled, skipping message');
-      return false;
+      return { sent: false, error: reason };
     }
 
     try {
       await this.bot!.sendMessage(this.chatId, message, { parse_mode: 'HTML' });
-      return true;
-    } catch (error) {
-      logService.error('SYSTEM', 'Failed to send Telegram message', { error });
-      return false;
+      return { sent: true };
+    } catch (error: any) {
+      const msg = error?.response?.body?.description || error?.message || 'Erro desconhecido';
+      logService.error('SYSTEM', 'Failed to send Telegram message', { error: msg });
+      return { sent: false, error: msg };
     }
   }
 
   // Send alert notification
-  async sendAlert(event: AlertEvent): Promise<boolean> {
-    const poolName = event.pool 
-      ? event.pool.token0.symbol + '/' + event.pool.token1.symbol 
+  async sendAlert(event: AlertEvent): Promise<{ sent: boolean; error?: string }> {
+    const poolName = event.pool
+      ? event.pool.token0.symbol + '/' + event.pool.token1.symbol
       : 'N/A';
-    
+
     const emoji = this.getAlertEmoji(event.type);
-    
-    const message = 
+
+    const message =
       emoji + ' <b>ALERTA: ' + event.type.replace(/_/g, ' ') + '</b>\n\n' +
       '<b>Pool:</b> ' + poolName + '\n' +
       '<b>Mensagem:</b> ' + event.message + '\n' +
       '<b>Horario:</b> ' + event.timestamp.toISOString() + '\n\n' +
       '<i>Pool Intelligence Pro</i>';
-    
+
     return this.sendMessage(message);
   }
 
   // Send recommendation notification
-  async sendRecommendation(rec: Recommendation): Promise<boolean> {
+  async sendRecommendation(rec: Recommendation): Promise<{ sent: boolean; error?: string }> {
     const poolName = rec.pool.token0.symbol + '/' + rec.pool.token1.symbol;
     const modeEmoji = rec.mode === 'DEFENSIVE' ? '🛡' : rec.mode === 'NORMAL' ? '⚖' : '🎯';
-    
-    const message = 
+
+    const message =
       '🏆 <b>TOP ' + rec.rank + ' RECOMENDACAO</b> ' + modeEmoji + '\n\n' +
       '<b>Pool:</b> ' + poolName + ' (' + rec.pool.protocol + ')\n' +
       '<b>Chain:</b> ' + rec.pool.chain + '\n' +
@@ -87,7 +137,7 @@ class TelegramBotService {
       '<b>📝 Analise:</b>\n' +
       rec.commentary.substring(0, 300) + '...\n\n' +
       '<i>Valido ate: ' + rec.validUntil.toISOString() + '</i>';
-    
+
     return this.sendMessage(message);
   }
 
@@ -97,35 +147,35 @@ class TelegramBotService {
     watchlistCount: number;
     alertsToday: number;
     topRecommendation?: Recommendation;
-  }): Promise<boolean> {
-    let message = 
+  }): Promise<{ sent: boolean; error?: string }> {
+    let message =
       '📊 <b>RESUMO DIARIO</b>\n\n' +
       '<b>Pools analisadas:</b> ' + data.totalPools + '\n' +
       '<b>Na watchlist:</b> ' + data.watchlistCount + '\n' +
       '<b>Alertas hoje:</b> ' + data.alertsToday + '\n\n';
-    
+
     if (data.topRecommendation) {
-      const poolName = data.topRecommendation.pool.token0.symbol + '/' + 
+      const poolName = data.topRecommendation.pool.token0.symbol + '/' +
                        data.topRecommendation.pool.token1.symbol;
-      message += 
+      message +=
         '<b>🏆 Melhor oportunidade:</b>\n' +
         poolName + ' (Score: ' + data.topRecommendation.score.total.toFixed(1) + ')\n\n';
     }
-    
+
     message += '<i>Pool Intelligence Pro</i>';
-    
+
     return this.sendMessage(message);
   }
 
   // Send system health notification
-  async sendHealthAlert(status: string, details: string): Promise<boolean> {
+  async sendHealthAlert(status: string, details: string): Promise<{ sent: boolean; error?: string }> {
     const emoji = status === 'HEALTHY' ? '✅' : status === 'DEGRADED' ? '⚠' : '🔴';
-    
-    const message = 
+
+    const message =
       emoji + ' <b>STATUS DO SISTEMA: ' + status + '</b>\n\n' +
       details + '\n\n' +
       '<i>' + new Date().toISOString() + '</i>';
-    
+
     return this.sendMessage(message);
   }
 
