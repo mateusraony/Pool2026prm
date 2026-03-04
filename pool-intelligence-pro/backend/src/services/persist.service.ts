@@ -1,11 +1,13 @@
 /**
- * Simple JSON file persistence for runtime settings.
- * Stores Telegram config and notification preferences in a JSON file
- * so they survive server restarts (Render redeploys, etc.)
+ * Persistence service using PostgreSQL (via Prisma).
+ * Stores runtime settings (Telegram, notifications, risk config) in the
+ * AppConfig table as key-value JSON pairs.
+ *
+ * Falls back to in-memory cache so the app works even if DB is temporarily unavailable.
+ * On startup, loads all config from DB. On save, writes to DB immediately.
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
+import { PrismaClient } from '@prisma/client';
 import { logService } from './log.service.js';
 
 export interface PersistedData {
@@ -40,76 +42,88 @@ export interface PersistedData {
   } | null;
 }
 
-const DATA_DIR = process.env.PERSIST_DIR || join(process.cwd(), 'data');
-const DATA_FILE = join(DATA_DIR, 'settings.json');
-
 class PersistService {
-  private data: Partial<PersistedData> = {};
-  private saveTimeout: ReturnType<typeof setTimeout> | null = null;
+  private prisma: PrismaClient | null = null;
+  private cache: Record<string, any> = {};
+  private ready = false;
 
   constructor() {
-    this.load();
+    this.initDb();
   }
 
-  private load(): void {
+  private async initDb(): Promise<void> {
     try {
-      if (existsSync(DATA_FILE)) {
-        const raw = readFileSync(DATA_FILE, 'utf-8');
-        this.data = JSON.parse(raw);
-        logService.info('SYSTEM', 'Settings loaded from disk', { file: DATA_FILE });
-      } else {
-        logService.info('SYSTEM', 'No persisted settings file found, starting fresh');
+      this.prisma = new PrismaClient();
+      await this.prisma.$connect();
+
+      // Ensure the AppConfig table exists (db push on Render handles this,
+      // but if the table doesn't exist yet, we catch the error gracefully)
+      try {
+        const rows = await this.prisma.appConfig.findMany();
+        for (const row of rows) {
+          this.cache[row.key] = row.value;
+        }
+        logService.info('SYSTEM', `Loaded ${rows.length} config entries from database`);
+      } catch (error: any) {
+        // Table might not exist yet - will be created on next deploy with prisma db push
+        if (error?.code === 'P2021' || error?.message?.includes('does not exist')) {
+          logService.warn('SYSTEM', 'AppConfig table not found - will be created on next deploy. Using defaults.');
+        } else {
+          throw error;
+        }
       }
+
+      this.ready = true;
     } catch (error) {
-      logService.error('SYSTEM', 'Failed to load persisted settings', { error });
-      this.data = {};
+      logService.warn('SYSTEM', 'Database not available for config persistence, using in-memory fallback', { error });
+      this.prisma = null;
     }
   }
 
-  private scheduleSave(): void {
-    // Debounce: save at most once per second
-    if (this.saveTimeout) clearTimeout(this.saveTimeout);
-    this.saveTimeout = setTimeout(() => this.flush(), 1000);
-  }
+  private async saveToDb(key: string, value: any): Promise<void> {
+    if (!this.prisma) return;
 
-  private flush(): void {
     try {
-      const dir = dirname(DATA_FILE);
-      if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
+      await this.prisma.appConfig.upsert({
+        where: { key },
+        update: { value },
+        create: { key, value },
+      });
+    } catch (error: any) {
+      // If table doesn't exist yet, just log and continue with in-memory
+      if (error?.code === 'P2021' || error?.message?.includes('does not exist')) {
+        logService.warn('SYSTEM', `AppConfig table not ready, saving ${key} in memory only`);
+      } else {
+        logService.error('SYSTEM', `Failed to persist ${key} to database`, { error });
       }
-      writeFileSync(DATA_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
-      logService.info('SYSTEM', 'Settings persisted to disk');
-    } catch (error) {
-      logService.error('SYSTEM', 'Failed to persist settings', { error });
     }
   }
 
   getTelegram(): PersistedData['telegram'] | undefined {
-    return this.data.telegram;
+    return this.cache.telegram as PersistedData['telegram'] | undefined;
   }
 
   setTelegram(telegram: PersistedData['telegram']): void {
-    this.data.telegram = telegram;
-    this.scheduleSave();
+    this.cache.telegram = telegram;
+    this.saveToDb('telegram', telegram);
   }
 
   getNotifications(): PersistedData['notifications'] | undefined {
-    return this.data.notifications;
+    return this.cache.notifications as PersistedData['notifications'] | undefined;
   }
 
   setNotifications(notifications: PersistedData['notifications']): void {
-    this.data.notifications = notifications;
-    this.scheduleSave();
+    this.cache.notifications = notifications;
+    this.saveToDb('notifications', notifications);
   }
 
   getRiskConfig(): PersistedData['riskConfig'] | undefined {
-    return this.data.riskConfig;
+    return this.cache.riskConfig as PersistedData['riskConfig'] | undefined;
   }
 
   setRiskConfig(riskConfig: PersistedData['riskConfig']): void {
-    this.data.riskConfig = riskConfig;
-    this.scheduleSave();
+    this.cache.riskConfig = riskConfig;
+    this.saveToDb('riskConfig', riskConfig);
   }
 }
 

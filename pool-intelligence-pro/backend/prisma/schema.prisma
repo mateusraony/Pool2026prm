@@ -500,14 +500,24 @@ model ProviderHealth {
 
 model SystemLog {
   id        String   @id @default(uuid())
-  
+
   level     String   // INFO, WARN, ERROR, CRITICAL
   component String   // RADAR, WATCHLIST, SCORE, RECOMMENDATION, ALERT, PROVIDER
   message   String   @db.Text
   data      Json?
-  
+
   createdAt DateTime @default(now())
-  
+
   @@index([level, createdAt])
   @@index([component, createdAt])
+}
+
+// ============================================
+// APP CONFIG (key-value store for runtime settings)
+// ============================================
+
+model AppConfig {
+  key       String   @id           // e.g. "telegram", "notifications", "riskConfig"
+  value     Json                   // JSON blob with the config data
+  updatedAt DateTime @updatedAt
 }
