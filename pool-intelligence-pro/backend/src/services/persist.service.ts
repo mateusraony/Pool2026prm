@@ -56,8 +56,7 @@ class PersistService {
       this.prisma = new PrismaClient();
       await this.prisma.$connect();
 
-      // Ensure the AppConfig table exists (db push on Render handles this,
-      // but if the table doesn't exist yet, we catch the error gracefully)
+      // Try to load config from AppConfig table
       try {
         const rows = await this.prisma.appConfig.findMany();
         for (const row of rows) {
@@ -65,9 +64,21 @@ class PersistService {
         }
         logService.info('SYSTEM', `Loaded ${rows.length} config entries from database`);
       } catch (error: any) {
-        // Table might not exist yet - will be created on next deploy with prisma db push
+        // Table doesn't exist yet - create it via raw SQL
         if (error?.code === 'P2021' || error?.message?.includes('does not exist')) {
-          logService.warn('SYSTEM', 'AppConfig table not found - will be created on next deploy. Using defaults.');
+          logService.warn('SYSTEM', 'AppConfig table not found, creating it now...');
+          try {
+            await this.prisma.$executeRawUnsafe(`
+              CREATE TABLE IF NOT EXISTS "AppConfig" (
+                "key" TEXT PRIMARY KEY,
+                "value" JSONB NOT NULL,
+                "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+              )
+            `);
+            logService.info('SYSTEM', 'AppConfig table created successfully');
+          } catch (createError) {
+            logService.error('SYSTEM', 'Failed to create AppConfig table', { error: createError });
+          }
         } else {
           throw error;
         }

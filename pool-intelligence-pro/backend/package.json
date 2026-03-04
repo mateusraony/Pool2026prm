@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build:frontend": "if [ -d ../frontend ] && [ ! -f public/index.html ]; then echo '[BUILD] Building frontend...' && cd ../frontend && NODE_ENV=development npm install --include=dev && npm run build && cd ../backend && rm -rf public && cp -r ../frontend/dist public && echo '[BUILD] Frontend built OK -> backend/public'; else echo '[BUILD] Skipped (public/index.html exists or no ../frontend)'; fi",
-    "build": "npm run build:frontend && npx prisma generate && npx prisma db push --accept-data-loss && tsc",
+    "build": "npm run build:frontend && npx prisma generate && (npx prisma db push --accept-data-loss || echo '[WARN] prisma db push failed - table will be created at runtime') && tsc",
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
