@@ -41,7 +41,18 @@ class NotificationSettingsService {
   private settings: NotificationSettings;
 
   constructor() {
-    // Load from persisted file, fallback to defaults
+    // Start with defaults. Real config loaded later via loadFromDb().
+    this.settings = {
+      ...DEFAULT_SETTINGS,
+      notifications: { ...DEFAULT_SETTINGS.notifications },
+      tokenFilters: [...DEFAULT_SETTINGS.tokenFilters],
+    };
+  }
+
+  /**
+   * Load persisted config from database (called AFTER persistService.init()).
+   */
+  loadFromDb(): void {
     const persisted = persistService.getNotifications();
     if (persisted) {
       this.settings = {
@@ -51,13 +62,7 @@ class NotificationSettingsService {
         dailyReportMinute: persisted.dailyReportMinute ?? DEFAULT_SETTINGS.dailyReportMinute,
         tokenFilters: persisted.tokenFilters || [],
       };
-      logService.info('SYSTEM', 'Notification settings loaded from disk');
-    } else {
-      this.settings = {
-        ...DEFAULT_SETTINGS,
-        notifications: { ...DEFAULT_SETTINGS.notifications },
-        tokenFilters: [...DEFAULT_SETTINGS.tokenFilters],
-      };
+      logService.info('SYSTEM', 'Notification settings loaded from database');
     }
   }
 

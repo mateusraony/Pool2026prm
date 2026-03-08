@@ -6,17 +6,33 @@ import { AlertEvent, Recommendation } from '../types/index.js';
 
 class TelegramBotService {
   private bot: TelegramBot | null = null;
-  private chatId: string;
-  private botToken: string;
+  private chatId: string = '';
+  private botToken: string = '';
 
   constructor() {
-    // Priority: persisted file > env vars
-    const persisted = persistService.getTelegram();
-    this.botToken = persisted?.botToken || config.telegram.botToken;
-    this.chatId = persisted?.chatId || config.telegram.chatId;
+    // Just set env var defaults. Real config loaded later via loadFromDb().
+    this.botToken = config.telegram.botToken;
+    this.chatId = config.telegram.chatId;
 
     if (this.botToken) {
       this.initBotSync(this.botToken);
+    }
+  }
+
+  /**
+   * Load persisted config from database (called AFTER persistService.init()).
+   * Overrides env var defaults if DB has saved values.
+   */
+  loadFromDb(): void {
+    const persisted = persistService.getTelegram();
+    if (persisted?.botToken) {
+      this.botToken = persisted.botToken;
+      this.initBotSync(persisted.botToken);
+      logService.info('SYSTEM', 'Telegram bot token loaded from database');
+    }
+    if (persisted?.chatId) {
+      this.chatId = persisted.chatId;
+      logService.info('SYSTEM', 'Telegram chat ID loaded from database');
     }
   }
 
