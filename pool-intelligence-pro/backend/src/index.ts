@@ -92,6 +92,33 @@ try {
 }
 
 // ============================================
+// INITIALIZE PERSISTENCE (load config from DB)
+// Must happen AFTER routes are loaded (services already instantiated)
+// but BEFORE server starts accepting requests
+// ============================================
+async function initPersistence() {
+  try {
+    const { persistService } = require('./services/persist.service.js');
+    await persistService.init();
+    console.log('[BOOT] Database persistence initialized');
+
+    // Now load saved config into services
+    const { telegramBot } = require('./bot/telegram.js');
+    telegramBot.loadFromDb();
+    console.log('[BOOT] Telegram config loaded from DB');
+
+    const { notificationSettingsService } = require('./services/notification-settings.service.js');
+    notificationSettingsService.loadFromDb();
+    console.log('[BOOT] Notification settings loaded from DB');
+  } catch (err: any) {
+    console.error('[BOOT] Persistence init failed (using defaults):', err.message);
+  }
+}
+
+// Run persistence init immediately
+initPersistence();
+
+// ============================================
 // SERVE FRONTEND STATIC FILES
 // ============================================
 const frontendPath = path.resolve(process.cwd(), 'public');
