@@ -503,7 +503,7 @@ export async function saveRiskConfig(riskConfig: any): Promise<any> {
   return data.data;
 }
 
-export async function testTelegramConnection(): Promise<{ success: boolean; error?: string }> {
+export async function testTelegramConnection(): Promise<{ success: boolean; message?: string; error?: string }> {
   const { data } = await api.post('/settings/telegram/test');
   return data;
 }

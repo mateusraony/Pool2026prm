@@ -115,8 +115,35 @@ async function initPersistence() {
   }
 }
 
-// Run persistence init immediately
-initPersistence();
+// ============================================
+// PERSISTENCE READINESS GATE
+// Ensures all /api requests wait until DB is loaded
+// ============================================
+let persistenceReady = false;
+let persistencePromise: Promise<void> | null = null;
+
+// Middleware: block /api requests until persistence is initialized
+app.use('/api', async (_req, res, next) => {
+  if (persistenceReady) return next();
+  if (persistencePromise) {
+    try {
+      await persistencePromise;
+      return next();
+    } catch {
+      return res.status(503).json({ success: false, error: 'Server is starting up, please retry in a few seconds' });
+    }
+  }
+  return next(); // fallback: let it through
+});
+
+// Run persistence init and track the promise
+persistencePromise = initPersistence().then(() => {
+  persistenceReady = true;
+  console.log('[BOOT] Persistence ready — API requests unblocked');
+}).catch((err: any) => {
+  persistenceReady = true; // allow requests through with defaults
+  console.error('[BOOT] Persistence init failed, using defaults:', err?.message);
+});
 
 // ============================================
 // SERVE FRONTEND STATIC FILES

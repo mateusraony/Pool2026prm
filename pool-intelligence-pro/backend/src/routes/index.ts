@@ -372,6 +372,9 @@ router.get('/settings', async (req, res) => {
         hasBot: telegramBot.hasBot(),
       },
       riskConfig: persistService.getRiskConfig() || null,
+      persistence: {
+        ready: persistService.ready,
+      },
     },
     timestamp: new Date(),
   });
@@ -454,6 +457,20 @@ router.put('/settings/notifications', validate(notificationSettingsSchema), asyn
 // Send test Telegram message (simple connection test)
 router.post('/settings/telegram/test', async (req, res) => {
   try {
+    // Pre-flight checks with clear error messages
+    if (!telegramBot.hasBot()) {
+      return res.json({
+        success: false,
+        error: 'Bot Token nao configurado. Configure o token na secao acima.',
+      });
+    }
+    if (!telegramBot.getChatId()) {
+      return res.json({
+        success: false,
+        error: 'Chat ID nao configurado. Adicione seu Chat ID na secao acima.',
+      });
+    }
+
     const appUrl = notificationSettingsService.getAppUrl();
     const posLink = notificationSettingsService.getPositionsLink();
     const msg =
@@ -463,13 +480,22 @@ router.post('/settings/telegram/test', async (req, res) => {
       `🔗 <a href="${posLink}">Abrir Posições</a>`;
     const result = await telegramBot.sendMessage(msg);
     if (result.sent) {
-      res.json({ success: true, message: 'Test message sent' });
+      res.json({ success: true, message: 'Mensagem de teste enviada! Verifique seu Telegram.' });
     } else {
-      res.status(400).json({ success: false, error: result.error || 'Falha ao enviar' });
+      // Return 200 with success=false so frontend gets the error message without axios throwing
+      let errorMsg = result.error || 'Falha ao enviar';
+      // Add helpful hint for common Telegram API errors
+      if (errorMsg.includes('Forbidden') || errorMsg.includes('bot was blocked') || errorMsg.includes("can't initiate")) {
+        errorMsg += ' — Voce precisa abrir o seu bot no Telegram e enviar /start antes que ele possa enviar mensagens.';
+      } else if (errorMsg.includes('chat not found')) {
+        errorMsg += ' — Chat ID invalido ou voce nao enviou /start para o bot ainda.';
+      }
+      res.json({ success: false, error: errorMsg });
     }
-  } catch (error) {
-    logService.error('SYSTEM', 'POST /settings/telegram/test failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
+  } catch (error: any) {
+    const msg = error?.message || 'Erro interno';
+    logService.error('SYSTEM', 'POST /settings/telegram/test failed', { error: msg });
+    res.json({ success: false, error: 'Erro ao enviar teste: ' + msg });
   }
 });
 
