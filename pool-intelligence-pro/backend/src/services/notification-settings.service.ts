@@ -23,7 +23,7 @@ export interface NotificationSettings {
 }
 
 const DEFAULT_SETTINGS: NotificationSettings = {
-  appUrl: 'http://localhost:5173',
+  appUrl: process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || 'http://localhost:5173',
   notifications: {
     rangeExit: true,
     nearRangeExit: true,

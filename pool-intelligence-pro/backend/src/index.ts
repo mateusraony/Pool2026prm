@@ -73,7 +73,61 @@ app.use((req, res, next) => {
 });
 
 // ============================================
-// API ROUTES — loaded dynamically to prevent crash on import
+// PERSISTENCE INITIALIZATION
+// ============================================
+async function initPersistence() {
+  try {
+    const { persistService } = require('./services/persist.service.js');
+    await persistService.init();
+    console.log('[BOOT] Database persistence initialized');
+
+    // Now load saved config into services
+    const { telegramBot } = require('./bot/telegram.js');
+    telegramBot.loadFromDb();
+    console.log('[BOOT] Telegram config loaded from DB');
+
+    const { notificationSettingsService } = require('./services/notification-settings.service.js');
+    notificationSettingsService.loadFromDb();
+    console.log('[BOOT] Notification settings loaded from DB');
+
+    // Auto-detect appUrl from RENDER_EXTERNAL_URL if not set by user
+    const currentAppUrl = notificationSettingsService.getAppUrl();
+    const renderUrl = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || '';
+    if (renderUrl && (currentAppUrl === 'http://localhost:5173' || !currentAppUrl)) {
+      notificationSettingsService.updateSettings({ appUrl: renderUrl });
+      console.log('[BOOT] Auto-set appUrl from RENDER_EXTERNAL_URL:', renderUrl);
+    }
+  } catch (err: any) {
+    console.error('[BOOT] Persistence init failed (using defaults):', err.message);
+  }
+}
+
+// ============================================
+// PERSISTENCE READINESS GATE
+// MUST be registered BEFORE routes so Express processes it first
+// ============================================
+let persistenceReady = false;
+const persistencePromise = initPersistence().then(() => {
+  persistenceReady = true;
+  console.log('[BOOT] Persistence ready — API requests unblocked');
+}).catch((err: any) => {
+  persistenceReady = true; // allow requests through with defaults
+  console.error('[BOOT] Persistence init failed, using defaults:', err?.message);
+});
+
+// Middleware: hold /api requests until DB config is loaded
+app.use('/api', async (_req, res, next) => {
+  if (persistenceReady) return next();
+  try {
+    await persistencePromise;
+    return next();
+  } catch {
+    return res.status(503).json({ success: false, error: 'Server is starting up, please retry in a few seconds' });
+  }
+});
+
+// ============================================
+// API ROUTES — loaded AFTER readiness gate
 // ============================================
 try {
   const routes = require('./routes/index.js').default;
@@ -90,60 +144,6 @@ try {
     });
   });
 }
-
-// ============================================
-// INITIALIZE PERSISTENCE (load config from DB)
-// Must happen AFTER routes are loaded (services already instantiated)
-// but BEFORE server starts accepting requests
-// ============================================
-async function initPersistence() {
-  try {
-    const { persistService } = require('./services/persist.service.js');
-    await persistService.init();
-    console.log('[BOOT] Database persistence initialized');
-
-    // Now load saved config into services
-    const { telegramBot } = require('./bot/telegram.js');
-    telegramBot.loadFromDb();
-    console.log('[BOOT] Telegram config loaded from DB');
-
-    const { notificationSettingsService } = require('./services/notification-settings.service.js');
-    notificationSettingsService.loadFromDb();
-    console.log('[BOOT] Notification settings loaded from DB');
-  } catch (err: any) {
-    console.error('[BOOT] Persistence init failed (using defaults):', err.message);
-  }
-}
-
-// ============================================
-// PERSISTENCE READINESS GATE
-// Ensures all /api requests wait until DB is loaded
-// ============================================
-let persistenceReady = false;
-let persistencePromise: Promise<void> | null = null;
-
-// Middleware: block /api requests until persistence is initialized
-app.use('/api', async (_req, res, next) => {
-  if (persistenceReady) return next();
-  if (persistencePromise) {
-    try {
-      await persistencePromise;
-      return next();
-    } catch {
-      return res.status(503).json({ success: false, error: 'Server is starting up, please retry in a few seconds' });
-    }
-  }
-  return next(); // fallback: let it through
-});
-
-// Run persistence init and track the promise
-persistencePromise = initPersistence().then(() => {
-  persistenceReady = true;
-  console.log('[BOOT] Persistence ready — API requests unblocked');
-}).catch((err: any) => {
-  persistenceReady = true; // allow requests through with defaults
-  console.error('[BOOT] Persistence init failed, using defaults:', err?.message);
-});
 
 // ============================================
 // SERVE FRONTEND STATIC FILES
@@ -200,16 +200,12 @@ app.listen(PORT, () => {
 
   // ============================================
   // KEEP-ALIVE: Prevent Render free tier from sleeping (every 13 min)
-  // Uses the public app URL (from notification settings or env var)
-  // so Render sees external traffic and stays awake.
   // ============================================
-  const KEEP_ALIVE_INTERVAL = 13 * 60 * 1000; // 13 minutes (Render sleeps at 15)
+  const KEEP_ALIVE_INTERVAL = 13 * 60 * 1000;
   let keepAliveUrl = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || '';
-  // Add https:// if it's just a hostname
   if (keepAliveUrl && !keepAliveUrl.startsWith('http')) {
     keepAliveUrl = 'https://' + keepAliveUrl;
   }
-  // Fallback to localhost
   if (!keepAliveUrl) {
     keepAliveUrl = `http://localhost:${PORT}`;
   }

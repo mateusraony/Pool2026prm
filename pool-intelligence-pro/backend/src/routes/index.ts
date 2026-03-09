@@ -374,6 +374,8 @@ router.get('/settings', async (req, res) => {
       riskConfig: persistService.getRiskConfig() || null,
       persistence: {
         ready: persistService.ready,
+        hasTelegramInDb: !!persistService.getTelegram(),
+        hasNotificationsInDb: !!persistService.getNotifications(),
       },
     },
     timestamp: new Date(),
