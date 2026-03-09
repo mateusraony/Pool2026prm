@@ -174,9 +174,19 @@ export default function ScoutSettings() {
       setTelegramHasBot(result.hasBot);
       if (token) setBotTokenInput('');
       if (chatId) setChatIdInput('');
-      toast.success('Telegram configurado com sucesso!');
+      toast.success(result.enabled
+        ? 'Telegram configurado e pronto para enviar!'
+        : 'Configuracao salva. Configure o Bot Token e Chat ID para ativar.');
+
+      // Reload full settings to sync state
+      try {
+        const settings = await fetchSettings();
+        setTelegramEnabled(settings.telegram?.enabled || false);
+        setTelegramChatId(settings.telegram?.chatId || null);
+        setTelegramHasBot(settings.telegram?.hasBot || false);
+      } catch { /* ignore reload error */ }
     } catch (err: any) {
-      const msg = err?.response?.data?.error || 'Falha ao configurar Telegram';
+      const msg = err?.response?.data?.error || err?.message || 'Falha ao configurar Telegram';
       toast.error(msg);
     } finally {
       setTelegramSaving(false);
@@ -218,16 +228,20 @@ export default function ScoutSettings() {
     setTestStatus('loading');
     try {
       const result = await testTelegramConnection();
-      setTestStatus(result.success ? 'success' : 'error');
-      toast[result.success ? 'success' : 'error'](
-        result.success ? 'Mensagem de teste enviada! Verifique seu Telegram.' : (result.error || 'Falha ao enviar teste')
-      );
+      if (result.success) {
+        setTestStatus('success');
+        toast.success(result.message || 'Mensagem de teste enviada! Verifique seu Telegram.');
+      } else {
+        setTestStatus('error');
+        toast.error(result.error || 'Falha ao enviar teste');
+      }
     } catch (err: any) {
       setTestStatus('error');
-      const msg = err?.response?.data?.error || 'Falha ao conectar com Telegram';
+      // Extract detailed error from different response formats
+      const msg = err?.response?.data?.error || err?.message || 'Falha ao conectar com o servidor';
       toast.error(msg);
     }
-    setTimeout(() => setTestStatus('idle'), 3000);
+    setTimeout(() => setTestStatus('idle'), 5000);
   }
 
   async function handleSendReport() {
@@ -680,17 +694,24 @@ export default function ScoutSettings() {
             </div>
           )}
 
-          {/* Setup instructions when bot not configured */}
-          {!telegramHasBot && !telegramLoading && (
+          {/* Setup instructions — always visible when not fully configured */}
+          {!telegramEnabled && !telegramLoading && (
             <div className="bg-primary/10 border border-primary/30 rounded-lg p-3 text-sm text-primary">
               <p className="font-medium mb-1">Como configurar:</p>
               <ol className="list-decimal list-inside space-y-1 text-xs text-muted-foreground">
                 <li>Abra o Telegram e busque por <strong>@BotFather</strong></li>
                 <li>Envie <code className="bg-secondary px-1 py-0.5 rounded">/newbot</code> e siga as instrucoes</li>
-                <li>Copie o <strong>token</strong> gerado e cole acima</li>
-                <li>Busque por <strong>@userinfobot</strong> e envie <code className="bg-secondary px-1 py-0.5 rounded">/start</code></li>
-                <li>Copie seu <strong>Chat ID</strong> e cole acima</li>
+                <li>Copie o <strong>token</strong> gerado e cole no campo "Bot Token" acima</li>
+                <li>Busque por <strong>@userinfobot</strong> e envie <code className="bg-secondary px-1 py-0.5 rounded">/start</code> para descobrir seu Chat ID</li>
+                <li>Cole seu <strong>Chat ID</strong> no campo acima</li>
+                <li className="text-yellow-600 font-semibold">IMPORTANTE: Abra o seu bot no Telegram e envie <code className="bg-secondary px-1 py-0.5 rounded">/start</code> para ele. Sem isso, o bot NAO consegue enviar mensagens para voce!</li>
               </ol>
+            </div>
+          )}
+          {/* Reminder about /start even when bot is configured but not enabled */}
+          {telegramHasBot && !telegramEnabled && !telegramLoading && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-sm text-yellow-600 mt-2">
+              <strong>Dica:</strong> Se voce configurou tudo mas nao recebe mensagens, abra o Telegram, busque seu bot e envie <code className="bg-secondary px-1 py-0.5 rounded">/start</code>. O bot so pode enviar mensagens depois que voce iniciar a conversa.
             </div>
           )}
         </div>

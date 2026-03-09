@@ -83,14 +83,14 @@ class TelegramBotService {
     try {
       const testBot = new TelegramBot(token, { polling: false });
       const me = await testBot.getMe();
+      // Only replace after successful validation
       this.bot = testBot;
       this.botToken = token;
       this.persist();
       logService.info('SYSTEM', `Telegram bot validated: @${me.username}`);
       return { ok: true, botName: me.username };
     } catch (error: any) {
-      this.bot = null;
-      this.botToken = '';
+      // Do NOT clear the existing working bot — keep previous state intact
       const msg = error?.response?.body?.description || error?.message || 'Token invalido';
       logService.error('SYSTEM', 'Telegram bot token validation failed', { error: msg });
       return { ok: false, error: msg };
@@ -98,19 +98,33 @@ class TelegramBotService {
   }
 
   async sendMessage(message: string): Promise<{ sent: boolean; error?: string }> {
-    if (!this.isEnabled()) {
-      const reason = !this.bot ? 'Bot Token nao configurado' : 'Chat ID nao configurado';
-      logService.warn('SYSTEM', 'Telegram bot not enabled, skipping message');
-      return { sent: false, error: reason };
+    if (!this.bot) {
+      logService.warn('SYSTEM', 'Telegram bot not configured, skipping message');
+      return { sent: false, error: 'Bot Token nao configurado' };
+    }
+    if (!this.chatId) {
+      logService.warn('SYSTEM', 'Telegram chatId not configured, skipping message');
+      return { sent: false, error: 'Chat ID nao configurado' };
     }
 
     try {
-      await this.bot!.sendMessage(this.chatId, message, { parse_mode: 'HTML' });
+      logService.info('SYSTEM', `Sending Telegram message to chatId ${this.chatId.slice(0, 3)}***`);
+      await this.bot.sendMessage(this.chatId, message, { parse_mode: 'HTML' });
+      logService.info('SYSTEM', 'Telegram message sent successfully');
       return { sent: true };
     } catch (error: any) {
-      const msg = error?.response?.body?.description || error?.message || 'Erro desconhecido';
-      logService.error('SYSTEM', 'Failed to send Telegram message', { error: msg });
-      return { sent: false, error: msg };
+      // Extract error from different formats (node-telegram-bot-api uses response.body)
+      const telegramError = error?.response?.body?.description
+        || error?.response?.description
+        || error?.message
+        || 'Erro desconhecido';
+      const statusCode = error?.response?.statusCode || error?.response?.body?.error_code || '';
+      logService.error('SYSTEM', `Failed to send Telegram message: [${statusCode}] ${telegramError}`, {
+        chatId: this.chatId,
+        statusCode,
+        error: telegramError,
+      });
+      return { sent: false, error: telegramError };
     }
   }
 
