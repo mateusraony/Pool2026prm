@@ -183,6 +183,9 @@ class RangeMonitorService {
 
     position.lastCheckedAt = new Date();
 
+    // Skip if Telegram is not configured
+    if (!telegramBot.isEnabled()) return;
+
     // Cooldown check
     const lastAlert = this.lastAlertTimes.get(position.id);
     if (lastAlert && Date.now() - lastAlert.getTime() < this.alertCooldown) {
@@ -243,6 +246,10 @@ class RangeMonitorService {
   async sendPortfolioReport(): Promise<void> {
     const positions = this.getPositions();
     if (positions.length === 0) return;
+    if (!telegramBot.isEnabled()) {
+      logService.warn('ALERT', 'Portfolio report skipped: Telegram not configured');
+      return;
+    }
 
     const radarResults = getLatestRadarResults();
     const settings = notificationSettingsService.getSettings();
