@@ -170,6 +170,31 @@ app.listen(PORT, () => {
   } catch (err: any) {
     console.error('[BOOT] Failed to initialize jobs:', err.message);
   }
+
+  // ============================================
+  // KEEP-ALIVE: Prevent Render free tier from sleeping (every 13 min)
+  // Uses the public app URL (from notification settings or env var)
+  // so Render sees external traffic and stays awake.
+  // ============================================
+  const KEEP_ALIVE_INTERVAL = 13 * 60 * 1000; // 13 minutes (Render sleeps at 15)
+  let keepAliveUrl = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || '';
+  // Add https:// if it's just a hostname
+  if (keepAliveUrl && !keepAliveUrl.startsWith('http')) {
+    keepAliveUrl = 'https://' + keepAliveUrl;
+  }
+  // Fallback to localhost
+  if (!keepAliveUrl) {
+    keepAliveUrl = `http://localhost:${PORT}`;
+  }
+
+  setInterval(() => {
+    const pingUrl = `${keepAliveUrl}/health`;
+    const mod = pingUrl.startsWith('https') ? 'https' : 'http';
+    import(mod).then(m => {
+      m.get(pingUrl, (res: any) => { res.resume(); }).on('error', () => {});
+    });
+  }, KEEP_ALIVE_INTERVAL);
+  console.log(`[BOOT] Keep-alive ping every 13min → ${keepAliveUrl}/health`);
 });
 
 export default app;
