@@ -151,7 +151,7 @@ export default function ScoutDashboard() {
     >
       {/* Error Banner */}
       {error && (
-        <div className="mb-6 rounded-lg p-4 bg-destructive/10 border border-destructive/30">
+        <div className="mb-6 rounded-xl p-4 bg-destructive/8 border border-destructive/25 ring-1 ring-destructive/10">
           <div className="flex items-center gap-3">
             <XCircle className="h-5 w-5 text-destructive shrink-0" />
             <div className="flex-1 min-w-0">
@@ -169,12 +169,12 @@ export default function ScoutDashboard() {
         </div>
       )}
 
-      {/* Operation Status Banner */}
+      {/* Operation Status Banner — real-time monitoring pattern */}
       {!error && (
-        <div className={`mb-6 rounded-lg p-4 flex items-center justify-between ${
+        <div className={`mb-6 rounded-xl p-4 flex items-center justify-between ${
           canOperate
-            ? 'bg-success/10 border border-success/30'
-            : 'bg-warning/10 border border-warning/30'
+            ? 'bg-success/8 border border-success/25 ring-1 ring-success/10'
+            : 'bg-warning/8 border border-warning/25 ring-1 ring-warning/10'
         }`}>
           <div className="flex items-center gap-3">
             {canOperate ? (

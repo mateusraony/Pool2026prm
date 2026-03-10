@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -10,67 +10,81 @@
    ===================================================== */
 @layer base {
   :root {
-    --background: 222 47% 6%;
+    /* Fintech/Crypto Dark Palette — ui-ux-pro-max-skill */
+    --background: 222 47% 5%;
     --foreground: 210 40% 98%;
 
-    --card: 222 47% 8%;
+    --card: 222 47% 7%;
     --card-foreground: 210 40% 98%;
 
-    --popover: 222 47% 10%;
+    --popover: 222 47% 9%;
     --popover-foreground: 210 40% 98%;
 
     --primary: 174 72% 50%;
-    --primary-foreground: 222 47% 6%;
+    --primary-foreground: 222 47% 5%;
 
-    --secondary: 222 47% 14%;
+    --secondary: 222 35% 13%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 222 47% 12%;
+    --muted: 222 35% 11%;
     --muted-foreground: 215 20% 55%;
 
-    --accent: 174 72% 40%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 38 92% 50%;
+    --accent-foreground: 222 47% 5%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 210 40% 98%;
 
     --success: 142 72% 45%;
-    --success-foreground: 222 47% 6%;
+    --success-foreground: 222 47% 5%;
 
     --warning: 38 92% 50%;
-    --warning-foreground: 222 47% 6%;
+    --warning-foreground: 222 47% 5%;
 
-    --border: 222 47% 16%;
-    --input: 222 47% 14%;
+    --border: 222 30% 16%;
+    --input: 222 35% 13%;
     --ring: 174 72% 50%;
 
-    --radius: 0.5rem;
+    --radius: 0.625rem;
 
+    /* Chart palette with fintech trust colors */
     --chart-1: 174 72% 50%;
     --chart-2: 142 72% 45%;
     --chart-3: 38 92% 50%;
     --chart-4: 0 72% 51%;
     --chart-5: 262 72% 55%;
 
-    --sidebar-background: 222 47% 7%;
+    --sidebar-background: 222 47% 4%;
     --sidebar-foreground: 210 40% 98%;
     --sidebar-primary: 174 72% 50%;
-    --sidebar-primary-foreground: 222 47% 6%;
-    --sidebar-accent: 222 47% 12%;
+    --sidebar-primary-foreground: 222 47% 5%;
+    --sidebar-accent: 222 35% 11%;
     --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 222 47% 14%;
+    --sidebar-border: 222 30% 12%;
     --sidebar-ring: 174 72% 50%;
 
-    /* Custom tokens */
+    /* Gold accent for fintech trust */
+    --gold: 38 92% 50%;
+    --gold-foreground: 222 47% 5%;
+
+    /* Enhanced gradients */
     --gradient-primary: linear-gradient(135deg, hsl(174 72% 50%), hsl(174 72% 35%));
-    --gradient-card: linear-gradient(180deg, hsl(222 47% 10%), hsl(222 47% 7%));
+    --gradient-gold: linear-gradient(135deg, hsl(38 92% 50%), hsl(38 92% 40%));
+    --gradient-card: linear-gradient(180deg, hsl(222 35% 9%) 0%, hsl(222 47% 5%) 100%);
+    --gradient-card-hover: linear-gradient(180deg, hsl(222 35% 11%) 0%, hsl(222 47% 7%) 100%);
     --gradient-success: linear-gradient(135deg, hsl(142 72% 45%), hsl(142 72% 35%));
     --gradient-danger: linear-gradient(135deg, hsl(0 72% 51%), hsl(0 72% 40%));
+    --gradient-glass: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
 
-    --shadow-glow: 0 0 20px hsl(174 72% 50% / 0.2);
-    --shadow-card: 0 4px 24px hsl(222 47% 4% / 0.5);
+    /* Premium shadows */
+    --shadow-glow: 0 0 20px hsl(174 72% 50% / 0.15);
+    --shadow-glow-gold: 0 0 20px hsl(38 92% 50% / 0.15);
+    --shadow-card: 0 4px 24px hsl(222 47% 3% / 0.6);
+    --shadow-card-hover: 0 8px 32px hsl(222 47% 3% / 0.7);
+    --shadow-inner: inset 0 1px 0 rgba(255,255,255,0.04);
 
     --transition-smooth: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-spring: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
   .dark {
@@ -90,6 +104,11 @@
     min-height: 100vh;
   }
 
+  /* Headings — Space Grotesk for Web3/DeFi personality */
+  h1, h2, h3 {
+    font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  }
+
   /* Number/data display font */
   .font-mono {
     font-family: 'JetBrains Mono', monospace;
@@ -101,17 +120,33 @@
    ===================================================== */
 @layer components {
   .glass-card {
-    @apply bg-card/80 backdrop-blur-xl border border-border/50 rounded-lg;
-    box-shadow: var(--shadow-card);
+    @apply bg-card/80 backdrop-blur-xl border border-border/40 rounded-xl;
+    background-image: var(--gradient-glass);
+    box-shadow: var(--shadow-card), var(--shadow-inner);
+    transition: var(--transition-smooth);
+  }
+
+  .glass-card:hover {
+    border-color: hsl(var(--border) / 0.6);
+    box-shadow: var(--shadow-card-hover), var(--shadow-inner);
   }
 
   .glow-primary {
     box-shadow: var(--shadow-glow);
   }
 
+  .glow-gold {
+    box-shadow: var(--shadow-glow-gold);
+  }
+
   .gradient-text {
     @apply bg-clip-text text-transparent;
     background-image: var(--gradient-primary);
+  }
+
+  .gradient-text-gold {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-gold);
   }
 
   .stat-value {
@@ -120,6 +155,8 @@
 
   .stat-label {
     @apply text-xs uppercase tracking-wider text-muted-foreground;
+    font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+    letter-spacing: 0.1em;
   }
 
   .data-cell {
@@ -127,7 +164,23 @@
   }
 
   .score-badge {
-    @apply inline-flex items-center px-2 py-0.5 rounded font-mono text-xs font-medium;
+    @apply inline-flex items-center px-2.5 py-1 rounded-lg font-mono text-xs font-semibold;
+  }
+
+  /* Score glow effect for high scores */
+  .score-high {
+    @apply text-success;
+    text-shadow: 0 0 12px hsl(142 72% 45% / 0.5);
+  }
+
+  .score-medium {
+    @apply text-warning;
+    text-shadow: 0 0 12px hsl(38 92% 50% / 0.4);
+  }
+
+  .score-low {
+    @apply text-destructive;
+    text-shadow: 0 0 12px hsl(0 72% 51% / 0.4);
   }
 
   .risk-low {
@@ -212,6 +265,48 @@
   .stat-card {
     @apply glass-card p-4 text-center;
   }
+
+  /* Shimmer loading effect */
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255,255,255,0.04) 50%,
+      transparent 100%
+    );
+    animation: shimmer 2s infinite;
+  }
+
+  /* Live indicator dot */
+  .live-dot {
+    @apply relative inline-flex h-2.5 w-2.5;
+  }
+
+  .live-dot::before {
+    @apply absolute inline-flex h-full w-full rounded-full opacity-60;
+    content: '';
+    background-color: currentColor;
+    animation: livePing 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  .live-dot::after {
+    @apply relative inline-flex rounded-full h-2.5 w-2.5;
+    content: '';
+    background-color: currentColor;
+  }
+
+  /* Metric highlight on change */
+  .metric-flash {
+    animation: metricFlash 0.6s ease-out;
+  }
 }
 
 /* =====================================================
@@ -255,6 +350,31 @@
       opacity: 1;
       transform: scale(1);
     }
+  }
+
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  @keyframes livePing {
+    0% { transform: scale(1); opacity: 0.6; }
+    75%, 100% { transform: scale(2.5); opacity: 0; }
+  }
+
+  @keyframes metricFlash {
+    0% { background-color: hsl(174 72% 50% / 0.15); }
+    100% { background-color: transparent; }
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
+
+  @keyframes borderGlow {
+    0%, 100% { border-color: hsl(174 72% 50% / 0.3); }
+    50% { border-color: hsl(174 72% 50% / 0.6); }
   }
 
   .scrollbar-thin {

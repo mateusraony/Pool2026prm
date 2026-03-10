@@ -1,44 +1,61 @@
-import { useState, createContext, useContext } from 'react';
+import { useState, createContext, useContext, type ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Menu, X } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Menu,
+  X,
+  LayoutDashboard,
+  Brain,
+  Droplets,
+  Search,
+  Radar,
+  CircleDot,
+  Ruler,
+  Heart,
+  ScrollText,
+  Bell,
+  Settings,
+  Activity,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navSections = [
   {
     title: 'Dashboard',
     items: [
-      { path: '/dashboard', icon: '📊', label: 'Dashboard' },
+      { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     ],
   },
   {
-    title: 'Análise',
+    title: 'Analise',
     items: [
-      { path: '/recommended', icon: '🧠', label: 'Recomendadas' },
-      { path: '/pools', icon: '🏊', label: 'Pool Intelligence' },
-      { path: '/token-analyzer', icon: '🔍', label: 'Token Analyzer' },
-      { path: '/radar', icon: '📡', label: 'Radar' },
+      { path: '/recommended', icon: Brain, label: 'Recomendadas' },
+      { path: '/pools', icon: Droplets, label: 'Pool Intelligence' },
+      { path: '/token-analyzer', icon: Search, label: 'Token Analyzer' },
+      { path: '/radar', icon: Radar, label: 'Radar' },
     ],
   },
   {
-    title: 'Operações',
+    title: 'Operacoes',
     items: [
-      { path: '/active', icon: '🟢', label: 'Pools Ativas' },
-      { path: '/simulation', icon: '📐', label: 'Simulação' },
+      { path: '/active', icon: CircleDot, label: 'Pools Ativas' },
+      { path: '/simulation', icon: Ruler, label: 'Simulacao' },
     ],
   },
   {
     title: 'Gerenciamento',
     items: [
-      { path: '/favorites', icon: '❤️', label: 'Favoritas' },
-      { path: '/history', icon: '📜', label: 'Histórico' },
-      { path: '/alerts', icon: '🚨', label: 'Alertas' },
+      { path: '/favorites', icon: Heart, label: 'Favoritas' },
+      { path: '/history', icon: ScrollText, label: 'Historico' },
+      { path: '/alerts', icon: Bell, label: 'Alertas' },
     ],
   },
   {
     title: 'Sistema',
     items: [
-      { path: '/scout-settings', icon: '⚙️', label: 'Configurações' },
-      { path: '/status', icon: '🩺', label: 'Status' },
+      { path: '/scout-settings', icon: Settings, label: 'Configuracoes' },
+      { path: '/status', icon: Activity, label: 'Status' },
     ],
   },
 ];
@@ -92,14 +109,16 @@ function SidebarContent({ collapsed, onNavClick }: { collapsed: boolean; onNavCl
     <>
       {/* Logo */}
       <div className={cn(
-        'p-4 border-b border-border flex items-center',
-        collapsed ? 'justify-center' : 'gap-2'
+        'p-4 border-b border-sidebar-border flex items-center',
+        collapsed ? 'justify-center' : 'gap-3'
       )}>
-        <span className="text-2xl">🌊</span>
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary flex-shrink-0">
+          <Droplets className="h-5 w-5" />
+        </div>
         {!collapsed && (
           <div>
-            <h1 className="text-lg font-bold text-foreground">Pool Intelligence</h1>
-            <p className="text-[10px] text-muted-foreground">Enterprise DeFi Analytics</p>
+            <h1 className="text-base font-bold text-foreground font-display tracking-tight">Pool Intelligence</h1>
+            <p className="text-[10px] text-muted-foreground tracking-wide">Enterprise DeFi Analytics</p>
           </div>
         )}
       </div>
@@ -114,28 +133,31 @@ function SidebarContent({ collapsed, onNavClick }: { collapsed: boolean; onNavCl
               </p>
             )}
             <div className="space-y-0.5">
-              {section.items.map((item) => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  onClick={onNavClick}
-                  className={({ isActive }) =>
-                    cn(
-                      'flex items-center gap-3 px-3 py-2 rounded-lg transition-all text-sm',
-                      isActive
-                        ? 'bg-primary/15 text-primary font-medium'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
-                      collapsed && 'justify-center px-2'
-                    )
-                  }
-                  title={collapsed ? item.label : undefined}
-                >
-                  <span className="text-base flex-shrink-0">{item.icon}</span>
-                  {!collapsed && (
-                    <span className="truncate">{item.label}</span>
-                  )}
-                </NavLink>
-              ))}
+              {section.items.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    onClick={onNavClick}
+                    className={({ isActive }) =>
+                      cn(
+                        'flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm',
+                        isActive
+                          ? 'bg-primary/12 text-primary font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
+                        collapsed && 'justify-center px-2'
+                      )
+                    }
+                    title={collapsed ? item.label : undefined}
+                  >
+                    <Icon className="h-[18px] w-[18px] flex-shrink-0" />
+                    {!collapsed && (
+                      <span className="truncate">{item.label}</span>
+                    )}
+                  </NavLink>
+                );
+              })}
             </div>
           </div>
         ))}
