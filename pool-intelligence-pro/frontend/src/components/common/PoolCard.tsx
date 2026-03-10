@@ -1,5 +1,5 @@
 import { Pool } from '@/types/pool';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Star, Eye, Activity, TrendingUp } from 'lucide-react';
@@ -94,11 +94,11 @@ export function PoolCard({
       <div className="mt-4 grid grid-cols-4 gap-3">
         <div>
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-display">TVL</p>
-          <p className="font-mono text-sm mt-0.5">${(pool.tvl / 1_000_000).toFixed(1)}M</p>
+          <p className="font-mono text-sm mt-0.5">{formatCurrency(pool.tvl, true)}</p>
         </div>
         <div>
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-display">Vol 24h</p>
-          <p className="font-mono text-sm mt-0.5">${(pool.volume24h / 1_000_000).toFixed(1)}M</p>
+          <p className="font-mono text-sm mt-0.5">{formatCurrency(pool.volume24h, true)}</p>
         </div>
         <div>
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-display">APR</p>

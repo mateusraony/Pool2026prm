@@ -397,6 +397,15 @@
   }
 }
 
+/* Reduced motion — accessibility (ui-ux-pro-max-skill checklist) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* Custom scrollbar (global) */
 ::-webkit-scrollbar {
   width: 8px;

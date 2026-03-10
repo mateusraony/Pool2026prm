@@ -9,6 +9,7 @@ import { fetchUnifiedPools, fetchRangePositions, fetchAlerts, fetchHealth, API_B
 import type { RangePosition } from '@/api/client';
 import { unifiedPoolToViewPool } from '@/data/adapters';
 import type { Pool, ActivePool } from '@/types/pool';
+import { formatCurrency } from '@/lib/utils';
 import {
   Wallet,
   TrendingUp,
@@ -214,18 +215,18 @@ export default function ScoutDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard
           label="Banca Total"
-          value={`$${defaultRiskConfig.totalBanca.toLocaleString()}`}
+          value={formatCurrency(defaultRiskConfig.totalBanca)}
           icon={<Wallet className="h-5 w-5" />}
         />
         <StatCard
           label="Capital Alocado"
-          value={`$${totalCapitalDeployed.toLocaleString()}`}
+          value={formatCurrency(totalCapitalDeployed)}
           change={totalCapitalDeployed > 0 ? ((totalCapitalDeployed / defaultRiskConfig.totalBanca) * 100) : 0}
           icon={<Activity className="h-5 w-5" />}
         />
         <StatCard
           label="PnL Total"
-          value={`${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)}`}
+          value={formatCurrency(totalPnl)}
           change={totalCapitalDeployed > 0 ? ((totalPnl / totalCapitalDeployed) * 100) : 0}
           variant={totalPnl >= 0 ? 'success' : 'danger'}
           icon={<TrendingUp className="h-5 w-5" />}
