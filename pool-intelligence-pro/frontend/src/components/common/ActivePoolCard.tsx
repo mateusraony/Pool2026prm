@@ -23,23 +23,24 @@ export function ActivePoolCard({
   className,
 }: ActivePoolCardProps) {
   const statusStyles = {
-    ok: { bg: 'bg-success/10', border: 'border-success/30', dot: 'text-success', label: 'OK' },
-    attention: { bg: 'bg-warning/10', border: 'border-warning/30', dot: 'text-warning', label: 'Atenção' },
-    critical: { bg: 'bg-destructive/10', border: 'border-destructive/30', dot: 'text-destructive', label: 'Crítico' },
+    ok: { bg: 'bg-success/8', border: 'border-success/25', dot: 'text-success', label: 'OK' },
+    attention: { bg: 'bg-warning/8', border: 'border-warning/25', dot: 'text-warning', label: 'Atencao' },
+    critical: { bg: 'bg-destructive/8', border: 'border-destructive/25', dot: 'text-destructive', label: 'Critico' },
   };
 
   const status = statusStyles[pool.status];
+  const netPnl = pool.feesAccrued - pool.ilActual;
 
   return (
     <div className={cn('glass-card overflow-hidden animate-slide-up', className)}>
-      {/* Status Bar */}
+      {/* Status Bar — real-time monitoring pattern */}
       <div className={cn('px-4 py-2 flex items-center justify-between', status.bg, status.border, 'border-b')}>
         <div className="flex items-center gap-2">
-          <span className={cn('pulse-dot', status.dot)} />
-          <span className="text-sm font-medium">{status.label}</span>
+          <span className={cn('live-dot', status.dot)} />
+          <span className="text-sm font-medium font-display">{status.label}</span>
         </div>
-        <span className="text-xs text-muted-foreground">
-          Última ação: {(() => {
+        <span className="text-xs text-muted-foreground font-mono">
+          {(() => {
             try {
               const d = new Date(pool.lastAction);
               return isNaN(d.getTime()) ? pool.lastAction : formatDistanceToNow(d, { addSuffix: true, locale: ptBR });
@@ -50,24 +51,24 @@ export function ActivePoolCard({
         </span>
       </div>
 
-      <div className="p-4">
+      <div className="p-5">
         {/* Header */}
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary text-xl">
-              {dexLogos[pool.dex] || '🔵'}
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary/80 text-xl ring-1 ring-border/30">
+              {dexLogos[pool.dex] || '\u{1F535}'}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-semibold">{pool.pair}</h3>
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                <h3 className="font-display font-semibold text-[15px]">{pool.pair}</h3>
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
                   {pool.feeTier}%
                 </Badge>
               </div>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-xs text-muted-foreground">{pool.dex}</span>
-                <span className="text-muted-foreground">·</span>
-                <span 
+                <span className="text-muted-foreground/50">·</span>
+                <span
                   className="text-xs font-medium"
                   style={{ color: networkColors[pool.network] || '#888' }}
                 >
@@ -77,7 +78,7 @@ export function ActivePoolCard({
             </div>
           </div>
 
-          {/* PnL */}
+          {/* PnL — with trend glow */}
           <div className="text-right">
             <div className={cn(
               'flex items-center gap-1',
@@ -88,36 +89,36 @@ export function ActivePoolCard({
               ) : (
                 <TrendingDown className="h-4 w-4" />
               )}
-              <span className="font-mono text-lg font-bold">
+              <span className="font-mono text-xl font-bold">
                 {pool.pnl >= 0 ? '+' : ''}{pool.pnl.toFixed(2)}%
               </span>
             </div>
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">PnL</span>
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-display">PnL</span>
           </div>
         </div>
 
-        {/* Capital & Metrics */}
-        <div className="mt-4 grid grid-cols-4 gap-3">
-          <div className="rounded-lg bg-secondary/50 p-2 text-center">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Capital</p>
-            <p className="font-mono text-sm">${pool.capital}</p>
+        {/* Capital & Metrics — data-dense dashboard pattern */}
+        <div className="mt-4 grid grid-cols-4 gap-2">
+          <div className="rounded-xl bg-secondary/40 p-2.5 text-center ring-1 ring-border/20">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-display">Capital</p>
+            <p className="font-mono text-sm mt-0.5">${pool.capital}</p>
             <p className="text-[10px] text-muted-foreground">{pool.capitalPercent}%</p>
           </div>
-          <div className="rounded-lg bg-secondary/50 p-2 text-center">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Fees</p>
-            <p className="font-mono text-sm text-success">+${pool.feesAccrued.toFixed(2)}</p>
+          <div className="rounded-xl bg-secondary/40 p-2.5 text-center ring-1 ring-border/20">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-display">Fees</p>
+            <p className="font-mono text-sm text-success mt-0.5">+${pool.feesAccrued.toFixed(2)}</p>
           </div>
-          <div className="rounded-lg bg-secondary/50 p-2 text-center">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">IL</p>
-            <p className="font-mono text-sm text-destructive">-${pool.ilActual.toFixed(2)}</p>
+          <div className="rounded-xl bg-secondary/40 p-2.5 text-center ring-1 ring-border/20">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-display">IL</p>
+            <p className="font-mono text-sm text-destructive mt-0.5">-${pool.ilActual.toFixed(2)}</p>
           </div>
-          <div className="rounded-lg bg-secondary/50 p-2 text-center">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Net</p>
+          <div className="rounded-xl bg-secondary/40 p-2.5 text-center ring-1 ring-border/20">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-display">Net</p>
             <p className={cn(
-              'font-mono text-sm',
-              (pool.feesAccrued - pool.ilActual) >= 0 ? 'text-success' : 'text-destructive'
+              'font-mono text-sm font-medium mt-0.5',
+              netPnl >= 0 ? 'text-success' : 'text-destructive'
             )}>
-              {(pool.feesAccrued - pool.ilActual) >= 0 ? '+' : ''}${(pool.feesAccrued - pool.ilActual).toFixed(2)}
+              {netPnl >= 0 ? '+' : ''}${netPnl.toFixed(2)}
             </p>
           </div>
         </div>
@@ -130,7 +131,7 @@ export function ActivePoolCard({
             className="flex-1"
             onClick={() => onRebalance?.()}
           >
-            <RefreshCw className="h-4 w-4 mr-1" />
+            <RefreshCw className="h-4 w-4 mr-1.5" />
             Rebalancear
           </Button>
           <Button
@@ -145,7 +146,7 @@ export function ActivePoolCard({
             size="sm"
             onClick={() => onExit?.()}
           >
-            <XCircle className="h-4 w-4 mr-1" />
+            <XCircle className="h-4 w-4 mr-1.5" />
             Sair
           </Button>
         </div>

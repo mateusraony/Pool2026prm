@@ -9,6 +9,7 @@ import { fetchUnifiedPools, fetchRangePositions, fetchAlerts, fetchHealth, API_B
 import type { RangePosition } from '@/api/client';
 import { unifiedPoolToViewPool } from '@/data/adapters';
 import type { Pool, ActivePool } from '@/types/pool';
+import { formatCurrency } from '@/lib/utils';
 import {
   Wallet,
   TrendingUp,
@@ -151,7 +152,7 @@ export default function ScoutDashboard() {
     >
       {/* Error Banner */}
       {error && (
-        <div className="mb-6 rounded-lg p-4 bg-destructive/10 border border-destructive/30">
+        <div className="mb-6 rounded-xl p-4 bg-destructive/8 border border-destructive/25 ring-1 ring-destructive/10">
           <div className="flex items-center gap-3">
             <XCircle className="h-5 w-5 text-destructive shrink-0" />
             <div className="flex-1 min-w-0">
@@ -169,12 +170,12 @@ export default function ScoutDashboard() {
         </div>
       )}
 
-      {/* Operation Status Banner */}
+      {/* Operation Status Banner — real-time monitoring pattern */}
       {!error && (
-        <div className={`mb-6 rounded-lg p-4 flex items-center justify-between ${
+        <div className={`mb-6 rounded-xl p-4 flex items-center justify-between ${
           canOperate
-            ? 'bg-success/10 border border-success/30'
-            : 'bg-warning/10 border border-warning/30'
+            ? 'bg-success/8 border border-success/25 ring-1 ring-success/10'
+            : 'bg-warning/8 border border-warning/25 ring-1 ring-warning/10'
         }`}>
           <div className="flex items-center gap-3">
             {canOperate ? (
@@ -214,18 +215,18 @@ export default function ScoutDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard
           label="Banca Total"
-          value={`$${defaultRiskConfig.totalBanca.toLocaleString()}`}
+          value={formatCurrency(defaultRiskConfig.totalBanca)}
           icon={<Wallet className="h-5 w-5" />}
         />
         <StatCard
           label="Capital Alocado"
-          value={`$${totalCapitalDeployed.toLocaleString()}`}
+          value={formatCurrency(totalCapitalDeployed)}
           change={totalCapitalDeployed > 0 ? ((totalCapitalDeployed / defaultRiskConfig.totalBanca) * 100) : 0}
           icon={<Activity className="h-5 w-5" />}
         />
         <StatCard
           label="PnL Total"
-          value={`${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)}`}
+          value={formatCurrency(totalPnl)}
           change={totalCapitalDeployed > 0 ? ((totalPnl / totalCapitalDeployed) * 100) : 0}
           variant={totalPnl >= 0 ? 'success' : 'danger'}
           icon={<TrendingUp className="h-5 w-5" />}
