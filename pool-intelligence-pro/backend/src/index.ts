@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
+import rateLimit from 'express-rate-limit';
 import path from 'path';
 import fs from 'fs';
 import { config } from './config/index.js';
@@ -21,7 +22,21 @@ const app = express();
 app.use(helmet({
   contentSecurityPolicy: false, // Allow inline scripts from Vite build
 }));
-app.use(cors());
+// CORS: restritivo em produção, aberto em desenvolvimento
+if (config.nodeEnv === 'production') {
+  const allowedOrigins = [
+    process.env.RENDER_EXTERNAL_URL,
+    process.env.APP_URL,
+    process.env.CORS_ORIGIN,
+  ].filter(Boolean) as string[];
+  app.use(cors({
+    origin: allowedOrigins.length > 0 ? allowedOrigins : true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  }));
+} else {
+  app.use(cors());
+}
 app.use(compression());
 app.use(express.json());
 
@@ -30,35 +45,37 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Debug endpoint — shows exactly what the server sees
-app.get('/debug', (_req, res) => {
-  const frontendDir = path.resolve(process.cwd(), 'public');
-  let files: string[] = [];
-  let indexExists = false;
-  try {
-    files = fs.readdirSync(frontendDir);
-    indexExists = fs.existsSync(path.join(frontendDir, 'index.html'));
-  } catch { /* dir doesn't exist */ }
+// Debug endpoint — only available in development (exposes internal paths and env info)
+if (config.nodeEnv !== 'production') {
+  app.get('/debug', (_req, res) => {
+    const frontendDir = path.resolve(process.cwd(), 'public');
+    let files: string[] = [];
+    let indexExists = false;
+    try {
+      files = fs.readdirSync(frontendDir);
+      indexExists = fs.existsSync(path.join(frontendDir, 'index.html'));
+    } catch { /* dir doesn't exist */ }
 
-  let assetsFiles: string[] = [];
-  try {
-    assetsFiles = fs.readdirSync(path.join(frontendDir, 'assets'));
-  } catch { /* no assets dir */ }
+    let assetsFiles: string[] = [];
+    try {
+      assetsFiles = fs.readdirSync(path.join(frontendDir, 'assets'));
+    } catch { /* no assets dir */ }
 
-  res.json({
-    status: 'running',
-    cwd: process.cwd(),
-    nodeEnv: process.env.NODE_ENV,
-    port: process.env.PORT,
-    frontendPath: frontendDir,
-    frontendExists: indexExists,
-    frontendFiles: files,
-    assetsFiles: assetsFiles,
-    hasDatabaseUrl: !!process.env.DATABASE_URL,
-    uptime: Math.round(process.uptime()) + 's',
-    timestamp: new Date().toISOString(),
+    res.json({
+      status: 'running',
+      cwd: process.cwd(),
+      nodeEnv: process.env.NODE_ENV,
+      port: process.env.PORT,
+      frontendPath: frontendDir,
+      frontendExists: indexExists,
+      frontendFiles: files,
+      assetsFiles: assetsFiles,
+      hasDatabaseUrl: !!process.env.DATABASE_URL,
+      uptime: Math.round(process.uptime()) + 's',
+      timestamp: new Date().toISOString(),
+    });
   });
-});
+}
 
 // Request logging (skip health checks and static files)
 app.use((req, res, next) => {
@@ -114,6 +131,17 @@ const persistencePromise = initPersistence().then(() => {
   persistenceReady = true; // allow requests through with defaults
   console.error('[BOOT] Persistence init failed, using defaults:', err?.message);
 });
+
+// Rate limiting: previne abuso da API (100 req/min por IP)
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many requests, please try again later' },
+  skip: (req) => req.path === '/health',
+});
+app.use('/api', apiLimiter);
 
 // Middleware: hold /api requests until DB config is loaded
 app.use('/api', async (_req, res, next) => {
@@ -184,7 +212,7 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 // Start server
 const PORT = config.port;
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log('[BOOT] Server started on port ' + PORT);
   console.log('[BOOT] Environment: ' + config.nodeEnv);
   console.log('[BOOT] Frontend: ' + frontendPath + (hasFrontend ? ' (OK)' : ' (NOT FOUND)'));
@@ -219,5 +247,37 @@ app.listen(PORT, () => {
   }, KEEP_ALIVE_INTERVAL);
   console.log(`[BOOT] Keep-alive ping every 13min → ${keepAliveUrl}/health`);
 });
+
+// ============================================
+// GRACEFUL SHUTDOWN
+// ============================================
+function gracefulShutdown(signal: string) {
+  console.log(`[SHUTDOWN] ${signal} received — closing server gracefully...`);
+
+  server.close(() => {
+    console.log('[SHUTDOWN] HTTP server closed');
+
+    // Close Prisma connections
+    try {
+      const { PrismaClient } = require('@prisma/client');
+      const prisma = new PrismaClient();
+      prisma.$disconnect().then(() => {
+        console.log('[SHUTDOWN] Prisma disconnected');
+        process.exit(0);
+      }).catch(() => process.exit(0));
+    } catch {
+      process.exit(0);
+    }
+  });
+
+  // Force exit after 10s if graceful shutdown stalls
+  setTimeout(() => {
+    console.error('[SHUTDOWN] Forced exit after timeout');
+    process.exit(1);
+  }, 10_000).unref();
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 export default app;

@@ -2,6 +2,31 @@ import { z } from 'zod';
 import { Request, Response, NextFunction } from 'express';
 
 // ============================================
+// PARAM VALIDATION
+// ============================================
+
+/** Safe poolId pattern: alphanumeric, colons, hyphens, underscores, dots, slashes (for chain/address combos) */
+const POOL_ID_PATTERN = /^[a-zA-Z0-9:_\-./]+$/;
+
+/** Validates req.params.poolId against injection. */
+export function validatePoolIdParam(req: Request, res: Response, next: NextFunction) {
+  const { poolId } = req.params;
+  if (!poolId || poolId.length > 200 || !POOL_ID_PATTERN.test(poolId)) {
+    return res.status(400).json({ success: false, error: 'Invalid poolId format' });
+  }
+  next();
+}
+
+/** Validates a generic :id param (alphanumeric, hyphens, underscores). */
+export function validateIdParam(req: Request, res: Response, next: NextFunction) {
+  const { id } = req.params;
+  if (!id || id.length > 100 || !/^[a-zA-Z0-9_\-]+$/.test(id)) {
+    return res.status(400).json({ success: false, error: 'Invalid id format' });
+  }
+  next();
+}
+
+// ============================================
 // SCHEMAS
 // ============================================
 
@@ -66,6 +91,18 @@ export const telegramTestRecsSchema = z.object({
 export const telegramConfigSchema = z.object({
   chatId: z.string().optional(),
   botToken: z.string().optional(),
+});
+
+export const riskConfigSchema = z.object({
+  totalBanca: z.number().min(0),
+  profile: z.string().min(1),
+  maxPerPool: z.number().min(0).max(100),
+  maxPerNetwork: z.number().min(0).max(100),
+  maxVolatile: z.number().min(0).max(100),
+  allowedNetworks: z.array(z.string()).default([]),
+  allowedDexs: z.array(z.string()).default([]),
+  allowedTokens: z.array(z.string()).default([]),
+  excludeMemecoins: z.boolean().default(false),
 });
 
 export const notificationSettingsSchema = z.object({
