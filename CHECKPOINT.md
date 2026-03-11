@@ -2,45 +2,54 @@
 
 ## Status Atual
 **Branch:** `claude/pool2026-ui-lovable-eSwtR`
-**Data:** 2026-02-28 UTC
-**Fase:** Deploy unificado — Frontend + Backend no mesmo servico
+**Data:** 2026-03-11 UTC
+**Fase:** Configuração Claude Code + Plano de melhorias
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-02-28-C"`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-11"`
 
 ---
 
-## PROBLEMA RESOLVIDO: 404 + API desconectada
+## O QUE FOI FEITO (2026-03-11)
 
-### Causa raiz
-O Render tinha frontend e backend como servicos separados, mas o usuario criou
-um unico servico `pool2026prm`. Resultado:
-- O servico nao sabia servir arquivos estaticos → 404
-- Frontend chamava API em dominio diferente que nao existia → sem dados
-
-### Solucao aplicada
-1. **Backend Express agora serve o frontend** (`backend/public/`)
-2. **API URL relativa** — frontend usa `/api` (mesmo dominio, sem CORS)
-3. **Build unificado** — `pool-intelligence-pro/package.json` com:
-   - `npm run build` = build frontend + copiar para backend/public + build backend
-   - `npm start` = inicia o servidor Express que serve tudo
-4. **render.yaml** atualizado para servico unico `pool2026prm`
+### Configuração Claude Code (awesome-claude-code)
+1. **CLAUDE.md** reescrito com contexto completo do projeto:
+   - Stack técnico, estrutura de diretórios, regras de código
+   - Referência rápida de endpoints e páginas
+   - Padrões de qualidade e anti-patterns
+2. **Slash commands** criados em `.claude/commands/`:
+   - `/status` — health check geral do projeto
+   - `/checkpoint` — atualizar CHECKPOINT.md
+   - `/analyze` — análise de código com sugestões
+   - `/deploy-check` — verificar prontidão para deploy
+3. **Settings** configurados em `.claude/settings.json`:
+   - Permissões automáticas para leitura e git
+   - Bloqueio de operações destrutivas
+4. **Tabela de melhorias** criada com prioridades e etapas
 
 ---
 
-## CONFIGURACAO DO RENDER
+## ESTADO ANTERIOR (2026-02-28)
 
-### O servico `pool2026prm` precisa ter:
+### Problema resolvido: 404 + API desconectada
+- Backend Express agora serve o frontend (`backend/public/`)
+- API URL relativa — frontend usa `/api` (mesmo domínio)
+- Build unificado com scripts no package.json root
+
+---
+
+## CONFIGURAÇÃO DO RENDER
+
 | Campo | Valor |
 |-------|-------|
 | **Type** | Web Service |
 | **Runtime** | Node |
-| **Root Directory** | `pool-intelligence-pro` |
-| **Build Command** | `npm run install:all && npm run build` |
+| **Root Directory** | `pool-intelligence-pro/backend` |
+| **Build Command** | `npm install && npm run build` |
 | **Start Command** | `npm start` |
 | **Health Check Path** | `/health` |
 
-### Environment Variables necessarias:
+### Environment Variables necessárias:
 - `NODE_ENV` = `production`
 - `PORT` = `10000`
 - `DATABASE_URL` = (do Render PostgreSQL)
@@ -49,22 +58,23 @@ um unico servico `pool2026prm`. Resultado:
 
 ---
 
-## COMO FUNCIONA AGORA
+## COMO FUNCIONA
 
+```
 pool2026prm.onrender.com
-- /health          → Health check (Express)
-- /api/*           → Rotas da API (Express Router)
-- /assets/*        → JS/CSS do frontend (express.static)
-- /dashboard       → index.html (SPA fallback)
-- /radar           → index.html (SPA fallback)
-- /simulation/*    → index.html (SPA fallback)
-- /*               → index.html (SPA fallback)
+├── /health          → Health check (Express)
+├── /api/*           → Rotas da API (Express Router)
+├── /assets/*        → JS/CSS do frontend (express.static)
+├── /dashboard       → index.html (SPA fallback)
+├── /radar           → index.html (SPA fallback)
+├── /simulation/*    → index.html (SPA fallback)
+└── /*               → index.html (SPA fallback)
+```
 
 ---
 
-## OBJETIVOS ANTERIORES (COMPLETOS)
-
-### OBJETIVO 1 — Frontend: T1-T5 todos completos
-### OBJETIVO 2 — Backend: T1-T5 todos completos
-
-Ver commits anteriores para detalhes.
+## OBJETIVOS COMPLETOS
+- Frontend: T1-T5 todos completos (Scout UI)
+- Backend: T1-T5 todos completos (API + Services)
+- Deploy: Unificado no Render
+- Claude Code: Configurado com best practices
