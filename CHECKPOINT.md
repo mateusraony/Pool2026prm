@@ -1,40 +1,54 @@
 # CHECKPOINT - Pool Intelligence Pro
 
 ## Status Atual
-**Branch:** `claude/pool2026-ui-lovable-eSwtR`
+**Branch:** `claude/continue-stage-1-improvements-Wl2yZ`
 **Data:** 2026-03-11 UTC
-**Fase:** Configuração Claude Code + Plano de melhorias
+**Fase:** ETAPA 1 concluída — Segurança e Estabilidade
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-11"`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-11 — iniciar ETAPA 2"`
 
 ---
 
-## O QUE FOI FEITO (2026-03-11)
+## O QUE FOI FEITO (2026-03-11) — ETAPA 1
+
+### 1.1 — Endpoint `/debug` protegido
+- Agora só disponível em `NODE_ENV !== 'production'`
+- Em produção, o endpoint simplesmente não existe
+
+### 1.2 — CORS restritivo em produção
+- Em produção: allowlist com `RENDER_EXTERNAL_URL`, `APP_URL`, `CORS_ORIGIN`
+- Em desenvolvimento: `cors()` aberto (sem restrição)
+
+### 1.3 — Rate limiting na API
+- `express-rate-limit` instalado e configurado
+- 100 requests/minuto por IP em `/api/*`
+- Resposta padronizada com `success: false` ao exceder
+
+### 1.4 — Validação de params em DELETE endpoints
+- `validatePoolIdParam` — regex alphanumeric + `:_-./` (max 200 chars)
+- `validateIdParam` — regex alphanumeric + `_-` (max 100 chars)
+- Aplicado em: `/watchlist/:poolId`, `/favorites/:poolId`, `/alerts/:id`, `/ranges/:id`, `/notes/:id`
+
+### 1.5 — Graceful shutdown
+- Handler para `SIGTERM` e `SIGINT`
+- Fecha HTTP server, desconecta Prisma
+- Force exit após 10s se shutdown travar
+
+### 1.6 — Risk config tipado com Zod
+- Schema `riskConfigSchema` criado em `validation.ts`
+- Rota `PUT /settings/risk-config` agora valida body com Zod
+- Cache do `PersistService` tipado com `Partial<PersistedData>`
+
+---
+
+## ESTADO ANTERIOR (2026-03-11)
 
 ### Configuração Claude Code (awesome-claude-code)
-1. **CLAUDE.md** reescrito com contexto completo do projeto:
-   - Stack técnico, estrutura de diretórios, regras de código
-   - Referência rápida de endpoints e páginas
-   - Padrões de qualidade e anti-patterns
-2. **Slash commands** criados em `.claude/commands/`:
-   - `/status` — health check geral do projeto
-   - `/checkpoint` — atualizar CHECKPOINT.md
-   - `/analyze` — análise de código com sugestões
-   - `/deploy-check` — verificar prontidão para deploy
-3. **Settings** configurados em `.claude/settings.json`:
-   - Permissões automáticas para leitura e git
-   - Bloqueio de operações destrutivas
-4. **Tabela de melhorias** criada com prioridades e etapas
-
----
-
-## ESTADO ANTERIOR (2026-02-28)
-
-### Problema resolvido: 404 + API desconectada
-- Backend Express agora serve o frontend (`backend/public/`)
-- API URL relativa — frontend usa `/api` (mesmo domínio)
-- Build unificado com scripts no package.json root
+1. CLAUDE.md reescrito com contexto completo
+2. Slash commands criados
+3. Settings configurados
+4. MELHORIAS.md criado com 6 etapas
 
 ---
 
@@ -55,26 +69,14 @@
 - `DATABASE_URL` = (do Render PostgreSQL)
 - `TELEGRAM_BOT_TOKEN` (se configurado)
 - `TELEGRAM_CHAT_ID` (se configurado)
+- `RENDER_EXTERNAL_URL` (auto-set pelo Render — usado para CORS)
 
 ---
 
-## COMO FUNCIONA
-
-```
-pool2026prm.onrender.com
-├── /health          → Health check (Express)
-├── /api/*           → Rotas da API (Express Router)
-├── /assets/*        → JS/CSS do frontend (express.static)
-├── /dashboard       → index.html (SPA fallback)
-├── /radar           → index.html (SPA fallback)
-├── /simulation/*    → index.html (SPA fallback)
-└── /*               → index.html (SPA fallback)
-```
-
----
-
-## OBJETIVOS COMPLETOS
-- Frontend: T1-T5 todos completos (Scout UI)
-- Backend: T1-T5 todos completos (API + Services)
-- Deploy: Unificado no Render
-- Claude Code: Configurado com best practices
+## PRÓXIMOS PASSOS → ETAPA 2 (Performance)
+- 2.1 — Separar routes/index.ts (~967 linhas) em módulos
+- 2.2 — Migrar `require()` para `import()` dinâmico (ESM)
+- 2.3 — Keep-alive usar `node-cron` em vez de `setInterval`
+- 2.4 — Frontend bundle splitting com `React.lazy()`
+- 2.5 — Unificar tipos duplicados frontend
+- 2.6 — Mover `@types/*` para `devDependencies`

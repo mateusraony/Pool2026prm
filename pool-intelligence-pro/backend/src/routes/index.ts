@@ -23,10 +23,10 @@ import { poolIntelligenceService } from '../services/pool-intelligence.service.j
 import { calcRangeRecommendation, calcUserFees, calcILRisk } from '../services/calc.service.js';
 import { Pool, UnifiedPool } from '../types/index.js';
 import {
-  validate,
+  validate, validatePoolIdParam, validateIdParam,
   watchlistSchema, alertSchema, rangePositionSchema, rangeCalcSchema,
   favoriteSchema, noteSchema, telegramTestRecsSchema, notificationSettingsSchema,
-  telegramConfigSchema,
+  telegramConfigSchema, riskConfigSchema,
 } from './validation.js';
 
 // Lazy PrismaClient: only connects when first DB query happens.
@@ -317,7 +317,7 @@ router.post('/watchlist', validate(watchlistSchema), async (req, res) => {
 });
 
 // Remove from watchlist
-router.delete('/watchlist/:poolId', async (req, res) => {
+router.delete('/watchlist/:poolId', validatePoolIdParam, async (req, res) => {
   try {
     const { poolId } = req.params;
     removeFromWatchlist(poolId);
@@ -424,8 +424,8 @@ router.put('/settings/telegram', validate(telegramConfigSchema), async (req, res
   }
 });
 
-// Save risk config (persisted to disk)
-router.put('/settings/risk-config', async (req, res) => {
+// Save risk config (persisted to DB, validated with Zod)
+router.put('/settings/risk-config', validate(riskConfigSchema), async (req, res) => {
   try {
     persistService.setRiskConfig(req.body);
     res.json({
@@ -651,7 +651,7 @@ router.post('/alerts', validate(alertSchema), async (req, res) => {
 });
 
 // Delete alert rule
-router.delete('/alerts/:id', async (req, res) => {
+router.delete('/alerts/:id', validateIdParam, async (req, res) => {
   try {
     const { id } = req.params;
     alertService.removeRule(id);
@@ -724,7 +724,7 @@ router.post('/ranges', validate(rangePositionSchema), async (req, res) => {
 });
 
 // Delete range position
-router.delete('/ranges/:id', async (req, res) => {
+router.delete('/ranges/:id', validateIdParam, async (req, res) => {
   try {
     const { id } = req.params;
     const deleted = rangeMonitorService.deletePosition(id);
@@ -915,7 +915,7 @@ router.post('/favorites', validate(favoriteSchema), async (req, res) => {
   }
 });
 
-router.delete('/favorites/:poolId', async (req, res) => {
+router.delete('/favorites/:poolId', validatePoolIdParam, async (req, res) => {
   try {
     const { poolId } = req.params;
     await getPrisma().favorite.deleteMany({ where: { poolId } });
@@ -953,7 +953,7 @@ router.post('/notes', validate(noteSchema), async (req, res) => {
   }
 });
 
-router.delete('/notes/:id', async (req, res) => {
+router.delete('/notes/:id', validateIdParam, async (req, res) => {
   try {
     await getPrisma().note.delete({ where: { id: req.params.id } });
     res.json({ success: true });

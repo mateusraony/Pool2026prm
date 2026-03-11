@@ -44,7 +44,7 @@ export interface PersistedData {
 
 class PersistService {
   private prisma: PrismaClient | null = null;
-  private cache: Record<string, any> = {};
+  private cache: Partial<PersistedData> & Record<string, unknown> = {};
   private _ready = false;
 
   /**

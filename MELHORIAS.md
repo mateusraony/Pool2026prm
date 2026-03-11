@@ -6,16 +6,16 @@
 
 ## Tabela de Melhorias por Etapas
 
-### ETAPA 1 — Segurança e Estabilidade (Prioridade Alta)
+### ETAPA 1 — Segurança e Estabilidade (Prioridade Alta) ✅ CONCLUÍDA
 
-| # | Área | Melhoria | Impacto | Esforço |
-|---|------|----------|---------|---------|
-| 1.1 | **Segurança** | Remover endpoint `/debug` em produção (expõe paths internos, env vars, estrutura do servidor) | Alto | Baixo |
-| 1.2 | **Segurança** | CORS restritivo — substituir `cors()` aberto por allowlist de origens | Alto | Baixo |
-| 1.3 | **Segurança** | Rate limiting na API — adicionar `express-rate-limit` para prevenir abuso | Alto | Baixo |
-| 1.4 | **Segurança** | Validar `poolId` em DELETE `/favorites/:poolId` e `/watchlist/:poolId` contra injection | Médio | Baixo |
-| 1.5 | **Estabilidade** | Adicionar graceful shutdown (SIGTERM handler) para fechar conexões Prisma e cron jobs | Alto | Médio |
-| 1.6 | **Tipos** | Remover `any` em `saveRiskConfig(riskConfig: any)` — criar schema Zod | Médio | Baixo |
+| # | Área | Melhoria | Impacto | Esforço | Status |
+|---|------|----------|---------|---------|--------|
+| ~~1.1~~ | **Segurança** | Remover endpoint `/debug` em produção (expõe paths internos, env vars, estrutura do servidor) | Alto | Baixo | ✅ |
+| ~~1.2~~ | **Segurança** | CORS restritivo — substituir `cors()` aberto por allowlist de origens | Alto | Baixo | ✅ |
+| ~~1.3~~ | **Segurança** | Rate limiting na API — adicionar `express-rate-limit` para prevenir abuso | Alto | Baixo | ✅ |
+| ~~1.4~~ | **Segurança** | Validar `poolId` em DELETE `/favorites/:poolId` e `/watchlist/:poolId` contra injection | Médio | Baixo | ✅ |
+| ~~1.5~~ | **Estabilidade** | Adicionar graceful shutdown (SIGTERM handler) para fechar conexões Prisma e cron jobs | Alto | Médio | ✅ |
+| ~~1.6~~ | **Tipos** | Remover `any` em `saveRiskConfig(riskConfig: any)` — criar schema Zod | Médio | Baixo | ✅ |
 
 ### ETAPA 2 — Performance (Prioridade Alta)
 
