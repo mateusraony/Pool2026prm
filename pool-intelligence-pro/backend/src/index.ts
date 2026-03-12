@@ -94,16 +94,15 @@ app.use((req, res, next) => {
 // ============================================
 async function initPersistence() {
   try {
-    const { persistService } = require('./services/persist.service.js');
+    const { persistService } = await import('./services/persist.service.js');
     await persistService.init();
     console.log('[BOOT] Database persistence initialized');
 
-    // Now load saved config into services
-    const { telegramBot } = require('./bot/telegram.js');
+    const { telegramBot } = await import('./bot/telegram.js');
     telegramBot.loadFromDb();
     console.log('[BOOT] Telegram config loaded from DB');
 
-    const { notificationSettingsService } = require('./services/notification-settings.service.js');
+    const { notificationSettingsService } = await import('./services/notification-settings.service.js');
     notificationSettingsService.loadFromDb();
     console.log('[BOOT] Notification settings loaded from DB');
 
@@ -157,21 +156,9 @@ app.use('/api', async (_req, res, next) => {
 // ============================================
 // API ROUTES — loaded AFTER readiness gate
 // ============================================
-try {
-  const routes = require('./routes/index.js').default;
-  app.use('/api', routes);
-  console.log('[BOOT] API routes loaded successfully');
-} catch (err: any) {
-  console.error('[BOOT] Failed to load API routes:', err.message);
-  // Fallback: API returns error message so we can debug
-  app.use('/api', (_req, res) => {
-    res.status(503).json({
-      success: false,
-      error: 'API routes failed to load: ' + (err.message || 'unknown error'),
-      hint: 'Check Render logs for details',
-    });
-  });
-}
+import routes from './routes/index.js';
+app.use('/api', routes);
+console.log('[BOOT] API routes loaded');
 
 // ============================================
 // SERVE FRONTEND STATIC FILES
@@ -219,17 +206,15 @@ const server = app.listen(PORT, () => {
   console.log('[BOOT] Active chains: ' + config.defaults.chains.join(', '));
 
   // Initialize background jobs (deferred, non-blocking)
-  try {
-    const { initializeJobs } = require('./jobs/index.js');
+  import('./jobs/index.js').then(({ initializeJobs }) => {
     initializeJobs();
-  } catch (err: any) {
+  }).catch((err: any) => {
     console.error('[BOOT] Failed to initialize jobs:', err.message);
-  }
+  });
 
   // ============================================
-  // KEEP-ALIVE: Prevent Render free tier from sleeping (every 13 min)
+  // KEEP-ALIVE: Prevent Render free tier from sleeping (every 13 min via cron)
   // ============================================
-  const KEEP_ALIVE_INTERVAL = 13 * 60 * 1000;
   let keepAliveUrl = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || '';
   if (keepAliveUrl && !keepAliveUrl.startsWith('http')) {
     keepAliveUrl = 'https://' + keepAliveUrl;
@@ -238,14 +223,26 @@ const server = app.listen(PORT, () => {
     keepAliveUrl = `http://localhost:${PORT}`;
   }
 
-  setInterval(() => {
-    const pingUrl = `${keepAliveUrl}/health`;
-    const mod = pingUrl.startsWith('https') ? 'https' : 'http';
-    import(mod).then(m => {
-      m.get(pingUrl, (res: any) => { res.resume(); }).on('error', () => {});
+  import('node-cron').then(({ default: cron }) => {
+    // Every 13 minutes: */13 * * * *
+    cron.schedule('*/13 * * * *', () => {
+      const pingUrl = `${keepAliveUrl}/health`;
+      const mod = pingUrl.startsWith('https') ? 'https' : 'http';
+      import(mod).then(m => {
+        m.get(pingUrl, (res: any) => { res.resume(); }).on('error', () => {});
+      });
     });
-  }, KEEP_ALIVE_INTERVAL);
-  console.log(`[BOOT] Keep-alive ping every 13min → ${keepAliveUrl}/health`);
+    console.log(`[BOOT] Keep-alive cron every 13min → ${keepAliveUrl}/health`);
+  }).catch(() => {
+    console.warn('[BOOT] node-cron not available, using setInterval for keep-alive');
+    setInterval(() => {
+      const pingUrl = `${keepAliveUrl}/health`;
+      const mod = pingUrl.startsWith('https') ? 'https' : 'http';
+      import(mod).then(m => {
+        m.get(pingUrl, (res: any) => { res.resume(); }).on('error', () => {});
+      });
+    }, 13 * 60 * 1000);
+  });
 });
 
 // ============================================
@@ -258,16 +255,13 @@ function gracefulShutdown(signal: string) {
     console.log('[SHUTDOWN] HTTP server closed');
 
     // Close Prisma connections
-    try {
-      const { PrismaClient } = require('@prisma/client');
+    import('@prisma/client').then(({ PrismaClient }) => {
       const prisma = new PrismaClient();
       prisma.$disconnect().then(() => {
         console.log('[SHUTDOWN] Prisma disconnected');
         process.exit(0);
       }).catch(() => process.exit(0));
-    } catch {
-      process.exit(0);
-    }
+    }).catch(() => process.exit(0));
   });
 
   // Force exit after 10s if graceful shutdown stalls
