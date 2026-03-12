@@ -1,6 +1,14 @@
 /**
  * Pool types used by pool-scout-pro UI components.
  * These are the "view model" types that map from the Pool2026prm API types.
+ *
+ * NOTE: api/client.ts defines separate API response types (Pool, FavoritePool, etc.)
+ * with the same names but different structures. The types here are UI view models,
+ * while api/client.ts types represent raw API responses.
+ *
+ * Naming convention:
+ *   - types/pool.ts → UI view models (used by Scout pages)
+ *   - api/client.ts → API response types (used by data fetching hooks)
  */
 
 export interface Pool {

@@ -1,22 +1,34 @@
-import { Component, ReactNode } from 'react';
+import { Component, ReactNode, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import { Toaster } from './components/ui/sonner';
-// Scout pages (primary UI)
-import ScoutDashboard from './pages/ScoutDashboard';
-import ScoutRecommended from './pages/ScoutRecommended';
-import ScoutActivePools from './pages/ScoutActivePools';
-import ScoutPoolDetail from './pages/ScoutPoolDetail';
-import ScoutFavorites from './pages/ScoutFavorites';
-import ScoutHistory from './pages/ScoutHistory';
-import ScoutSettings from './pages/ScoutSettings';
-// Utility pages (unique functionality, no Scout equivalent)
-import PoolsPage from './pages/Pools';
-import TokenAnalyzerPage from './pages/TokenAnalyzer';
-import RadarPage from './pages/Radar';
-import SimulationPage from './pages/Simulation';
-import AlertsPage from './pages/Alerts';
-import StatusPage from './pages/Status';
+
+// Lazy-loaded pages for bundle splitting
+const ScoutDashboard = lazy(() => import('./pages/ScoutDashboard'));
+const ScoutRecommended = lazy(() => import('./pages/ScoutRecommended'));
+const ScoutActivePools = lazy(() => import('./pages/ScoutActivePools'));
+const ScoutPoolDetail = lazy(() => import('./pages/ScoutPoolDetail'));
+const ScoutFavorites = lazy(() => import('./pages/ScoutFavorites'));
+const ScoutHistory = lazy(() => import('./pages/ScoutHistory'));
+const ScoutSettings = lazy(() => import('./pages/ScoutSettings'));
+const PoolsPage = lazy(() => import('./pages/Pools'));
+const TokenAnalyzerPage = lazy(() => import('./pages/TokenAnalyzer'));
+const RadarPage = lazy(() => import('./pages/Radar'));
+const SimulationPage = lazy(() => import('./pages/Simulation'));
+const AlertsPage = lazy(() => import('./pages/Alerts'));
+const StatusPage = lazy(() => import('./pages/Status'));
+
+function PageLoader() {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
+      <div style={{ textAlign: 'center', color: '#9ca3af' }}>
+        <div style={{ width: '2rem', height: '2rem', border: '3px solid #4f46e5', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 0.75rem' }} />
+        <p style={{ fontSize: '0.875rem' }}>Carregando...</p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      </div>
+    </div>
+  );
+}
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   constructor(props: { children: ReactNode }) {
@@ -49,6 +61,16 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   }
 }
 
+function LazyPage({ children }: { children: ReactNode }) {
+  return (
+    <ErrorBoundary>
+      <Suspense fallback={<PageLoader />}>
+        {children}
+      </Suspense>
+    </ErrorBoundary>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -56,21 +78,21 @@ export default function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
           {/* Scout pages (primary navigation) */}
-          <Route path="dashboard" element={<ErrorBoundary><ScoutDashboard /></ErrorBoundary>} />
-          <Route path="recommended" element={<ErrorBoundary><ScoutRecommended /></ErrorBoundary>} />
-          <Route path="active" element={<ErrorBoundary><ScoutActivePools /></ErrorBoundary>} />
-          <Route path="favorites" element={<ErrorBoundary><ScoutFavorites /></ErrorBoundary>} />
-          <Route path="history" element={<ErrorBoundary><ScoutHistory /></ErrorBoundary>} />
-          <Route path="scout-settings" element={<ErrorBoundary><ScoutSettings /></ErrorBoundary>} />
-          <Route path="pools/:chain/:address" element={<ErrorBoundary><ScoutPoolDetail /></ErrorBoundary>} />
+          <Route path="dashboard" element={<LazyPage><ScoutDashboard /></LazyPage>} />
+          <Route path="recommended" element={<LazyPage><ScoutRecommended /></LazyPage>} />
+          <Route path="active" element={<LazyPage><ScoutActivePools /></LazyPage>} />
+          <Route path="favorites" element={<LazyPage><ScoutFavorites /></LazyPage>} />
+          <Route path="history" element={<LazyPage><ScoutHistory /></LazyPage>} />
+          <Route path="scout-settings" element={<LazyPage><ScoutSettings /></LazyPage>} />
+          <Route path="pools/:chain/:address" element={<LazyPage><ScoutPoolDetail /></LazyPage>} />
           {/* Utility pages (unique functionality) */}
-          <Route path="pools" element={<ErrorBoundary><PoolsPage /></ErrorBoundary>} />
-          <Route path="token-analyzer" element={<ErrorBoundary><TokenAnalyzerPage /></ErrorBoundary>} />
-          <Route path="radar" element={<ErrorBoundary><RadarPage /></ErrorBoundary>} />
-          <Route path="simulation" element={<ErrorBoundary><SimulationPage /></ErrorBoundary>} />
-          <Route path="simulation/:chain/:address" element={<ErrorBoundary><SimulationPage /></ErrorBoundary>} />
-          <Route path="alerts" element={<ErrorBoundary><AlertsPage /></ErrorBoundary>} />
-          <Route path="status" element={<ErrorBoundary><StatusPage /></ErrorBoundary>} />
+          <Route path="pools" element={<LazyPage><PoolsPage /></LazyPage>} />
+          <Route path="token-analyzer" element={<LazyPage><TokenAnalyzerPage /></LazyPage>} />
+          <Route path="radar" element={<LazyPage><RadarPage /></LazyPage>} />
+          <Route path="simulation" element={<LazyPage><SimulationPage /></LazyPage>} />
+          <Route path="simulation/:chain/:address" element={<LazyPage><SimulationPage /></LazyPage>} />
+          <Route path="alerts" element={<LazyPage><AlertsPage /></LazyPage>} />
+          <Route path="status" element={<LazyPage><StatusPage /></LazyPage>} />
           {/* Redirects: old routes → Scout equivalents */}
           <Route path="positions" element={<Navigate to="/active" replace />} />
           <Route path="watchlist" element={<Navigate to="/favorites" replace />} />

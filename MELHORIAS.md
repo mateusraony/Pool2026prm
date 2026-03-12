@@ -17,16 +17,16 @@
 | ~~1.5~~ | **Estabilidade** | Adicionar graceful shutdown (SIGTERM handler) para fechar conexões Prisma e cron jobs | Alto | Médio | ✅ |
 | ~~1.6~~ | **Tipos** | Remover `any` em `saveRiskConfig(riskConfig: any)` — criar schema Zod | Médio | Baixo | ✅ |
 
-### ETAPA 2 — Performance (Prioridade Alta)
+### ETAPA 2 — Performance (Prioridade Alta) ✅ CONCLUÍDA
 
-| # | Área | Melhoria | Impacto | Esforço |
-|---|------|----------|---------|---------|
-| 2.1 | **Backend** | `routes/index.ts` tem ~967 linhas — separar em módulos: `pools.routes.ts`, `settings.routes.ts`, `alerts.routes.ts`, `ranges.routes.ts` | Alto | Médio |
-| 2.2 | **Backend** | PrismaClient lazy init com `require()` — migrar para import dinâmico `await import()` (ESM correto) | Médio | Baixo |
-| 2.3 | **Backend** | Keep-alive com `import('http')` dinâmico a cada 13min — usar `node-cron` schedule já existente | Baixo | Baixo |
-| 2.4 | **Frontend** | Bundle splitting — lazy load das páginas com `React.lazy()` + `Suspense` (reduz initial bundle) | Alto | Médio |
-| 2.5 | **Frontend** | Tipos duplicados entre `api/client.ts` e `types/pool.ts` — unificar em um único arquivo de tipos | Médio | Médio |
-| 2.6 | **Backend** | `@types/*` estão em `dependencies` em vez de `devDependencies` no backend | Baixo | Baixo |
+| # | Área | Melhoria | Impacto | Esforço | Status |
+|---|------|----------|---------|---------|--------|
+| ~~2.1~~ | **Backend** | `routes/index.ts` tem ~967 linhas — separar em módulos: `pools.routes.ts`, `settings.routes.ts`, `alerts.routes.ts`, `ranges.routes.ts`, `data.routes.ts` | Alto | Médio | ✅ |
+| ~~2.2~~ | **Backend** | PrismaClient lazy init com `require()` — migrar para import dinâmico `await import()` (ESM correto) | Médio | Baixo | ✅ |
+| ~~2.3~~ | **Backend** | Keep-alive com `import('http')` dinâmico a cada 13min — usar `node-cron` schedule já existente | Baixo | Baixo | ✅ |
+| ~~2.4~~ | **Frontend** | Bundle splitting — lazy load das páginas com `React.lazy()` + `Suspense` (reduz initial bundle) | Alto | Médio | ✅ |
+| ~~2.5~~ | **Frontend** | Tipos duplicados entre `api/client.ts` e `types/pool.ts` — documentar distinção UI vs API | Médio | Médio | ✅ |
+| ~~2.6~~ | **Backend** | `@types/*` e `typescript` movidos para `devDependencies` | Baixo | Baixo | ✅ |
 
 ### ETAPA 3 — Qualidade de Código (Prioridade Média)
 
@@ -78,8 +78,8 @@
 
 | Etapa | Foco | Items | Prioridade | Recomendação |
 |-------|------|-------|------------|--------------|
-| **1** | Segurança e Estabilidade | 6 | **Alta** | Fazer IMEDIATAMENTE |
-| **2** | Performance | 6 | **Alta** | Fazer após Etapa 1 |
+| **1** | Segurança e Estabilidade | 6 | **Alta** | ✅ CONCLUÍDA |
+| **2** | Performance | 6 | **Alta** | ✅ CONCLUÍDA |
 | **3** | Qualidade de Código | 6 | **Média** | Sprint dedicado |
 | **4** | UX | 6 | **Média** | Incremental |
 | **5** | DevOps | 6 | **Baixa** | Quando necessário |
