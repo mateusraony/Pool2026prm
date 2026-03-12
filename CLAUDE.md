@@ -26,8 +26,12 @@ Pool2026prm/
 ├── package.json                       # Scripts root (install:all, build, start)
 ├── .github/workflows/claude.yml       # GitHub Actions para @claude
 ├── .claude/
-│   ├── commands/                      # Slash commands customizados
-│   └── settings.json                  # Configurações do Claude Code
+│   ├── commands/                      # Slash commands (projeto + GSD)
+│   ├── agents/                        # GSD agents (executor, planner, etc.)
+│   ├── skills/ui-ux-pro-max/         # UI-UX Pro Max skill + dados
+│   ├── get-shit-done/                 # GSD core (workflows, bin, templates)
+│   ├── hooks/                         # GSD hooks (update, context monitor, statusline)
+│   └── settings.json                  # Permissões + hooks (GSD + claude-mem)
 └── pool-intelligence-pro/
     ├── frontend/                      # React SPA
     │   ├── src/
@@ -84,13 +88,16 @@ Todas as rotas começam com `/api`. Formato de resposta padrão:
 { success: boolean, data?: T, error?: string, timestamp: Date }
 ```
 
-### Segurança
+### Segurança (ETAPA 1 ✅)
 
 - **NUNCA** commitar `.env`, `DATABASE_URL`, tokens ou secrets
 - **Helmet** está habilitado (CSP desabilitado para Vite)
-- **CORS** aberto (single-user app) — restringir se multi-user
+- **CORS** restritivo em produção (allowlist via `RENDER_EXTERNAL_URL`, `APP_URL`, `CORS_ORIGIN`)
+- **Rate limiting** ativo: 100 req/min por IP em `/api/*`
 - Validar TODOS os inputs com Zod antes de processar
-- **Debug endpoint** (`/debug`) deve ser removido em produção
+- **Debug endpoint** (`/debug`) só existe em development
+- **Graceful shutdown** configurado (SIGTERM/SIGINT)
+- **Param validation** em todos os DELETE endpoints
 
 ### Deploy (Render)
 
@@ -156,14 +163,61 @@ Todas as rotas começam com `/api`. Formato de resposta padrão:
 | `/status` | Status | Health do sistema |
 | `/scout-settings` | ScoutSettings | Configurações |
 
+## Skills & Ferramentas Instaladas
+
+### 1. GSD — Get Shit Done (v1.22.4)
+Meta-prompting e context engineering para desenvolvimento spec-driven.
+- **Quando usar**: Projetos grandes, planejamento de fases, execução paralela
+- **Comandos principais**:
+  - `/gsd:new-project` — Inicializar projeto com research + roadmap
+  - `/gsd:plan-phase N` — Pesquisar + planejar fase N
+  - `/gsd:execute-phase N` — Executar planos em waves paralelas
+  - `/gsd:quick` — Tarefas ad-hoc sem planejamento completo
+  - `/gsd:progress` — Status e próximos passos
+  - `/gsd:map-codebase` — Mapear codebase existente
+  - `/gsd:resume-work` — Retomar trabalho de sessão anterior
+  - `/gsd:help` — Todos os comandos disponíveis
+
+### 2. UI-UX Pro Max Skill
+Design intelligence com 161 regras de raciocínio, 67 estilos UI, 161 paletas, 57 pares tipográficos.
+- **Auto-ativa** em requests de UI/UX (landing pages, dashboards, componentes visuais)
+- **Stack suportadas**: React, shadcn/ui, TailwindCSS (nosso stack)
+- **Dados**: `.claude/skills/ui-ux-pro-max/data/` (estilos, cores, tipografia, guidelines)
+
+### 3. Claude-Mem (Memória Persistente)
+Sistema de memória que captura automaticamente o que Claude faz, comprime com AI, e injeta contexto relevante em sessões futuras.
+- **Automático**: Hooks configurados em SessionStart, PostToolUse, Stop
+- **Busca**: Use `mem-search` para consultar histórico de sessões
+- **Privacidade**: Use tags `<private>` para excluir conteúdo sensível
+
+### 4. Awesome Claude Code (Best Practices)
+Referência de best practices integrada no CLAUDE.md e configurações do projeto.
+- Multi-agent orchestration via subagents
+- Context engineering (arquivos separados para qualidade)
+- Atomic git commits por tarefa
+- Structured logging e error boundaries
+
+## Workflow Recomendado
+
+1. **Início de sessão**: Leia `CHECKPOINT.md` → `/gsd:resume-work` ou `/gsd:progress`
+2. **Antes de UI/UX**: O skill UI-UX Pro Max auto-ativa; para design systems: `python3 .claude/skills/ui-ux-pro-max/scripts/search.py "query"`
+3. **Tarefas rápidas**: `/gsd:quick` para mudanças pontuais com tracking
+4. **Memória**: Claude-mem salva contexto automaticamente entre sessões
+5. **Final de sessão**: `/checkpoint` para salvar estado
+
 ## Uso do Claude
 
 Mencione `@claude` em qualquer comentário de Issue ou PR para obter assistência.
 Respostas são geradas via GitHub Actions (`.github/workflows/claude.yml`).
 
-### Slash Commands Disponíveis
+### Slash Commands do Projeto
 
 - `/status` — Verificar health do sistema e resumo
 - `/checkpoint` — Gerar/atualizar CHECKPOINT.md
 - `/analyze` — Analisar código e sugerir melhorias
 - `/deploy-check` — Verificar se build está pronto para deploy
+
+### Slash Commands GSD (Get Shit Done)
+
+Veja `/gsd:help` para a lista completa. Principais:
+`/gsd:new-project`, `/gsd:plan-phase`, `/gsd:execute-phase`, `/gsd:verify-work`, `/gsd:quick`, `/gsd:progress`
