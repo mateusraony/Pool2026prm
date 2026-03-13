@@ -1,5 +1,6 @@
-import { Component, ReactNode, lazy, Suspense } from 'react';
+import { ReactNode, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { ErrorBoundary } from 'react-error-boundary';
 import Layout from './components/layout/Layout';
 import { Toaster } from './components/ui/sonner';
 
@@ -30,40 +31,29 @@ function PageLoader() {
   );
 }
 
-class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
-  constructor(props: { children: ReactNode }) {
-    super(props);
-    this.state = { error: null };
-  }
-  static getDerivedStateFromError(error: Error) {
-    return { error };
-  }
-  render() {
-    if (this.state.error) {
-      return (
-        <div style={{ padding: '2rem', textAlign: 'center', color: '#f87171' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-            Erro ao carregar a pagina
-          </h2>
-          <p style={{ color: '#9ca3af', marginBottom: '1rem', fontSize: '0.875rem' }}>
-            {this.state.error.message}
-          </p>
-          <button
-            style={{ background: '#6366f1', color: '#fff', padding: '0.5rem 1.5rem', borderRadius: '0.5rem', border: 'none', cursor: 'pointer' }}
-            onClick={() => this.setState({ error: null })}
-          >
-            Tentar novamente
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
+function PageErrorFallback({ error, resetErrorBoundary }: { error: unknown; resetErrorBoundary: () => void }) {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    <div style={{ padding: '2rem', textAlign: 'center', color: '#f87171' }}>
+      <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+        Erro ao carregar a pagina
+      </h2>
+      <p style={{ color: '#9ca3af', marginBottom: '1rem', fontSize: '0.875rem' }}>
+        {message}
+      </p>
+      <button
+        style={{ background: '#6366f1', color: '#fff', padding: '0.5rem 1.5rem', borderRadius: '0.5rem', border: 'none', cursor: 'pointer' }}
+        onClick={resetErrorBoundary}
+      >
+        Tentar novamente
+      </button>
+    </div>
+  );
 }
 
 function LazyPage({ children }: { children: ReactNode }) {
   return (
-    <ErrorBoundary>
+    <ErrorBoundary FallbackComponent={PageErrorFallback}>
       <Suspense fallback={<PageLoader />}>
         {children}
       </Suspense>

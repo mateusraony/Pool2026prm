@@ -164,7 +164,7 @@ router.get('/pools/:chain/:address', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Pool not found' });
     }
 
-    const score = scoreService.calculateScore(pool);
+    const score = memoryStore.getScore(pool.externalId) || scoreService.calculateScore(pool);
 
     res.json({
       success: true,
@@ -262,7 +262,7 @@ router.get('/pools-detail/:chain/:address', async (req, res) => {
     }
 
     const unified = poolIntelligenceService.enrichToUnifiedPool(pool, { updatedAt: new Date() });
-    const score = scoreService.calculateScore(pool);
+    const score = memoryStore.getScore(pool.externalId) || scoreService.calculateScore(pool);
 
     const horizonD = parseInt(horizonDays as string) || 7;
     const capUSD = parseFloat(capital as string) || 1000;
