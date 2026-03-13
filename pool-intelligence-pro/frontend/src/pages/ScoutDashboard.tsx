@@ -316,6 +316,54 @@ export default function ScoutDashboard() {
             </div>
           </div>
 
+          {/* System Metrics Widget */}
+          {healthData && (
+            <div className="glass-card p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold">Sistema</h3>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/status')} className="text-xs">
+                  Detalhes <ArrowRight className="ml-1 h-3 w-3" />
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {healthData.uptime && (
+                  <div className="rounded-lg bg-secondary/50 p-2 text-center">
+                    <p className="text-xs text-muted-foreground">Uptime</p>
+                    <p className="text-sm font-mono font-medium">{healthData.uptime.formatted}</p>
+                  </div>
+                )}
+                {healthData.memory && (
+                  <div className="rounded-lg bg-secondary/50 p-2 text-center">
+                    <p className="text-xs text-muted-foreground">RAM</p>
+                    <p className={`text-sm font-mono font-medium ${
+                      healthData.memory.rssMB > 400 ? 'text-destructive' : healthData.memory.rssMB > 300 ? 'text-warning' : ''
+                    }`}>{healthData.memory.rssMB.toFixed(0)} MB</p>
+                  </div>
+                )}
+                {healthData.requests && (
+                  <div className="rounded-lg bg-secondary/50 p-2 text-center">
+                    <p className="text-xs text-muted-foreground">Requests</p>
+                    <p className="text-sm font-mono font-medium">{healthData.requests.totalRequests}</p>
+                  </div>
+                )}
+                {healthData.requests && (
+                  <div className="rounded-lg bg-secondary/50 p-2 text-center">
+                    <p className="text-xs text-muted-foreground">Error Rate</p>
+                    <p className={`text-sm font-mono font-medium ${
+                      healthData.requests.errorRate > 5 ? 'text-destructive' :
+                      healthData.requests.errorRate > 1 ? 'text-warning' : 'text-success'
+                    }`}>{healthData.requests.errorRate.toFixed(1)}%</p>
+                  </div>
+                )}
+              </div>
+              {healthData.requests && healthData.requests.avgDurationMs > 0 && (
+                <div className="mt-2 text-xs text-muted-foreground text-center">
+                  Latência média: {healthData.requests.avgDurationMs.toFixed(0)}ms
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Network Exposure - from real positions */}
           <div className="glass-card p-4">
             <h3 className="font-semibold mb-3">Exposicao por Rede</h3>

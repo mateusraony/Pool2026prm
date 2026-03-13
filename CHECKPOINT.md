@@ -3,14 +3,41 @@
 ## Status Atual
 **Branch:** `claude/continue-stage-1-improvements-Wl2yZ`
 **Data:** 2026-03-13 UTC
-**Fase:** ETAPAS 1, 2, 3 e 4 concluídas
+**Fase:** ETAPAS 1, 2, 3, 4 e 5 concluídas
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-13 — iniciar ETAPA 5"`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-13 — iniciar ETAPA 6"`
 
 ---
 
 ## O QUE FOI FEITO (2026-03-13)
+
+### ETAPA 5 — UX & Frontend Polish ✅
+
+- 5.1: Página de Status consumindo /api/health expandido
+  - Uptime, memória do servidor (RSS/Heap com barra visual vs limite Render 512MB)
+  - Requests: total, erros, error rate, latência média, tabela de endpoints (p95, max)
+  - Background Jobs: runs, successes, failures, avg duration, last run por job
+  - Log Summary: contagem INFO/WARN/ERROR/CRITICAL (última hora)
+  - Mantido: provedores, cache, MemoryStore, logs recentes, copy-to-clipboard
+- 5.2: Widget de métricas no Dashboard
+  - Card compacto no sidebar com uptime, RAM, requests, error rate, latência
+  - Link direto para /status para detalhes completos
+  - Cores dinâmicas para indicar status (verde/amarelo/vermelho)
+- 5.3: Loading states e error handling melhorados
+  - PageLoader: usando Tailwind classes, mensagem "Conectando ao servidor"
+  - PageErrorFallback: detecção de erro de rede vs erro genérico
+    - Mensagem contextual para cold starts do Render
+    - Botão "Ir ao Dashboard" como escape alternativo
+  - GlobalErrorFallback: UX melhorada com ícone, mensagem de ajuda
+- 5.4: PWA manifest + offline fallback
+  - manifest.json: name, icons SVG (192/512), theme_color, standalone display
+  - Service worker: network-first, offline fallback para navigation requests
+  - offline.html: página estática com branding e botão de retry
+  - Meta tags: theme-color, apple-mobile-web-app-capable, apple-touch-icon
+  - Ícones SVG customizados (círculos concêntricos + onda verde)
+- Regra Absoluta #1 adicionada ao CLAUDE.md: NUNCA quebrar o que já funciona
+- HealthData interface expandida com uptime, memory, requests, jobs, logs
 
 ### ETAPA 4 — Observabilidade & Monitoramento ✅
 
@@ -91,8 +118,8 @@
 
 ---
 
-## PRÓXIMOS PASSOS → ETAPA 5 (UX & Frontend Polish)
-- 5.1 — Página de Status (/status) consumir novo /api/health expandido
-- 5.2 — Dashboard de métricas com gráficos (uptime, requests, errors)
-- 5.3 — Melhorar loading states e error handling no frontend
-- 5.4 — PWA manifest + offline fallback page
+## PRÓXIMOS PASSOS → ETAPA 6 (Features Avançadas)
+- 6.1 — Comparador de pools side-by-side
+- 6.2 — Histórico de performance com gráficos Recharts
+- 6.3 — Notificações in-app (toast + badge no sidebar)
+- 6.4 — Export de dados (CSV/PDF para relatórios)

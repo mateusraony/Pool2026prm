@@ -1,0 +1,24 @@
+{
+  "name": "Pool Intelligence Pro",
+  "short_name": "Pool Intel",
+  "description": "Sistema profissional de análise de pools de liquidez DeFi",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0a0a1a",
+  "theme_color": "#6366f1",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
