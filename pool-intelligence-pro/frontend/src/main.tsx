@@ -9,19 +9,23 @@ import './index.css';
 function GlobalErrorFallback({ error, resetErrorBoundary }: { error: unknown; resetErrorBoundary: () => void }) {
   const message = error instanceof Error ? error.message : String(error);
   return (
-    <div style={{ padding: '2rem', textAlign: 'center', background: '#0a0a1a', color: '#f87171', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui' }}>
-      <div>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1rem' }}>
+    <div style={{ padding: '2rem', textAlign: 'center', background: '#0a0a1a', color: '#e5e7eb', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui' }}>
+      <div style={{ maxWidth: '420px' }}>
+        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚠️</div>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem', color: '#f87171' }}>
           Erro na aplicacao
         </h2>
-        <p style={{ color: '#9ca3af', marginBottom: '1rem', fontSize: '0.875rem', maxWidth: '500px' }}>
+        <p style={{ color: '#9ca3af', marginBottom: '0.5rem', fontSize: '0.875rem' }}>
           {message}
+        </p>
+        <p style={{ color: '#6b7280', marginBottom: '1.5rem', fontSize: '0.75rem' }}>
+          Se o problema persistir, tente limpar o cache do navegador ou acessar novamente.
         </p>
         <button
           style={{ background: '#6366f1', color: '#fff', padding: '0.75rem 2rem', borderRadius: '0.5rem', border: 'none', cursor: 'pointer', fontSize: '0.875rem' }}
           onClick={() => { resetErrorBoundary(); window.location.reload(); }}
         >
-          Recarregar
+          Recarregar Aplicacao
         </button>
       </div>
     </div>

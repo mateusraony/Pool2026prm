@@ -106,10 +106,21 @@ export interface Recommendation {
 
 export interface HealthData {
   status: 'HEALTHY' | 'DEGRADED' | 'UNHEALTHY';
+  uptime?: { seconds: number; formatted: string };
+  memory?: { rssBytes: number; heapUsedBytes: number; heapTotalBytes: number; rssMB: number; heapUsedMB: number };
   providers: { name: string; isHealthy: boolean; isCircuitOpen: boolean; consecutiveFailures: number; isOptional?: boolean; note?: string }[];
   cache: { hits: number; misses: number; sets: number; keys: number; hitRate: number };
   memoryStore?: { pools: number; scores: number; watchlist: number; hasRecs: boolean; recsFresh: boolean; reads: number; hits: number; misses: number; writes: number; hitRatePct: number; estimatedKB: number };
   alerts: { rulesCount: number; recentAlertsCount: number; triggersToday: number };
+  requests?: {
+    totalRequests: number;
+    totalErrors: number;
+    errorRate: number;
+    avgDurationMs: number;
+    byEndpoint: Record<string, { count: number; avgMs: number; p95Ms: number; maxMs: number; errors: number }>;
+  };
+  jobs?: Record<string, { totalRuns: number; successes: number; failures: number; avgDurationMs: number; lastRunAt: string | null; lastDurationMs: number | null }>;
+  logs?: { INFO: number; WARN: number; ERROR: number; CRITICAL: number };
   timestamp: string;
 }
 
