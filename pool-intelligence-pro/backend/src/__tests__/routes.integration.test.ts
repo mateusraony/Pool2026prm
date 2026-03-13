@@ -47,7 +47,11 @@ vi.mock('../adapters/index.js', () => ({
 }));
 
 vi.mock('../services/log.service.js', () => ({
-  logService: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logService: {
+    info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(),
+    getSummary: vi.fn().mockReturnValue({ INFO: 5, WARN: 1, ERROR: 0, CRITICAL: 0 }),
+    getErrorCount: vi.fn().mockReturnValue(0),
+  },
 }));
 
 vi.mock('../services/notification-settings.service.js', () => ({
@@ -69,9 +73,21 @@ vi.mock('../config/index.js', () => ({
     nodeEnv: 'test', port: 3000,
     defaults: { mode: 'NORMAL', capital: 1000, chains: ['ethereum', 'arbitrum', 'base'] },
     telegram: { botToken: '', chatId: '', enabled: false },
-    render: { externalUrl: '', isRender: false },
-    appUrl: 'http://localhost:3000',
-    corsOrigin: '',
+  },
+}));
+
+vi.mock('../services/metrics.service.js', () => ({
+  metricsService: {
+    recordRequest: vi.fn(),
+    recordJob: vi.fn(),
+    getSnapshot: vi.fn().mockReturnValue({
+      uptime: { seconds: 120, formatted: '0h 2m 0s' },
+      memory: { rssMB: 50, heapUsedMB: 30, rssBytes: 50000000, heapUsedBytes: 30000000, heapTotalBytes: 40000000 },
+      requests: { totalRequests: 10, totalErrors: 0, errorRate: 0, avgDurationMs: 50, byEndpoint: {} },
+      jobs: {},
+    }),
+    getErrorRate: vi.fn().mockReturnValue(0),
+    getMemoryUsage: vi.fn().mockReturnValue({ rssMB: 50, heapUsedMB: 30 }),
   },
 }));
 
@@ -276,13 +292,18 @@ describe('GET /api/health', () => {
   let app: express.Express;
   beforeEach(() => { vi.clearAllMocks(); app = createTestApp(); });
 
-  it('returns health status with provider info', async () => {
+  it('returns health status with provider info and metrics', async () => {
     const res = await request(app).get('/api/health');
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('HEALTHY');
     expect(res.body.providers).toBeDefined();
     expect(res.body.cache).toBeDefined();
     expect(res.body.memoryStore).toBeDefined();
+    expect(res.body.uptime).toBeDefined();
+    expect(res.body.memory).toBeDefined();
+    expect(res.body.requests).toBeDefined();
+    expect(res.body.jobs).toBeDefined();
+    expect(res.body.logs).toBeDefined();
     expect(res.body.timestamp).toBeDefined();
   });
 });

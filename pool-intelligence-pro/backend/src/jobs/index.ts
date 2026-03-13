@@ -12,6 +12,7 @@ import { config } from '../config/index.js';
 import { Pool, Score, Recommendation } from '../types/index.js';
 import { memoryStore } from '../services/memory-store.service.js';
 import { poolIntelligenceService } from '../services/pool-intelligence.service.js';
+import { metricsService } from '../services/metrics.service.js';
 
 // ============================================
 // JOB STATE MANAGER — encapsula todo estado mutável
@@ -80,6 +81,8 @@ export function removeFromWatchlist(poolId: string) {
 // JOB RUNNERS
 // ============================================
 async function radarJobRunner() {
+  const start = Date.now();
+  let success = true;
   try {
     const results = await runRadarJob();
 
@@ -102,7 +105,10 @@ async function radarJobRunner() {
       memoryStore: memoryStore.getStats(),
     });
   } catch (error) {
+    success = false;
     logService.error('SYSTEM', 'Radar job failed', { error });
+  } finally {
+    metricsService.recordJob('radar', Date.now() - start, success);
   }
 }
 
@@ -110,6 +116,8 @@ async function watchlistJobRunner() {
   const watchlist = jobState.getWatchlist();
   if (watchlist.length === 0) return;
 
+  const start = Date.now();
+  let success = true;
   try {
     const result = await runWatchlistJob(watchlist);
 
@@ -126,7 +134,10 @@ async function watchlistJobRunner() {
       }
     }
   } catch (error) {
+    success = false;
     logService.error('SYSTEM', 'Watchlist job failed', { error });
+  } finally {
+    metricsService.recordJob('watchlist', Date.now() - start, success);
   }
 }
 
@@ -137,6 +148,8 @@ async function recommendationJobRunner() {
     return;
   }
 
+  const start = Date.now();
+  let success = true;
   try {
     const mode = config.defaults.mode;
     const capital = config.defaults.capital;
@@ -163,37 +176,66 @@ async function recommendationJobRunner() {
 
     logService.info('SYSTEM', 'Generated ' + recommendations.length + ' recommendations');
   } catch (error) {
+    success = false;
     logService.error('SYSTEM', 'Recommendation job failed', { error });
+  } finally {
+    metricsService.recordJob('recommendation', Date.now() - start, success);
   }
 }
 
 async function healthJobRunner() {
+  const start = Date.now();
+  let success = true;
   try {
     const health = await getAllProvidersHealth();
     const unhealthy = health.filter(h => !h.isHealthy);
+    const now = Date.now();
+    const canAlert = telegramBot.isEnabled() &&
+      notificationSettingsService.isEnabled('systemAlerts') &&
+      now - jobState.getLastHealthAlertTime() > jobState.HEALTH_ALERT_COOLDOWN;
 
+    // Provider health check
     if (unhealthy.length > 0) {
       logService.warn('SYSTEM', 'Unhealthy providers detected', { unhealthy });
 
-      const now = Date.now();
-      if (
-        unhealthy.length >= health.length / 2 &&
-        telegramBot.isEnabled() &&
-        notificationSettingsService.isEnabled('systemAlerts') &&
-        now - jobState.getLastHealthAlertTime() > jobState.HEALTH_ALERT_COOLDOWN
-      ) {
+      if (unhealthy.length >= health.length / 2 && canAlert) {
         jobState.setLastHealthAlertTime(now);
         await telegramBot.sendHealthAlert('DEGRADED',
           'Provedores com problema: ' + unhealthy.map(h => h.name).join(', ')
         );
       }
     }
+
+    // Error rate spike detection (>10% errors in last 5 minutes)
+    const errorRate = metricsService.getErrorRate(5);
+    if (errorRate > 0.10 && canAlert) {
+      jobState.setLastHealthAlertTime(now);
+      await telegramBot.sendHealthAlert('DEGRADED',
+        'Taxa de erro alta: ' + (errorRate * 100).toFixed(1) + '% nos ultimos 5 minutos'
+      );
+      logService.warn('METRICS', 'Error rate spike detected', { errorRate: (errorRate * 100).toFixed(1) + '%' });
+    }
+
+    // Memory threshold alert (>400MB RSS on free tier)
+    const mem = metricsService.getMemoryUsage();
+    if (mem.rssMB > 400 && canAlert) {
+      jobState.setLastHealthAlertTime(now);
+      await telegramBot.sendHealthAlert('DEGRADED',
+        'Uso de memoria alto: ' + mem.rssMB + 'MB RSS (heap: ' + mem.heapUsedMB + 'MB)'
+      );
+      logService.warn('METRICS', 'High memory usage', { rssMB: mem.rssMB, heapUsedMB: mem.heapUsedMB });
+    }
   } catch (error) {
+    success = false;
     logService.error('SYSTEM', 'Health check failed', { error });
+  } finally {
+    metricsService.recordJob('health', Date.now() - start, success);
   }
 }
 
 async function rangeCheckJobRunner() {
+  const start = Date.now();
+  let success = true;
   try {
     const stats = rangeMonitorService.getStats();
     if (stats.activePositions === 0) return;
@@ -201,11 +243,16 @@ async function rangeCheckJobRunner() {
     await rangeMonitorService.checkAllPositions();
     logService.info('SYSTEM', 'Range check completed', { activePositions: stats.activePositions });
   } catch (error) {
+    success = false;
     logService.error('SYSTEM', 'Range check job failed', { error });
+  } finally {
+    metricsService.recordJob('rangeCheck', Date.now() - start, success);
   }
 }
 
 async function dailyReportJobRunner() {
+  const start = Date.now();
+  let success = true;
   try {
     const settings = notificationSettingsService.getSettings();
     if (!settings.notifications.dailyReport) return;
@@ -225,7 +272,10 @@ async function dailyReportJobRunner() {
     jobState.setLastDailyReportDate(todayStr);
     await rangeMonitorService.sendPortfolioReport();
   } catch (error) {
+    success = false;
     logService.error('SYSTEM', 'Daily report job failed', { error });
+  } finally {
+    metricsService.recordJob('dailyReport', Date.now() - start, success);
   }
 }
 
