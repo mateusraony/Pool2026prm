@@ -1,5 +1,6 @@
-import { Component, ReactNode, lazy, Suspense } from 'react';
+import { ReactNode, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { ErrorBoundary } from 'react-error-boundary';
 import Layout from './components/layout/Layout';
 import { Toaster } from './components/ui/sonner';
 
@@ -20,50 +21,57 @@ const StatusPage = lazy(() => import('./pages/Status'));
 
 function PageLoader() {
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
-      <div style={{ textAlign: 'center', color: '#9ca3af' }}>
-        <div style={{ width: '2rem', height: '2rem', border: '3px solid #4f46e5', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 0.75rem' }} />
-        <p style={{ fontSize: '0.875rem' }}>Carregando...</p>
+    <div className="flex justify-center items-center min-h-[40vh]">
+      <div className="text-center text-muted-foreground">
+        <div className="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+        <p className="text-sm">Carregando...</p>
+        <p className="text-xs text-muted-foreground/60 mt-1">Conectando ao servidor</p>
         <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
       </div>
     </div>
   );
 }
 
-class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
-  constructor(props: { children: ReactNode }) {
-    super(props);
-    this.state = { error: null };
-  }
-  static getDerivedStateFromError(error: Error) {
-    return { error };
-  }
-  render() {
-    if (this.state.error) {
-      return (
-        <div style={{ padding: '2rem', textAlign: 'center', color: '#f87171' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
-            Erro ao carregar a pagina
-          </h2>
-          <p style={{ color: '#9ca3af', marginBottom: '1rem', fontSize: '0.875rem' }}>
-            {this.state.error.message}
-          </p>
-          <button
-            style={{ background: '#6366f1', color: '#fff', padding: '0.5rem 1.5rem', borderRadius: '0.5rem', border: 'none', cursor: 'pointer' }}
-            onClick={() => this.setState({ error: null })}
-          >
-            Tentar novamente
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
+function PageErrorFallback({ error, resetErrorBoundary }: { error: unknown; resetErrorBoundary: () => void }) {
+  const message = error instanceof Error ? error.message : String(error);
+  const isNetworkError = message.includes('Network') || message.includes('fetch') || message.includes('ECONNABORTED') || message.includes('timeout');
+  return (
+    <div className="p-8 text-center max-w-md mx-auto">
+      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-destructive/10 flex items-center justify-center">
+        <span className="text-2xl">{isNetworkError ? '🔌' : '⚠️'}</span>
+      </div>
+      <h2 className="text-xl font-bold text-destructive mb-2">
+        {isNetworkError ? 'Erro de conexao' : 'Erro ao carregar a pagina'}
+      </h2>
+      <p className="text-sm text-muted-foreground mb-1">
+        {message}
+      </p>
+      {isNetworkError && (
+        <p className="text-xs text-muted-foreground mb-4">
+          O servidor pode estar inicializando. Aguarde alguns segundos e tente novamente.
+        </p>
+      )}
+      <div className="flex gap-2 justify-center mt-4">
+        <button
+          className="bg-primary text-primary-foreground px-5 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+          onClick={resetErrorBoundary}
+        >
+          Tentar novamente
+        </button>
+        <button
+          className="bg-secondary text-secondary-foreground px-5 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+          onClick={() => window.location.href = '/dashboard'}
+        >
+          Ir ao Dashboard
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function LazyPage({ children }: { children: ReactNode }) {
   return (
-    <ErrorBoundary>
+    <ErrorBoundary FallbackComponent={PageErrorFallback}>
       <Suspense fallback={<PageLoader />}>
         {children}
       </Suspense>

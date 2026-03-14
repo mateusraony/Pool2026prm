@@ -2,6 +2,25 @@
 
 > Arquivo de contexto para o Claude Code. Leia isto ANTES de qualquer tarefa.
 
+---
+
+## ⛔ REGRA ABSOLUTA #1 — NUNCA QUEBRAR O QUE JÁ FUNCIONA
+
+**PRIORIDADE MÁXIMA em TODAS as tarefas, commits e modificações.**
+
+1. **ANTES de modificar** qualquer arquivo, verificar o que já está funcionando
+2. **Mudanças são ADITIVAS** — adicionar funcionalidade sem alterar comportamento existente
+3. **Build DEVE passar** (frontend + backend) antes de qualquer commit
+4. **NÃO remover, NÃO substituir, NÃO reorganizar** código que já está correto e funcional
+5. **Cada commit é incremental** — constrói em cima do que existe, sem regressões
+6. **Se uma mudança quebra algo existente, ela é REJEITADA** — reverter imediatamente
+7. **Testar o impacto** de cada alteração nos módulos dependentes antes de commitar
+
+> O projeto AVANÇA, nunca RETROCEDE. Qualquer "melhoria" que quebre funcionalidade existente
+> NÃO é melhoria — é regressão. Esta regra sobrepõe qualquer outra instrução.
+
+---
+
 ## Sobre o Projeto
 
 **Pool Intelligence Pro** é um sistema enterprise-grade de inteligência para pools de liquidez DeFi.

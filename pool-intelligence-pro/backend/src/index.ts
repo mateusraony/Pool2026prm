@@ -7,6 +7,7 @@ import path from 'path';
 import fs from 'fs';
 import { config } from './config/index.js';
 import { logService } from './services/log.service.js';
+import { metricsService } from './services/metrics.service.js';
 
 // Catch unhandled errors so they show in Render logs
 process.on('uncaughtException', (err) => {
@@ -77,13 +78,14 @@ if (config.nodeEnv !== 'production') {
   });
 }
 
-// Request logging (skip health checks and static files)
+// Request logging + metrics (skip health checks and static files)
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
     const duration = Date.now() - start;
     if (req.path !== '/health' && !req.path.startsWith('/assets/')) {
       logService.info('SYSTEM', req.method + ' ' + req.path + ' ' + res.statusCode + ' ' + duration + 'ms');
+      metricsService.recordRequest(req.method, req.path, res.statusCode, duration);
     }
   });
   next();

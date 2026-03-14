@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { getAllProvidersHealth } from '../adapters/index.js';
 import { cacheService } from '../services/cache.service.js';
 import { alertService } from '../services/alert.service.js';
+import { metricsService } from '../services/metrics.service.js';
+import { logService } from '../services/log.service.js';
 import { getMemoryStoreStats } from '../jobs/index.js';
 
 import poolsRouter from './pools.routes.js';
@@ -12,7 +14,7 @@ import dataRouter from './data.routes.js';
 
 const router = Router();
 
-// Health check
+// Health check — comprehensive system status
 router.get('/health', async (req, res) => {
   const providers = await getAllProvidersHealth();
 
@@ -28,12 +30,19 @@ router.get('/health', async (req, res) => {
     status = 'UNHEALTHY';
   }
 
+  const metrics = metricsService.getSnapshot();
+
   res.json({
     status,
+    uptime: metrics.uptime,
+    memory: metrics.memory,
     providers,
     cache: cacheService.getStats(),
     memoryStore: getMemoryStoreStats(),
     alerts: alertService.getStats(),
+    requests: metrics.requests,
+    jobs: metrics.jobs,
+    logs: logService.getSummary(60),
     timestamp: new Date(),
   });
 });
