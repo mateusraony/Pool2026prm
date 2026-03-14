@@ -18,6 +18,7 @@ const RadarPage = lazy(() => import('./pages/Radar'));
 const SimulationPage = lazy(() => import('./pages/Simulation'));
 const AlertsPage = lazy(() => import('./pages/Alerts'));
 const StatusPage = lazy(() => import('./pages/Status'));
+const PoolComparePage = lazy(() => import('./pages/PoolCompare'));
 
 function PageLoader() {
   return (
@@ -100,6 +101,7 @@ export default function App() {
           <Route path="simulation" element={<LazyPage><SimulationPage /></LazyPage>} />
           <Route path="simulation/:chain/:address" element={<LazyPage><SimulationPage /></LazyPage>} />
           <Route path="alerts" element={<LazyPage><AlertsPage /></LazyPage>} />
+          <Route path="compare" element={<LazyPage><PoolComparePage /></LazyPage>} />
           <Route path="status" element={<LazyPage><StatusPage /></LazyPage>} />
           {/* Redirects: old routes → Scout equivalents */}
           <Route path="positions" element={<Navigate to="/active" replace />} />

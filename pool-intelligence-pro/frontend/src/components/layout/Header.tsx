@@ -1,8 +1,11 @@
+import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw, Wifi, WifiOff } from 'lucide-react';
 import { format } from 'date-fns';
 import { fetchHealth } from '../../api/client';
 import { MobileMenuButton } from './Sidebar';
+import { NotificationBell } from '@/components/common/NotificationBell';
+import { useNotifications } from '@/hooks/useNotifications';
 import { cn } from '@/lib/utils';
 
 export default function Header() {
@@ -11,6 +14,24 @@ export default function Header() {
     queryFn: fetchHealth,
     refetchInterval: 30000,
   });
+  const { addNotification } = useNotifications();
+  const prevStatusRef = useRef<string | undefined>();
+
+  // Auto-generate notifications on status change
+  useEffect(() => {
+    if (!health?.status) return;
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = health.status;
+    if (!prev) return; // skip first render
+
+    if (prev === 'HEALTHY' && health.status === 'DEGRADED') {
+      addNotification({ type: 'warning', title: 'Sistema degradado', message: 'O servidor esta operando em modo degradado. Alguns dados podem estar atrasados.' });
+    } else if (prev !== 'HEALTHY' && health.status === 'HEALTHY') {
+      addNotification({ type: 'success', title: 'Sistema restaurado', message: 'O servidor voltou ao estado normal.' });
+    } else if (health.status === 'UNHEALTHY') {
+      addNotification({ type: 'error', title: 'Sistema indisponivel', message: 'O servidor esta com problemas. Tente novamente em alguns minutos.' });
+    }
+  }, [health?.status, addNotification]);
 
   const isHealthy = health?.status === 'HEALTHY';
   const isDegraded = health?.status === 'DEGRADED';
@@ -39,6 +60,9 @@ export default function Header() {
         >
           <RefreshCw className={cn('w-4 h-4', isLoading && 'animate-spin')} />
         </button>
+
+        {/* Notification bell */}
+        <NotificationBell />
 
         {/* Status indicator — real-time monitoring pattern */}
         <div className={cn(

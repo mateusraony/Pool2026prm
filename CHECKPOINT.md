@@ -2,15 +2,47 @@
 
 ## Status Atual
 **Branch:** `claude/continue-stage-1-improvements-Wl2yZ`
-**Data:** 2026-03-13 UTC
-**Fase:** ETAPAS 1, 2, 3, 4 e 5 concluídas
+**Data:** 2026-03-14 UTC
+**Fase:** ETAPAS 1, 2, 3, 4, 5 e 6 concluídas
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-13 — iniciar ETAPA 6"`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-14 — iniciar ETAPA 7"`
 
 ---
 
-## O QUE FOI FEITO (2026-03-13)
+## O QUE FOI FEITO
+
+### ETAPA 6 — Features Avançadas ✅ (2026-03-14)
+
+- 6.1: Comparador de pools side-by-side
+  - Página `/compare` com seleção de até 4 pools
+  - Busca com filtro por par, DEX, rede, token
+  - Tabela comparativa: Score, Risco, TVL, Volume, APR, Fees, IL, Ranges, Gas
+  - Destaque automático do melhor valor em cada métrica (azul/bold)
+  - Veredicto: badge "Melhor opção" para pool com maior score
+  - Botão de detalhes direto para cada pool
+  - Sidebar: item "Comparador" na seção Análise com ícone GitCompareArrows
+- 6.2: Histórico de performance com gráficos Recharts
+  - Componente `PerformanceCharts` reutilizável
+  - 4 abas: TVL (AreaChart), Volume (BarChart), Fees (BarChart), Preço (LineChart)
+  - Tooltip customizado com formatação financeira compacta
+  - Integrado no ScoutPoolDetail (exibe history do backend /pools-detail)
+  - Gradientes e cores consistentes com design system
+- 6.3: Notificações in-app
+  - `useNotifications` hook com Context + localStorage (max 50, persistente)
+  - `NotificationBell` no Header com badge de contagem
+  - Dropdown com lista de notificações (tipo, título, mensagem, tempo relativo)
+  - Marcar como lido (individual), marcar todas, limpar todas
+  - Auto-notificações: status do sistema (HEALTHY↔DEGRADED↔UNHEALTHY)
+  - Badge no sidebar (item Alertas) com contagem de não lidas
+  - Navegação: clique em notificação abre link associado
+- 6.4: Export de dados (CSV/PDF)
+  - Utilitário `lib/export.ts`: exportCSV + exportPrintReport (zero deps)
+  - CSV: BOM para Excel, escape de caracteres especiais, download automático
+  - PDF: abre janela de impressão com HTML formatado (relatório profissional)
+  - `ExportButton` reutilizável com dropdown (CSV/PDF)
+  - Integrado em: ScoutRecommended, Pools (Pool Intelligence), PoolCompare
+  - Colunas pré-definidas `poolColumns` para exports padrão
 
 ### ETAPA 5 — UX & Frontend Polish ✅
 
@@ -118,8 +150,8 @@
 
 ---
 
-## PRÓXIMOS PASSOS → ETAPA 6 (Features Avançadas)
-- 6.1 — Comparador de pools side-by-side
-- 6.2 — Histórico de performance com gráficos Recharts
-- 6.3 — Notificações in-app (toast + badge no sidebar)
-- 6.4 — Export de dados (CSV/PDF para relatórios)
+## PRÓXIMOS PASSOS → ETAPA 7 (Possíveis Melhorias)
+- 7.1 — Dashboard analytics avançado (métricas agregadas, tendências)
+- 7.2 — Backtesting de ranges (simulação histórica de performance)
+- 7.3 — Multi-wallet tracking (conectar carteiras, ver posições reais)
+- 7.4 — AI commentary aprimorado (análise qualitativa por pool)

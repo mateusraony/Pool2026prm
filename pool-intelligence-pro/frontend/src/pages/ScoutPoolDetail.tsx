@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RangeChart } from '@/components/common/RangeChart';
 import { StatCard } from '@/components/common/StatCard';
+import { PerformanceCharts } from '@/components/charts/PerformanceCharts';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -34,13 +35,16 @@ export default function ScoutPoolDetail() {
   const [selectedRange, setSelectedRange] = useState<'defensive' | 'optimized' | 'aggressive'>('optimized');
 
   // React Query: auto-retry 3x, cache, background refetch
-  const { data: pool, isLoading, error, refetch, isFetching } = useQuery<Pool | null>({
+  const { data: detailData, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['scout-pool-detail', chain, address],
     queryFn: async () => {
       if (!chain || !address) return null;
       const data = await fetchPoolDetail(chain, address);
       if (data) {
-        return unifiedPoolToViewPool(data.pool, data.score, data.ranges);
+        return {
+          pool: unifiedPoolToViewPool(data.pool, data.score, data.ranges),
+          history: data.history || [],
+        };
       }
       return null;
     },
@@ -48,6 +52,9 @@ export default function ScoutPoolDetail() {
     staleTime: 60000,
     refetchInterval: 120000, // refresh every 2 min
   });
+
+  const pool = detailData?.pool ?? null;
+  const history = detailData?.history ?? [];
 
   // Mutation: add to favorites
   const favoriteMutation = useMutation({
@@ -192,6 +199,11 @@ export default function ScoutPoolDetail() {
           <RangeChart pool={pool} selectedRange={selectedRange} />
         </TabsContent>
       </Tabs>
+
+      {/* Performance Charts */}
+      {history.length > 0 && (
+        <PerformanceCharts history={history} className="mb-6" />
+      )}
 
       {/* Projections */}
       <div className="glass-card p-6 mb-6">

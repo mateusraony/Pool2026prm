@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import { fetchUnifiedPools, fetchTokens, fetchFavorites, addFavorite, removeFavorite, UnifiedPool } from '../api/client';
+import { ExportButton } from '@/components/common/ExportButton';
+import { exportCSV, exportPrintReport } from '@/lib/export';
 
 // ============================================================
 // HELPERS
@@ -383,6 +385,36 @@ export default function PoolsPage() {
             <Filter className="w-4 h-4" />
             Filtros
           </button>
+          <ExportButton
+            disabled={sorted.length === 0}
+            onExportCSV={() => {
+              const poolExportCols = [
+                { header: 'Par', key: 'pair', format: (_: any, r: UnifiedPool) => `${r.baseToken}/${r.quoteToken}` },
+                { header: 'Protocolo', key: 'protocol' },
+                { header: 'Chain', key: 'chain' },
+                { header: 'Tipo', key: 'poolType' },
+                { header: 'TVL (USD)', key: 'tvlUSD', format: (v: number) => v?.toFixed(0) ?? '0' },
+                { header: 'APR Total (%)', key: 'aprTotal', format: (v: number) => v?.toFixed(2) ?? '0' },
+                { header: 'APR Ajustado (%)', key: 'aprAdjusted', format: (v: number) => v?.toFixed(2) ?? '0' },
+                { header: 'Volume 24h (USD)', key: 'volume24hUSD', format: (v: number) => v?.toFixed(0) ?? '0' },
+                { header: 'Fees 24h (USD)', key: 'fees24hUSD', format: (v: number) => v?.toFixed(2) ?? '0' },
+                { header: 'Volatilidade (%)', key: 'volatilityAnn', format: (v: number) => ((v ?? 0) * 100).toFixed(1) },
+                { header: 'Health Score', key: 'healthScore' },
+                { header: 'Blue-chip', key: 'bluechip', format: (v: boolean) => v ? 'Sim' : 'Nao' },
+              ];
+              exportCSV(sorted as any, poolExportCols, `pool-intelligence-${new Date().toISOString().slice(0, 10)}`);
+            }}
+            onExportPDF={() => {
+              const poolExportCols = [
+                { header: 'Par', key: 'pair', format: (_: any, r: UnifiedPool) => `${r.baseToken}/${r.quoteToken}` },
+                { header: 'Chain', key: 'chain' },
+                { header: 'TVL', key: 'tvlUSD', format: (v: number) => `$${((v ?? 0) / 1e6).toFixed(1)}M` },
+                { header: 'APR', key: 'aprTotal', format: (v: number) => `${v?.toFixed(1) ?? '0'}%` },
+                { header: 'Health', key: 'healthScore' },
+              ];
+              exportPrintReport(sorted as any, poolExportCols, 'Pool Intelligence');
+            }}
+          />
         </div>
       </div>
 
