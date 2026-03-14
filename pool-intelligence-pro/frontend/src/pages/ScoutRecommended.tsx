@@ -18,6 +18,8 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useRiskConfig } from '@/hooks/useRiskConfig';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ExportButton } from '@/components/common/ExportButton';
+import { exportCSV, exportPrintReport, poolColumns } from '@/lib/export';
 import { fetchUnifiedPools, addFavorite } from '@/api/client';
 import { unifiedPoolToViewPool } from '@/data/adapters';
 import type { Pool } from '@/types/pool';
@@ -190,6 +192,12 @@ export default function ScoutRecommended() {
                 <RefreshCw className="h-4 w-4" />
               )}
             </Button>
+
+            <ExportButton
+              disabled={pools.length === 0}
+              onExportCSV={() => exportCSV(pools, poolColumns, `pools-recomendadas-${new Date().toISOString().slice(0, 10)}`)}
+              onExportPDF={() => exportPrintReport(pools, poolColumns, 'Pools Recomendadas')}
+            />
           </div>
         </div>
 

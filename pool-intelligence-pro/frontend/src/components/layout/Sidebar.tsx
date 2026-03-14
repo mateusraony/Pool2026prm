@@ -17,8 +17,10 @@ import {
   Bell,
   Settings,
   Activity,
+  GitCompareArrows,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useNotifications } from '@/hooks/useNotifications';
 
 const navSections = [
   {
@@ -34,6 +36,7 @@ const navSections = [
       { path: '/pools', icon: Droplets, label: 'Pool Intelligence' },
       { path: '/token-analyzer', icon: Search, label: 'Token Analyzer' },
       { path: '/radar', icon: Radar, label: 'Radar' },
+      { path: '/compare', icon: GitCompareArrows, label: 'Comparador' },
     ],
   },
   {
@@ -105,6 +108,8 @@ export function MobileMenuButton() {
 }
 
 function SidebarContent({ collapsed, onNavClick }: { collapsed: boolean; onNavClick?: () => void }) {
+  const { unreadCount } = useNotifications();
+
   return (
     <>
       {/* Logo */}
@@ -142,7 +147,7 @@ function SidebarContent({ collapsed, onNavClick }: { collapsed: boolean; onNavCl
                     onClick={onNavClick}
                     className={({ isActive }) =>
                       cn(
-                        'flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm',
+                        'relative flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm',
                         isActive
                           ? 'bg-primary/12 text-primary font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'
                           : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50',
@@ -153,7 +158,15 @@ function SidebarContent({ collapsed, onNavClick }: { collapsed: boolean; onNavCl
                   >
                     <Icon className="h-[18px] w-[18px] flex-shrink-0" />
                     {!collapsed && (
-                      <span className="truncate">{item.label}</span>
+                      <span className="truncate flex-1">{item.label}</span>
+                    )}
+                    {item.path === '/alerts' && unreadCount > 0 && (
+                      <span className={cn(
+                        'flex items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground',
+                        collapsed ? 'absolute -top-1 -right-1 min-w-[16px] h-[16px] px-0.5' : 'min-w-[18px] h-[18px] px-1'
+                      )}>
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
                     )}
                   </NavLink>
                 );
