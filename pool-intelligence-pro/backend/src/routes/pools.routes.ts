@@ -18,7 +18,7 @@ import {
 } from '../services/calc.service.js';
 import { Pool, UnifiedPool } from '../types/index.js';
 import { rangeMonitorService } from '../services/range.service.js';
-import { validate, rangeCalcSchema } from './validation.js';
+import { validate, rangeCalcSchema, monteCarloSchema, backtestSchema, lvrSchema, autoCompoundSchema } from './validation.js';
 import { getPrisma } from './prisma.js';
 
 const router = Router();
@@ -340,8 +340,8 @@ router.get('/pools-liquidity/:chain/:address', async (req, res) => {
     const tvl = fromRadar?.pool.tvl || memUnified?.tvlUSD || 0;
     const vol = memUnified?.volatilityAnn || 0.3;
 
-    // Generate realistic liquidity distribution using Gaussian model
-    // Concentrated around current price, width based on volatility
+    // NOTE: Synthetic liquidity distribution (Gaussian model)
+    // Real on-chain tick liquidity requires subgraph queries not yet implemented
     const sigma = price * vol * 0.5; // half-year volatility as spread
     const rangeMin = price * (1 - vol * 0.8);
     const rangeMax = price * (1 + vol * 0.8);
@@ -378,6 +378,8 @@ router.get('/pools-liquidity/:chain/:address', async (req, res) => {
         volatility: vol,
         rangeMin,
         rangeMax,
+        synthetic: true,
+        disclaimer: 'Liquidity distribution is estimated (Gaussian model). Real tick-level data requires on-chain subgraph integration.',
       },
       timestamp: new Date(),
     });
@@ -388,7 +390,7 @@ router.get('/pools-liquidity/:chain/:address', async (req, res) => {
 });
 
 // POST /api/monte-carlo — Monte Carlo simulation
-router.post('/monte-carlo', async (req, res) => {
+router.post('/monte-carlo', validate(monteCarloSchema), async (req, res) => {
   try {
     const { chain, address, capital = 10000, horizonDays = 30, scenarios = 1000, mode = 'NORMAL' } = req.body;
 
@@ -443,7 +445,7 @@ router.post('/monte-carlo', async (req, res) => {
 });
 
 // POST /api/backtest — backtest a range strategy
-router.post('/backtest', async (req, res) => {
+router.post('/backtest', validate(backtestSchema), async (req, res) => {
   try {
     const { chain, address, capital = 10000, periodDays = 30, mode = 'NORMAL' } = req.body;
 
@@ -492,7 +494,7 @@ router.post('/backtest', async (req, res) => {
 });
 
 // POST /api/lvr — Loss-Versus-Rebalancing analysis
-router.post('/lvr', async (req, res) => {
+router.post('/lvr', validate(lvrSchema), async (req, res) => {
   try {
     const { chain, address, capital = 10000, mode = 'NORMAL' } = req.body;
 
@@ -644,7 +646,7 @@ router.get('/portfolio-analytics', async (req, res) => {
 });
 
 // POST /api/auto-compound — auto-compound simulation
-router.post('/auto-compound', async (req, res) => {
+router.post('/auto-compound', validate(autoCompoundSchema), async (req, res) => {
   try {
     const { chain, address, capital = 10000, periodDays = 365, compoundFrequency = 'weekly', gasPerCompound = 2.5 } = req.body;
 

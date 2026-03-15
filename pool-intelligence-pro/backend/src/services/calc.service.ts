@@ -784,7 +784,9 @@ export function calcBacktest(params: {
 
     const cumPnl = totalFees - totalIL;
     if (cumPnl > maxPnl) maxPnl = cumPnl;
-    const drawdown = maxPnl > 0 ? ((maxPnl - cumPnl) / capital) * 100 : 0;
+    // Peak-to-trough drawdown: measure from peak portfolio value
+    const peakValue = capital + maxPnl;
+    const drawdown = peakValue > 0 ? ((maxPnl - cumPnl) / peakValue) * 100 : 0;
     if (drawdown > maxDrawdown) maxDrawdown = drawdown;
 
     dailyReturns.push({
@@ -958,8 +960,9 @@ export function calcPortfolioAnalytics(positions: PortfolioPosition[], riskFreeR
     : portfolioStdDev * 0.7; // fallback estimate
   const sortinoRatio = downsideDeviation > 0 ? excessReturn / downsideDeviation : 0;
 
-  // Max Drawdown estimate based on volatility
-  // Expected max drawdown ≈ σ * sqrt(2 * ln(N)) where N = trading periods
+  // Max Drawdown estimate based on extreme value theory (no time-series available)
+  // Expected max drawdown ≈ σ * sqrt(2 * ln(N)) where N = trading periods (252 days)
+  // NOTE: This is an approximation — real drawdown requires historical price path
   const maxDrawdown = weightedVol > 0
     ? Math.min(50, weightedVol * Math.sqrt(2 * Math.log(252)) * 100)
     : 0;

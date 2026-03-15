@@ -121,6 +121,39 @@ export const notificationSettingsSchema = z.object({
 }).partial();
 
 // ============================================
+// ANALYTICS SCHEMAS
+// ============================================
+
+const analyticsPoolBase = {
+  chain: z.string().min(1),
+  address: z.string().min(1),
+  capital: z.number().positive().max(10_000_000).default(1000),
+  mode: z.enum(['DEFENSIVE', 'NORMAL', 'AGGRESSIVE']).default('NORMAL'),
+};
+
+export const monteCarloSchema = z.object({
+  ...analyticsPoolBase,
+  horizonDays: z.number().int().min(1).max(365).default(30),
+  scenarios: z.number().int().min(100).max(5000).default(1000),
+});
+
+export const backtestSchema = z.object({
+  ...analyticsPoolBase,
+  periodDays: z.number().int().min(7).max(365).default(30),
+});
+
+export const lvrSchema = z.object({
+  ...analyticsPoolBase,
+});
+
+export const autoCompoundSchema = z.object({
+  ...analyticsPoolBase,
+  periodDays: z.number().int().min(7).max(365).default(90),
+  compoundFrequency: z.enum(['daily', 'weekly', 'biweekly', 'monthly']).default('weekly'),
+  gasPerCompound: z.number().min(0).max(1000).default(5),
+});
+
+// ============================================
 // MIDDLEWARE
 // ============================================
 

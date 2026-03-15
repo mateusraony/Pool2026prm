@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { RangePosition, Pool } from '../types/index.js';
 import { logService } from './log.service.js';
 import { telegramBot } from '../bot/telegram.js';
@@ -100,7 +101,7 @@ class RangeMonitorService {
   private alertCooldown = 30 * 60 * 1000; // 30 minutes between alerts
 
   createPosition(position: Omit<RangePosition, 'id' | 'createdAt' | 'isActive'>): RangePosition {
-    const id = Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9);
+    const id = randomUUID();
     const fullPosition: RangePosition = {
       ...position,
       id,
