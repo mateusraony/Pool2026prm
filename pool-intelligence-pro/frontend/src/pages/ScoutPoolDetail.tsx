@@ -5,6 +5,8 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { RangeChart } from '@/components/common/RangeChart';
 import { StatCard } from '@/components/common/StatCard';
 import { PerformanceCharts } from '@/components/charts/PerformanceCharts';
+import { PoolNotes } from '@/components/common/PoolNotes';
+import { HodlVsLp } from '@/components/common/HodlVsLp';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -232,13 +234,19 @@ export default function ScoutPoolDetail() {
         </div>
       </div>
 
+      {/* HODL vs LP Comparison */}
+      <HodlVsLp pool={pool} className="mb-6" />
+
       {/* Explanation */}
       {pool.explanation && (
-        <div className="glass-card p-6">
+        <div className="glass-card p-6 mb-6">
           <h3 className="font-semibold mb-2">Analise</h3>
           <p className="text-muted-foreground">{pool.explanation}</p>
         </div>
       )}
+
+      {/* Notes */}
+      <PoolNotes poolId={pool.id} />
     </MainLayout>
   );
 }

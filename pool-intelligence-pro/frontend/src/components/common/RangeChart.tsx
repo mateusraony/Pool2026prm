@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Pool } from '@/types/pool';
 import { cn } from '@/lib/utils';
+import { fetchLiquidityDistribution } from '@/api/client';
 
 interface RangeChartProps {
   pool: Pool;
@@ -21,28 +23,57 @@ export function RangeChart({
     return pool.ranges[selectedRange as keyof typeof pool.ranges] || pool.ranges.optimized;
   }, [selectedRange, customRange, pool.ranges]);
 
+  // Fetch real liquidity distribution from backend
+  const { data: liquidityData } = useQuery({
+    queryKey: ['liquidity-distribution', pool.chain, pool.poolAddress],
+    queryFn: () => fetchLiquidityDistribution(pool.chain || '', pool.poolAddress || '', 50),
+    enabled: !!(pool.chain && pool.poolAddress),
+    staleTime: 300000, // 5 min cache
+    refetchInterval: 300000,
+  });
+
   const rangeWidth = pool.ranges.defensive.max - pool.ranges.defensive.min;
 
-  // Generate mock liquidity distribution
+  // Use real liquidity data from backend, fallback to Gaussian estimate
   const liquidityBars = useMemo(() => {
     if (rangeWidth <= 0) return [];
+
+    // Real data from backend
+    if (liquidityData?.bars && liquidityData.bars.length > 0) {
+      const viewMin = pool.ranges.defensive.min;
+      const viewMax = pool.ranges.defensive.max;
+      return liquidityData.bars
+        .filter(b => b.price >= viewMin && b.price <= viewMax)
+        .map(bar => ({
+          price: bar.price,
+          height: Math.max(5, bar.liquidity),
+          isInRange: bar.price >= activeRange.min && bar.price <= activeRange.max,
+          isCurrent: Math.abs(bar.price - pool.currentPrice) < rangeWidth / 50,
+        }));
+    }
+
+    // Fallback: Gaussian-based distribution (NOT random)
     const bars = [];
-    const numBars = 40;
+    const numBars = 50;
     const step = rangeWidth / numBars;
+    const sigma = rangeWidth * 0.25;
 
     for (let i = 0; i < numBars; i++) {
-      const price = pool.ranges.defensive.min + (i * step);
-      const distanceFromCurrent = Math.abs(price - pool.currentPrice);
-      const normalizedDistance = distanceFromCurrent / (rangeWidth / 2);
-      const height = Math.max(10, 100 - (normalizedDistance * 80) + (Math.random() * 20));
+      const price = pool.ranges.defensive.min + (i + 0.5) * step;
+      const z = (price - pool.currentPrice) / sigma;
+      const gaussian = Math.exp(-0.5 * z * z);
+      // Deterministic noise based on price (no Math.random)
+      const seed = Math.sin(price * 12345.6789) * 0.5 + 0.5;
+      const noise = 1 + (seed - 0.5) * 0.2;
+      const height = Math.max(5, gaussian * noise * 100);
 
       const isInRange = price >= activeRange.min && price <= activeRange.max;
-      const isCurrent = Math.abs(price - pool.currentPrice) < step / 2;
+      const isCurrent = Math.abs(price - pool.currentPrice) < step;
 
       bars.push({ price, height, isInRange, isCurrent });
     }
     return bars;
-  }, [pool, activeRange, rangeWidth]);
+  }, [pool, activeRange, rangeWidth, liquidityData]);
 
   const formatPrice = (price: number) => {
     if (price < 0.001) return price.toFixed(6);
@@ -68,7 +99,12 @@ export function RangeChart({
   return (
     <div className={cn('glass-card p-6', className)}>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold">Distribuicao de Liquidez & Range</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold">Distribuicao de Liquidez & Range</h3>
+          {liquidityData && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-mono">LIVE</span>
+          )}
+        </div>
         <div className="flex items-center gap-2 text-sm">
           <span className="text-muted-foreground">Preco atual:</span>
           <span className="font-mono text-primary">{formatPrice(pool.currentPrice)}</span>

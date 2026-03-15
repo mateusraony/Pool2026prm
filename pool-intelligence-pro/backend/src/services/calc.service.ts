@@ -435,6 +435,104 @@ export function isBluechip(token0Symbol: string, token1Symbol: string): boolean 
     BLUECHIP_TOKENS.has(token1Symbol.toUpperCase());
 }
 
+// ============================================================
+// 10. POSITION P&L CALCULATION
+// ============================================================
+
+export interface PositionPnL {
+  feesAccrued: number;      // estimated fees earned in USD
+  ilActual: number;         // actual impermanent loss in USD
+  pnl: number;              // net P&L in USD (fees - IL)
+  pnlPercent: number;       // net P&L as % of capital
+  daysActive: number;       // days since position opened
+  feeAPR: number;           // annualized fee return %
+  hodlValue: number;        // value if user just held tokens (HODL comparison)
+  lpValue: number;          // current estimated LP value
+}
+
+/**
+ * Calculate real P&L for a concentrated liquidity position.
+ *
+ * Fees are estimated from pool fee data + time active.
+ * IL is calculated from entry price vs current price using the CL IL formula.
+ * HODL value assumes 50/50 token split at entry.
+ */
+export function calcPositionPnL(params: {
+  capital: number;
+  entryPrice: number;
+  currentPrice: number;
+  rangeLower: number;
+  rangeUpper: number;
+  tvl: number;
+  fees24h: number;
+  createdAt: Date | string;
+  mode: 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE';
+}): PositionPnL {
+  const { capital, entryPrice, currentPrice, rangeLower, rangeUpper, tvl, fees24h, mode } = params;
+
+  // Days active
+  const created = typeof params.createdAt === 'string' ? new Date(params.createdAt) : params.createdAt;
+  const daysActive = Math.max(0.01, (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24));
+
+  // --- Fee estimation ---
+  const kMap: Record<string, number> = { DEFENSIVE: 0.55, NORMAL: 0.75, AGGRESSIVE: 0.95 };
+  const k_active = kMap[mode] ?? 0.75;
+  const userShare = tvl > 0 ? capital / tvl : 0;
+  const dailyFees = fees24h * userShare * k_active;
+  const feesAccrued = dailyFees * daysActive;
+
+  // --- IL calculation (concentrated liquidity) ---
+  // IL for CL: IL = 2*sqrt(P1/P0) / (1 + P1/P0) - 1
+  // This gives IL as a fraction (negative = loss)
+  const priceRatio = currentPrice / entryPrice;
+  let ilFraction = 0;
+
+  if (priceRatio > 0 && priceRatio !== 1) {
+    // Standard Uniswap V3 IL formula for concentrated liquidity
+    const sqrtRatio = Math.sqrt(priceRatio);
+    ilFraction = (2 * sqrtRatio) / (1 + priceRatio) - 1; // always <= 0
+  }
+
+  // If price is out of range, IL is worse
+  const isOutOfRange = currentPrice < rangeLower || currentPrice > rangeUpper;
+  if (isOutOfRange) {
+    // Amplify IL when out of range (concentrated = higher IL)
+    const rangeWidth = (rangeUpper - rangeLower) / entryPrice;
+    const concentrationFactor = rangeWidth > 0 ? Math.min(3, 1 / rangeWidth) : 1;
+    ilFraction = ilFraction * Math.min(concentrationFactor, 2.5);
+  }
+
+  const ilActual = Math.abs(ilFraction * capital); // IL as positive USD amount
+
+  // --- HODL comparison ---
+  // Assume 50/50 split at entry: half in token0, half in token1 (quote)
+  // token0 value changes with price, token1 stays
+  const hodlValue = (capital / 2) * priceRatio + (capital / 2);
+
+  // LP value = capital + fees - IL
+  const lpValue = capital + feesAccrued - ilActual;
+
+  // --- Net P&L ---
+  const pnl = feesAccrued - ilActual;
+  const pnlPercent = capital > 0 ? (pnl / capital) * 100 : 0;
+
+  // Annualized fee return
+  const feeAPR = daysActive > 0 && capital > 0
+    ? (feesAccrued / capital) * (365 / daysActive) * 100
+    : 0;
+
+  return {
+    feesAccrued: Math.round(feesAccrued * 100) / 100,
+    ilActual: Math.round(ilActual * 100) / 100,
+    pnl: Math.round(pnl * 100) / 100,
+    pnlPercent: Math.round(pnlPercent * 100) / 100,
+    daysActive: Math.round(daysActive * 10) / 10,
+    feeAPR: Math.round(feeAPR * 10) / 10,
+    hodlValue: Math.round(hodlValue * 100) / 100,
+    lpValue: Math.round(lpValue * 100) / 100,
+  };
+}
+
 const calcService = {
   calcAprFee,
   calcVolatilityAnn,
@@ -446,6 +544,7 @@ const calcService = {
   calcILRisk,
   inferPoolType,
   isBluechip,
+  calcPositionPnL,
 };
 
 export { calcService };

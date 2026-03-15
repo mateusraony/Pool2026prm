@@ -2,15 +2,40 @@
 
 ## Status Atual
 **Branch:** `claude/continue-stage-1-improvements-Wl2yZ`
-**Data:** 2026-03-14 UTC
-**Fase:** ETAPAS 1, 2, 3, 4, 5 e 6 concluídas
+**Data:** 2026-03-15 UTC
+**Fase:** ETAPAS 1, 2, 3, 4, 5, 6 e 7 concluídas
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-14 — iniciar ETAPA 7"`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-15 — iniciar ETAPA 8"`
 
 ---
 
 ## O QUE FOI FEITO
+
+### ETAPA 7 — Credibilidade dos Dados ✅ (2026-03-15)
+
+- 7.1: P&L real com tracking de posições
+  - `calcPositionPnL()` em calc.service.ts: calcula fees estimadas, IL real (fórmula CL), PnL net, HODL value, LP value
+  - Endpoint `GET /ranges` enriquecido: cruza posições com dados radar para calcular P&L real
+  - Dashboard e ActivePoolCard exibem dados reais em vez de $0 hardcoded
+  - Status automático baseado em posição do preço (ok/attention/critical)
+- 7.2: Distribuição de liquidez realista no RangeChart
+  - Endpoint `GET /api/pools-liquidity/:chain/:address`: gera distribuição Gaussiana baseada em TVL e volatilidade
+  - RangeChart consome dados do backend via React Query (com badge "LIVE")
+  - Fallback local usa Gaussian determinístico (sem Math.random)
+  - Eliminado ruído aleatório — visualização consistente entre renders
+- 7.3: UI de Notes/Anotações nas pools (CRUD completo)
+  - Componente `PoolNotes` com formulário de criação, tags sugeridas, listagem e remoção
+  - 9 tags pré-definidas (estrategia, risco, entrada, saida, etc.)
+  - Integrado no ScoutPoolDetail
+  - Usa API existente (`/api/notes`) com React Query + mutations
+- 7.4: HODL vs LP comparison
+  - Componente `HodlVsLp` com simulação de retornos
+  - Seletores interativos: capital ($1k-$25k) e período (7d-1a)
+  - Compara: valor HODL vs valor LP com breakdown (fees, IL, net)
+  - Veredicto visual: LP supera HODL ou vice-versa
+  - Projeção baseada em APR, fees e IL estimados da pool
+  - Integrado no ScoutPoolDetail
 
 ### ETAPA 6 — Features Avançadas ✅ (2026-03-14)
 
@@ -150,8 +175,21 @@
 
 ---
 
-## PRÓXIMOS PASSOS → ETAPA 7 (Possíveis Melhorias)
-- 7.1 — Dashboard analytics avançado (métricas agregadas, tendências)
-- 7.2 — Backtesting de ranges (simulação histórica de performance)
-- 7.3 — Multi-wallet tracking (conectar carteiras, ver posições reais)
-- 7.4 — AI commentary aprimorado (análise qualitativa por pool)
+## PRÓXIMOS PASSOS → ETAPA 8 (Analytics Institucional)
+- 8.1 — Monte Carlo simulation (stress test: "e se ETH cair 40%?")
+- 8.2 — Backtesting de ranges (performance histórica simulada)
+- 8.3 — Fee tier comparison (mesmo par, tiers diferentes)
+- 8.4 — LVR (Loss-Versus-Rebalancing) como métrica de risco
+
+## ETAPA 9 (Portfolio Intelligence)
+- 9.1 — Dashboard portfolio avançado (alocação por chain, Sharpe, drawdown)
+- 9.2 — APR risk-adjusted (Sharpe-like metric)
+- 9.3 — Auto-compound simulator
+- 9.4 — Correlação entre tokens do par
+
+## ETAPA 10 (Polish Profissional)
+- 10.1 — Glossário/tooltips em todas as métricas
+- 10.2 — i18n (PT-BR + EN)
+- 10.3 — Light theme
+- 10.4 — Swagger/OpenAPI docs
+- 10.5 — Onboarding wizard

@@ -93,16 +93,35 @@ export default function ScoutDashboard() {
         chain: pos.chain,
       };
 
+      // Use real P&L data from backend if available
+      const pnlData = pos.pnl;
+      const feesAccrued = pnlData?.feesAccrued ?? 0;
+      const ilActual = pnlData?.ilActual ?? 0;
+      const pnlPercent = pnlData?.pnlPercent ?? 0;
+
+      // Determine status from P&L and price position
+      const currentPrice = pos.currentPrice ?? pos.entryPrice;
+      const isOutOfRange = currentPrice < pos.rangeLower || currentPrice > pos.rangeUpper;
+      const distToEdge = Math.min(
+        Math.abs(currentPrice - pos.rangeLower),
+        Math.abs(currentPrice - pos.rangeUpper),
+      ) / currentPrice * 100;
+      const posStatus: 'ok' | 'attention' | 'critical' = isOutOfRange
+        ? 'critical'
+        : distToEdge < 5
+          ? 'attention'
+          : 'ok';
+
       return {
         ...base,
         capital: pos.capital,
         capitalPercent: (pos.capital / defaultRiskConfig.totalBanca) * 100,
         entryDate: pos.createdAt,
-        pnl: 0,
-        feesAccrued: 0,
-        ilActual: 0,
-        status: pos.isActive ? 'ok' as const : 'attention' as const,
-        lastAction: pos.createdAt || new Date().toISOString(),
+        pnl: pnlPercent,
+        feesAccrued,
+        ilActual,
+        status: posStatus,
+        lastAction: pos.lastCheckedAt || pos.createdAt || new Date().toISOString(),
         rangeSelected: pos.mode.toLowerCase() as 'defensive' | 'optimized' | 'aggressive',
       };
     });
@@ -123,7 +142,7 @@ export default function ScoutDashboard() {
     }));
   }, [activePools]);
 
-  const totalPnl = activePools.reduce((acc, p) => acc + (p.feesAccrued - p.ilActual), 0);
+  const totalPnl = activePools.reduce((acc, p) => acc + p.feesAccrued - p.ilActual, 0);
   const totalCapitalDeployed = activePools.reduce((acc, p) => acc + p.capital, 0);
   const topPool = pools[0] || null;
   const canOperate = pools.some(p => p.score > 60);
