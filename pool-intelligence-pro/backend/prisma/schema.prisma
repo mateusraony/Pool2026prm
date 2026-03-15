@@ -521,3 +521,30 @@ model AppConfig {
   value     Json                   // JSON blob with the config data
   updatedAt DateTime @updatedAt
 }
+
+// ============================================
+// POSITION HISTORY (timeline of LP actions)
+// ============================================
+
+model PositionHistory {
+  id          String   @id @default(uuid())
+  poolId      String                   // e.g. "ethereum_0x123..."
+  chain       String
+  poolAddress String
+  token0      String                   // e.g. "WETH"
+  token1      String                   // e.g. "USDC"
+  type        String                   // ENTRY | EXIT | REBALANCE | FEE_COLLECT
+  mode        String?                  // DEFENSIVE | NORMAL | AGGRESSIVE
+  capital     Float?                   // USD value at time of action
+  pnl         Float?                   // P&L at time of exit/rebalance
+  rangeLower  Float?
+  rangeUpper  Float?
+  price       Float?                   // Token price at time of action
+  note        String?                  // Optional user note
+  metadata    Json?                    // Extra data (fees collected, IL, etc.)
+  createdAt   DateTime @default(now())
+
+  @@index([poolId])
+  @@index([chain])
+  @@index([createdAt])
+}

@@ -266,7 +266,16 @@ router.get('/pools-detail/:chain/:address', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Pool not found' });
     }
 
-    const unified = poolIntelligenceService.enrichToUnifiedPool(pool, { updatedAt: new Date() });
+    // Also try GeckoTerminal OHLCV if TheGraph history is empty
+    if (history.length === 0) {
+      try {
+        const { geckoTerminalAdapter } = await import('../adapters/index.js');
+        const geckoHistory = await geckoTerminalAdapter.getPoolHistory(chain, address, 30);
+        if (geckoHistory.length > 0) history = geckoHistory;
+      } catch { /* ignore — use proxy volatility */ }
+    }
+
+    const unified = poolIntelligenceService.enrichToUnifiedPool(pool, { updatedAt: new Date(), history });
     const score = memoryStore.getScore(pool.externalId) || scoreService.calculateScore(pool);
 
     const horizonD = parseInt(horizonDays as string) || 7;
@@ -693,12 +702,25 @@ router.get('/token-correlation/:chain/:address', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Pool not found' });
     }
 
+    // Try to fetch OHLCV for real Pearson correlation
+    let priceHistory: { timestamp: Date; price: number }[] | undefined;
+    try {
+      const { geckoTerminalAdapter } = await import('../adapters/index.js');
+      const history = await geckoTerminalAdapter.getPoolHistory(chain, address, 30);
+      if (history.length >= 10) {
+        priceHistory = history
+          .filter(h => h.price != null && h.price > 0)
+          .map(h => ({ timestamp: h.timestamp, price: h.price! }));
+      }
+    } catch { /* fall back to rule-based */ }
+
     const result = calcTokenCorrelation({
       token0Symbol: memPool.token0?.symbol || memPool.baseToken || 'Token0',
       token1Symbol: memPool.token1?.symbol || memPool.quoteToken || 'Token1',
       poolVolAnn: memPool.volatilityAnn || 0.3,
       poolType: memPool.poolType as 'CL' | 'V2' | 'STABLE' | undefined,
       feeTier: memPool.feeTier,
+      priceHistory,
     });
 
     res.json({ success: true, data: result, timestamp: new Date() });

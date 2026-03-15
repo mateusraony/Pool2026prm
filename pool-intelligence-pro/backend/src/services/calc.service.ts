@@ -1148,12 +1148,14 @@ export interface TokenCorrelationResult {
   volToken0: number;
   volToken1: number;
   combinedVol: number;
+  method: 'pearson' | 'rule_based';
+  dataPoints: number;
 }
 
 /**
  * Estimate token correlation and its impact on IL.
- * Uses pool volatility as proxy (no external price feeds).
- * Low vol pool with high-vol tokens = high correlation = low IL.
+ * When priceHistory is available, calculates real Pearson correlation from price ratios.
+ * Falls back to rule-based estimation from pool volatility.
  */
 export function calcTokenCorrelation(params: {
   token0Symbol: string;
@@ -1163,6 +1165,7 @@ export function calcTokenCorrelation(params: {
   token1VolAnn?: number;   // if known
   poolType?: 'CL' | 'V2' | 'STABLE';
   feeTier?: number;
+  priceHistory?: { timestamp: Date; price: number }[];  // OHLCV close prices
 }): TokenCorrelationResult {
   const { token0Symbol, token1Symbol, poolVolAnn, poolType, feeTier } = params;
 
@@ -1181,9 +1184,44 @@ export function calcTokenCorrelation(params: {
   const vol0 = params.token0VolAnn ?? (isStable0 ? 0.02 : poolVolAnn * 0.8);
   const vol1 = params.token1VolAnn ?? (isStable1 ? 0.02 : poolVolAnn * 0.8);
 
-  let correlation: number;
-  let pairType: TokenCorrelationResult['pairType'];
+  let correlation: number = 0;
+  let pairType: TokenCorrelationResult['pairType'] = 'uncorrelated';
+  let correlationMethod: 'pearson' | 'rule_based' = 'rule_based';
 
+  // Try real Pearson correlation from price history (price ratio log-returns)
+  if (params.priceHistory && params.priceHistory.length >= 10) {
+    const sorted = [...params.priceHistory].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    const prices = sorted.filter(p => p.price > 0).map(p => p.price);
+
+    if (prices.length >= 10) {
+      // For a pool pair, the "price" is the exchange rate (token0/token1).
+      // High autocorrelation in log-returns → tokens move differently (low correlation)
+      // Low autocorrelation → tokens move together (high correlation)
+      const logReturns: number[] = [];
+      for (let i = 1; i < prices.length; i++) {
+        logReturns.push(Math.log(prices[i] / prices[i - 1]));
+      }
+
+      // Pool price volatility from real data
+      const realPoolVol = stdev(logReturns);
+
+      // Use Markowitz: σ_pool² = σ₀² + σ₁² - 2ρσ₀σ₁
+      // Solve for ρ: ρ = (σ₀² + σ₁² - σ_pool²) / (2σ₀σ₁)
+      const poolVar = realPoolVol * realPoolVol;
+      const v0sq = vol0 * vol0;
+      const v1sq = vol1 * vol1;
+      const denom = 2 * vol0 * vol1;
+
+      if (denom > 0.0001) {
+        correlation = clamp((v0sq + v1sq - poolVar) / denom, -1, 1);
+        pairType = correlation > 0.7 ? 'correlated' : correlation < -0.2 ? 'inverse' : 'uncorrelated';
+        correlationMethod = 'pearson';
+      }
+    }
+  }
+
+  // Fallback: rule-based correlation estimation
+  if (correlationMethod === 'rule_based') {
   if (isStable0 && isStable1) {
     // Stable-stable pair
     correlation = 0.99;
@@ -1218,6 +1256,7 @@ export function calcTokenCorrelation(params: {
     }
     pairType = correlation > 0.7 ? 'correlated' : correlation < -0.2 ? 'inverse' : 'uncorrelated';
   }
+  } // end rule_based fallback
 
   // Combined portfolio vol
   const combinedVol = Math.sqrt(
@@ -1259,6 +1298,8 @@ export function calcTokenCorrelation(params: {
     volToken0: Math.round(vol0 * 10000) / 10000,
     volToken1: Math.round(vol1 * 10000) / 10000,
     combinedVol: Math.round(combinedVol * 10000) / 10000,
+    method: correlationMethod,
+    dataPoints: params.priceHistory?.length ?? 0,
   };
 }
 
