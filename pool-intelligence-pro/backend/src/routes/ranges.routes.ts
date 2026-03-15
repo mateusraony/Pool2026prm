@@ -1,17 +1,52 @@
 import { Router } from 'express';
 import { logService } from '../services/log.service.js';
 import { rangeMonitorService } from '../services/range.service.js';
+import { calcPositionPnL, type PositionPnL } from '../services/calc.service.js';
+import { getLatestRadarResults } from '../jobs/index.js';
 import { validate, validateIdParam, rangePositionSchema } from './validation.js';
 
 const router = Router();
 
-// Get all range positions
+// Get all range positions (enriched with P&L data)
 router.get('/ranges', async (req, res) => {
   try {
     const positions = rangeMonitorService.getPositions();
     const stats = rangeMonitorService.getStats();
+    const radarResults = getLatestRadarResults();
 
-    res.json({ success: true, data: positions, stats, timestamp: new Date() });
+    // Enrich positions with real P&L calculations
+    const enrichedPositions = positions.map(pos => {
+      const poolData = radarResults.find(
+        r => r.pool.externalId === pos.poolId ||
+             (r.pool.chain === pos.chain && r.pool.poolAddress === pos.poolAddress)
+      );
+
+      let pnlData: PositionPnL | null = null;
+      if (poolData) {
+        const currentPrice = poolData.pool.price || pos.entryPrice;
+        pnlData = calcPositionPnL({
+          capital: pos.capital,
+          entryPrice: pos.entryPrice,
+          currentPrice,
+          rangeLower: pos.rangeLower,
+          rangeUpper: pos.rangeUpper,
+          tvl: poolData.pool.tvl || 0,
+          fees24h: poolData.pool.fees24h || poolData.pool.fees1h ? (poolData.pool.fees1h || 0) * 24 : 0,
+          createdAt: pos.createdAt,
+          mode: pos.mode,
+        });
+      }
+
+      return {
+        ...pos,
+        currentPrice: poolData?.pool.price || pos.entryPrice,
+        poolScore: poolData?.score?.total || null,
+        poolApr: poolData?.score?.breakdown?.return?.aprEstimate || null,
+        pnl: pnlData,
+      };
+    });
+
+    res.json({ success: true, data: enrichedPositions, stats, timestamp: new Date() });
   } catch (error) {
     logService.error('SYSTEM', 'GET /ranges failed', { error });
     res.status(500).json({ success: false, error: 'Internal error' });

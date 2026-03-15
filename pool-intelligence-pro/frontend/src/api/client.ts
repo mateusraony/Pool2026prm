@@ -413,6 +413,30 @@ export async function calcRange(params: {
   }
 }
 
+// Liquidity Distribution
+export interface LiquidityBar {
+  price: number;
+  liquidity: number; // 0-100 normalized
+}
+
+export interface LiquidityDistribution {
+  bars: LiquidityBar[];
+  currentPrice: number;
+  tvl: number;
+  volatility: number;
+  rangeMin: number;
+  rangeMax: number;
+}
+
+export async function fetchLiquidityDistribution(chain: string, address: string, bars?: number): Promise<LiquidityDistribution | null> {
+  try {
+    const { data } = await api.get(`/pools-liquidity/${chain}/${address}`, { params: { bars } });
+    return data.data || null;
+  } catch {
+    return null;
+  }
+}
+
 // Favorites
 export async function fetchFavorites(): Promise<FavoritePool[]> {
   try {
@@ -573,6 +597,17 @@ export async function deleteAlert(id: string): Promise<void> {
 // RANGE MONITORING
 // ============================================
 
+export interface PositionPnL {
+  feesAccrued: number;
+  ilActual: number;
+  pnl: number;
+  pnlPercent: number;
+  daysActive: number;
+  feeAPR: number;
+  hodlValue: number;
+  lpValue: number;
+}
+
 export interface RangePosition {
   id: string;
   poolId: string;
@@ -589,6 +624,11 @@ export interface RangePosition {
   createdAt: string;
   lastCheckedAt?: string;
   isActive: boolean;
+  // Enriched P&L data from backend
+  currentPrice?: number;
+  poolScore?: number | null;
+  poolApr?: number | null;
+  pnl?: PositionPnL | null;
 }
 
 export async function fetchRangePositions(): Promise<RangePosition[]> {
