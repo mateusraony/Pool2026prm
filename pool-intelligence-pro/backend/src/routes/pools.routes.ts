@@ -476,6 +476,19 @@ router.post('/backtest', validate(backtestSchema), async (req, res) => {
       price, volAnn: vol, horizonDays: periodDays, riskMode: mode, poolType: memPool?.poolType,
     });
 
+    // Fetch real OHLCV for backtest when available
+    let priceHistory: number[] | undefined;
+    try {
+      const { geckoTerminalAdapter } = await import('../adapters/index.js');
+      const history = await geckoTerminalAdapter.getPoolHistory(chain, address, Math.min(periodDays, 90));
+      if (history.length >= 7) {
+        priceHistory = history
+          .filter(h => h.price != null && h.price > 0)
+          .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+          .map(h => h.price!);
+      }
+    } catch { /* fall back to GBM simulation */ }
+
     const result = calcBacktest({
       capital,
       entryPrice: price,
@@ -486,12 +499,15 @@ router.post('/backtest', validate(backtestSchema), async (req, res) => {
       tvl,
       mode,
       periodDays: Math.min(periodDays, 365),
+      priceHistory,
     });
 
     res.json({
       success: true,
       data: {
         ...result,
+        dataSource: priceHistory ? 'historical_ohlcv' : 'gbm_simulation',
+        historicalDays: priceHistory?.length ?? 0,
         pool: { price, tvl, fees24h, volatility: vol, rangeLower: range.lower, rangeUpper: range.upper },
       },
       timestamp: new Date(),
@@ -620,6 +636,32 @@ router.get('/portfolio-analytics', async (req, res) => {
     const radarResults = getLatestRadarResults();
     const activePositions = allRangePositions.filter(rp => rp.isActive);
 
+    // Try to fetch OHLCV daily returns for each position (parallel, best-effort)
+    let ohlcvMap = new Map<string, number[]>(); // poolKey → daily returns %
+    try {
+      const { geckoTerminalAdapter } = await import('../adapters/index.js');
+      const fetches = activePositions.map(async (rp) => {
+        try {
+          const history = await geckoTerminalAdapter.getPoolHistory(rp.chain, rp.poolAddress, 30);
+          if (history && history.length >= 7) {
+            // Compute daily log-returns from OHLCV close prices
+            const dailyReturns: number[] = [];
+            for (let i = 1; i < history.length; i++) {
+              const prev = history[i - 1].price ?? history[i - 1].tvl;
+              const curr = history[i].price ?? history[i].tvl;
+              if (prev > 0 && curr > 0) {
+                dailyReturns.push(((curr - prev) / prev) * 100);
+              }
+            }
+            if (dailyReturns.length >= 7) {
+              ohlcvMap.set(`${rp.chain}_${rp.poolAddress}`, dailyReturns);
+            }
+          }
+        } catch { /* best-effort: skip this position */ }
+      });
+      await Promise.allSettled(fetches);
+    } catch { /* OHLCV unavailable — will use snapshot method */ }
+
     const positions: PortfolioPosition[] = activePositions.map(rp => {
       const fromRadar = radarResults.find(r =>
         r.pool.chain === rp.chain &&
@@ -643,6 +685,7 @@ router.get('/portfolio-analytics', async (req, res) => {
         protocol: memPool?.protocol || fromRadar?.pool.protocol || '',
         token0Symbol: rp.token0Symbol,
         token1Symbol: rp.token1Symbol,
+        dailyReturns: ohlcvMap.get(`${rp.chain}_${rp.poolAddress}`),
       };
     });
 

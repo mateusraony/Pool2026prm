@@ -888,6 +888,8 @@ export interface PortfolioPosition {
   protocol?: string;
   token0Symbol?: string;
   token1Symbol?: string;
+  /** Optional daily return series (% returns) for real Sharpe/Sortino */
+  dailyReturns?: number[];
 }
 
 export interface PortfolioAnalytics {
@@ -904,6 +906,10 @@ export interface PortfolioAnalytics {
   allocationByProtocol: { protocol: string; capital: number; percent: number }[];
   allocationByToken: { token: string; exposure: number; percent: number }[];
   riskBand: 'conservative' | 'balanced' | 'aggressive';
+  /** Method used for Sharpe/Sortino: 'time_series' (real daily returns) or 'snapshot' (estimate) */
+  ratioMethod: 'time_series' | 'snapshot';
+  /** Number of daily return data points used (0 if snapshot) */
+  ratioDataPoints: number;
 }
 
 /**
@@ -920,7 +926,7 @@ export function calcPortfolioAnalytics(positions: PortfolioPosition[], riskFreeR
       weightedApr: 0, sharpeRatio: 0, sortinoRatio: 0,
       maxDrawdown: 0, riskAdjustedApr: 0, diversificationScore: 0,
       allocationByChain: [], allocationByProtocol: [], allocationByToken: [],
-      riskBand: 'conservative',
+      riskBand: 'conservative', ratioMethod: 'snapshot', ratioDataPoints: 0,
     };
   }
 
@@ -936,36 +942,109 @@ export function calcPortfolioAnalytics(positions: PortfolioPosition[], riskFreeR
   // Portfolio volatility (weighted)
   const weightedVol = positions.reduce((s, p) => s + p.volAnn * (p.capital / totalCapital), 0);
 
-  // Per-position returns for Sharpe/Sortino
-  const returns = positions.map(p => {
-    const pnl = p.feesAccrued - p.ilActual;
-    return p.capital > 0 ? (pnl / p.capital) * 100 : 0; // % return
-  });
+  // ── Sharpe / Sortino — prefer real daily returns when available ──
+  // Aggregate portfolio-level daily returns from position-level dailyReturns
+  const positionsWithReturns = positions.filter(p => p.dailyReturns && p.dailyReturns.length >= 7);
+  const useTimeSeries = positionsWithReturns.length > 0;
 
-  const weights = positions.map(p => p.capital / totalCapital);
-  const portfolioReturn = returns.reduce((s, r, i) => s + r * weights[i], 0);
+  let sharpeRatio: number;
+  let sortinoRatio: number;
+  let ratioMethod: 'time_series' | 'snapshot';
+  let ratioDataPoints: number;
 
-  // Annualized return estimate (scale from current to annual)
-  const annualizedReturn = weightedApr;
-  const excessReturn = annualizedReturn - riskFreeRate;
+  if (useTimeSeries) {
+    // Build portfolio-level daily returns (capital-weighted)
+    // Find the common length (minimum across positions with data)
+    const minLen = Math.min(...positionsWithReturns.map(p => p.dailyReturns!.length));
+    const portfolioDailyReturns: number[] = [];
 
-  // Portfolio std dev of returns (weighted)
-  const portfolioStdDev = weightedVol * 100; // convert to %
-  const sharpeRatio = portfolioStdDev > 0 ? excessReturn / portfolioStdDev : 0;
+    for (let d = 0; d < minLen; d++) {
+      let dayReturn = 0;
+      let weightSum = 0;
+      for (const p of positionsWithReturns) {
+        const w = p.capital / totalCapital;
+        dayReturn += p.dailyReturns![d] * w;
+        weightSum += w;
+      }
+      // For positions without dailyReturns, assume 0 contribution
+      portfolioDailyReturns.push(dayReturn);
+    }
 
-  // Sortino: only downside deviation
-  const downsideReturns = returns.filter(r => r < 0);
-  const downsideDeviation = downsideReturns.length > 1
-    ? Math.sqrt(downsideReturns.reduce((s, r) => s + r * r, 0) / downsideReturns.length)
-    : portfolioStdDev * 0.7; // fallback estimate
-  const sortinoRatio = downsideDeviation > 0 ? excessReturn / downsideDeviation : 0;
+    ratioDataPoints = portfolioDailyReturns.length;
+    ratioMethod = 'time_series';
 
-  // Max Drawdown estimate based on extreme value theory (no time-series available)
-  // Expected max drawdown ≈ σ * sqrt(2 * ln(N)) where N = trading periods (252 days)
-  // NOTE: This is an approximation — real drawdown requires historical price path
-  const maxDrawdown = weightedVol > 0
-    ? Math.min(50, weightedVol * Math.sqrt(2 * Math.log(252)) * 100)
-    : 0;
+    // Mean daily return
+    const meanDaily = portfolioDailyReturns.reduce((s, r) => s + r, 0) / ratioDataPoints;
+
+    // Annualized return & risk-free daily
+    const annualizedReturn = meanDaily * 252;
+    const dailyRf = riskFreeRate / 252;
+    const excessDailyReturns = portfolioDailyReturns.map(r => r - dailyRf);
+
+    // Standard deviation of daily returns → annualize
+    const variance = portfolioDailyReturns.reduce((s, r) => s + (r - meanDaily) ** 2, 0) / (ratioDataPoints - 1);
+    const dailyStdDev = Math.sqrt(variance);
+    const annualStdDev = dailyStdDev * Math.sqrt(252);
+
+    // Sharpe = (annualized excess return) / annualized stddev
+    sharpeRatio = annualStdDev > 0 ? (annualizedReturn - riskFreeRate) / annualStdDev : 0;
+
+    // Sortino: only downside deviation
+    const downsideDaily = excessDailyReturns.filter(r => r < 0);
+    const downsideVar = downsideDaily.length > 0
+      ? downsideDaily.reduce((s, r) => s + r * r, 0) / downsideDaily.length
+      : 0;
+    const annualDownsideDev = Math.sqrt(downsideVar) * Math.sqrt(252);
+    sortinoRatio = annualDownsideDev > 0 ? (annualizedReturn - riskFreeRate) / annualDownsideDev : 0;
+  } else {
+    // Snapshot-based estimation (original logic)
+    ratioMethod = 'snapshot';
+    ratioDataPoints = 0;
+
+    const annualizedReturn = weightedApr;
+    const excessReturn = annualizedReturn - riskFreeRate;
+
+    // Portfolio std dev of returns (weighted)
+    const portfolioStdDev = weightedVol * 100; // convert to %
+    sharpeRatio = portfolioStdDev > 0 ? excessReturn / portfolioStdDev : 0;
+
+    // Sortino: only downside deviation from position returns
+    const returns = positions.map(p => {
+      const pnl = p.feesAccrued - p.ilActual;
+      return p.capital > 0 ? (pnl / p.capital) * 100 : 0;
+    });
+    const downsideReturns = returns.filter(r => r < 0);
+    const downsideDeviation = downsideReturns.length > 1
+      ? Math.sqrt(downsideReturns.reduce((s, r) => s + r * r, 0) / downsideReturns.length)
+      : portfolioStdDev * 0.7;
+    sortinoRatio = downsideDeviation > 0 ? excessReturn / downsideDeviation : 0;
+  }
+
+  // Max Drawdown — use real time-series peak-to-trough when available
+  let maxDrawdown: number;
+  if (useTimeSeries) {
+    const minLen = Math.min(...positionsWithReturns.map(p => p.dailyReturns!.length));
+    // Build cumulative portfolio value
+    let cumValue = 1.0;
+    let peak = 1.0;
+    let maxDD = 0;
+    for (let d = 0; d < minLen; d++) {
+      let dayReturn = 0;
+      for (const p of positionsWithReturns) {
+        dayReturn += (p.dailyReturns![d] / 100) * (p.capital / totalCapital);
+      }
+      cumValue *= (1 + dayReturn);
+      if (cumValue > peak) peak = cumValue;
+      const dd = (peak - cumValue) / peak;
+      if (dd > maxDD) maxDD = dd;
+    }
+    maxDrawdown = maxDD * 100;
+  } else {
+    // Estimate via extreme value theory
+    maxDrawdown = weightedVol > 0
+      ? Math.min(50, weightedVol * Math.sqrt(2 * Math.log(252)) * 100)
+      : 0;
+  }
 
   // Risk-adjusted APR: penalize high vol positions
   // Formula: APR * (1 - vol_penalty) where vol_penalty = min(0.5, vol²)
@@ -1032,6 +1111,8 @@ export function calcPortfolioAnalytics(positions: PortfolioPosition[], riskFreeR
     allocationByProtocol,
     allocationByToken,
     riskBand,
+    ratioMethod,
+    ratioDataPoints,
   };
 }
 

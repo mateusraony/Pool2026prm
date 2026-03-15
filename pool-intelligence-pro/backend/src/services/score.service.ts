@@ -1,6 +1,7 @@
 import { Pool, PoolWithMetrics, Score, ScoreBreakdown, Mode } from '../types/index.js';
 import { config } from '../config/index.js';
 import { logService } from './log.service.js';
+import { memoryStore } from './memory-store.service.js';
 
 interface ScoreWeights {
   health: number;
@@ -111,8 +112,8 @@ export class ScoreService {
       risk: {
         // Volatility penalty (uses real volatilityAnn when available)
         volatilityPenalty: this.calculateVolatilityPenalty(volatility24h),
-        // Liquidity drop penalty (requires historical TVL data — not available)
-        liquidityDropPenalty: 0,
+        // Liquidity drop penalty (from TVL snapshots in MemoryStore)
+        liquidityDropPenalty: this.calculateLiquidityDropPenalty(pool),
         // Inconsistency between sources (set by consensus when multiple providers)
         inconsistencyPenalty: 0,
         // Spread penalty (requires order book data — not available)
@@ -275,6 +276,20 @@ export class ScoreService {
     if (volatility >= 10) return 12;
     if (volatility >= 5) return 5;
     return 0;
+  }
+
+  private calculateLiquidityDropPenalty(pool: Pool): number {
+    const poolId = `${pool.chain}_${pool.poolAddress}`;
+    const dropPct = memoryStore.getTvlDrop(poolId);
+
+    // No significant drop
+    if (dropPct < 10) return 0;
+    // 10-30% drop = moderate penalty
+    if (dropPct < 30) return Math.round(dropPct * 0.5);
+    // 30-50% drop = heavy penalty
+    if (dropPct < 50) return Math.round(dropPct * 0.7);
+    // >50% drop = severe penalty (likely rug or migration)
+    return 25;
   }
 
   private determineMode(pool: Pool, metrics: PoolWithMetrics['metrics'] | undefined, score: number): Mode {
