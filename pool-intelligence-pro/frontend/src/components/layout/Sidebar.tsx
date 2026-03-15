@@ -18,6 +18,7 @@ import {
   Settings,
   Activity,
   GitCompareArrows,
+  PieChart,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/hooks/useNotifications';
@@ -27,6 +28,7 @@ const navSections = [
     title: 'Dashboard',
     items: [
       { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+      { path: '/portfolio', icon: PieChart, label: 'Portfolio' },
     ],
   },
   {

@@ -870,6 +870,395 @@ export function calcLVR(params: {
   };
 }
 
+// ============================================================
+// 14. PORTFOLIO ANALYTICS (Sharpe, Drawdown, Allocation)
+// ============================================================
+
+export interface PortfolioPosition {
+  poolId: string;
+  chain: string;
+  pair: string;
+  capital: number;
+  apr: number;
+  volAnn: number;
+  feesAccrued: number;
+  ilActual: number;
+  protocol?: string;
+  token0Symbol?: string;
+  token1Symbol?: string;
+}
+
+export interface PortfolioAnalytics {
+  totalCapital: number;
+  totalPnl: number;
+  totalPnlPercent: number;
+  weightedApr: number;
+  sharpeRatio: number;
+  sortinoRatio: number;
+  maxDrawdown: number;
+  riskAdjustedApr: number;     // APR * (1 - downside_risk_factor)
+  diversificationScore: number; // 0-100, based on HHI
+  allocationByChain: { chain: string; capital: number; percent: number }[];
+  allocationByProtocol: { protocol: string; capital: number; percent: number }[];
+  allocationByToken: { token: string; exposure: number; percent: number }[];
+  riskBand: 'conservative' | 'balanced' | 'aggressive';
+}
+
+/**
+ * Calculate portfolio-level analytics across all positions.
+ * Sharpe ratio = (Portfolio Return - Risk Free) / Portfolio StdDev
+ * Sortino uses only downside deviation.
+ */
+export function calcPortfolioAnalytics(positions: PortfolioPosition[], riskFreeRate: number = 4.5): PortfolioAnalytics {
+  const totalCapital = positions.reduce((s, p) => s + p.capital, 0);
+
+  if (totalCapital === 0 || positions.length === 0) {
+    return {
+      totalCapital: 0, totalPnl: 0, totalPnlPercent: 0,
+      weightedApr: 0, sharpeRatio: 0, sortinoRatio: 0,
+      maxDrawdown: 0, riskAdjustedApr: 0, diversificationScore: 0,
+      allocationByChain: [], allocationByProtocol: [], allocationByToken: [],
+      riskBand: 'conservative',
+    };
+  }
+
+  // Total PnL
+  const totalFees = positions.reduce((s, p) => s + p.feesAccrued, 0);
+  const totalIL = positions.reduce((s, p) => s + p.ilActual, 0);
+  const totalPnl = totalFees - totalIL;
+  const totalPnlPercent = (totalPnl / totalCapital) * 100;
+
+  // Weighted APR
+  const weightedApr = positions.reduce((s, p) => s + p.apr * (p.capital / totalCapital), 0);
+
+  // Portfolio volatility (weighted)
+  const weightedVol = positions.reduce((s, p) => s + p.volAnn * (p.capital / totalCapital), 0);
+
+  // Per-position returns for Sharpe/Sortino
+  const returns = positions.map(p => {
+    const pnl = p.feesAccrued - p.ilActual;
+    return p.capital > 0 ? (pnl / p.capital) * 100 : 0; // % return
+  });
+
+  const weights = positions.map(p => p.capital / totalCapital);
+  const portfolioReturn = returns.reduce((s, r, i) => s + r * weights[i], 0);
+
+  // Annualized return estimate (scale from current to annual)
+  const annualizedReturn = weightedApr;
+  const excessReturn = annualizedReturn - riskFreeRate;
+
+  // Portfolio std dev of returns (weighted)
+  const portfolioStdDev = weightedVol * 100; // convert to %
+  const sharpeRatio = portfolioStdDev > 0 ? excessReturn / portfolioStdDev : 0;
+
+  // Sortino: only downside deviation
+  const downsideReturns = returns.filter(r => r < 0);
+  const downsideDeviation = downsideReturns.length > 1
+    ? Math.sqrt(downsideReturns.reduce((s, r) => s + r * r, 0) / downsideReturns.length)
+    : portfolioStdDev * 0.7; // fallback estimate
+  const sortinoRatio = downsideDeviation > 0 ? excessReturn / downsideDeviation : 0;
+
+  // Max Drawdown estimate based on volatility
+  // Expected max drawdown ≈ σ * sqrt(2 * ln(N)) where N = trading periods
+  const maxDrawdown = weightedVol > 0
+    ? Math.min(50, weightedVol * Math.sqrt(2 * Math.log(252)) * 100)
+    : 0;
+
+  // Risk-adjusted APR: penalize high vol positions
+  // Formula: APR * (1 - vol_penalty) where vol_penalty = min(0.5, vol²)
+  const volPenalty = Math.min(0.5, weightedVol * weightedVol);
+  const riskAdjustedApr = weightedApr * (1 - volPenalty);
+
+  // Diversification score using Herfindahl-Hirschman Index (HHI)
+  // HHI = sum of squared market shares; lower = more diversified
+  const chainMap = new Map<string, number>();
+  positions.forEach(p => chainMap.set(p.chain, (chainMap.get(p.chain) || 0) + p.capital));
+  const chainShares = Array.from(chainMap.values()).map(v => v / totalCapital);
+  const hhi = chainShares.reduce((s, share) => s + share * share, 0);
+  // Convert: HHI=1 (concentrated) → 0, HHI=1/N (max diversified) → 100
+  const minHHI = chainShares.length > 0 ? 1 / chainShares.length : 1;
+  const diversificationScore = hhi <= minHHI
+    ? 100
+    : Math.round((1 - (hhi - minHHI) / (1 - minHHI)) * 100);
+
+  // Allocation by chain
+  const allocationByChain = Array.from(chainMap.entries())
+    .map(([chain, capital]) => ({ chain, capital: Math.round(capital * 100) / 100, percent: Math.round((capital / totalCapital) * 10000) / 100 }))
+    .sort((a, b) => b.capital - a.capital);
+
+  // Allocation by protocol
+  const protocolMap = new Map<string, number>();
+  positions.forEach(p => {
+    const proto = p.protocol || 'Unknown';
+    protocolMap.set(proto, (protocolMap.get(proto) || 0) + p.capital);
+  });
+  const allocationByProtocol = Array.from(protocolMap.entries())
+    .map(([protocol, capital]) => ({ protocol, capital: Math.round(capital * 100) / 100, percent: Math.round((capital / totalCapital) * 10000) / 100 }))
+    .sort((a, b) => b.capital - a.capital);
+
+  // Token exposure (each position exposes to 2 tokens)
+  const tokenMap = new Map<string, number>();
+  positions.forEach(p => {
+    const t0 = p.token0Symbol || 'Unknown';
+    const t1 = p.token1Symbol || 'Unknown';
+    // Each token gets half the capital exposure
+    tokenMap.set(t0, (tokenMap.get(t0) || 0) + p.capital / 2);
+    tokenMap.set(t1, (tokenMap.get(t1) || 0) + p.capital / 2);
+  });
+  const allocationByToken = Array.from(tokenMap.entries())
+    .map(([token, exposure]) => ({ token, exposure: Math.round(exposure * 100) / 100, percent: Math.round((exposure / totalCapital) * 10000) / 100 }))
+    .sort((a, b) => b.exposure - a.exposure);
+
+  // Risk band
+  let riskBand: PortfolioAnalytics['riskBand'];
+  if (weightedVol < 0.3 && diversificationScore > 50) riskBand = 'conservative';
+  else if (weightedVol > 0.6 || diversificationScore < 25) riskBand = 'aggressive';
+  else riskBand = 'balanced';
+
+  return {
+    totalCapital: Math.round(totalCapital * 100) / 100,
+    totalPnl: Math.round(totalPnl * 100) / 100,
+    totalPnlPercent: Math.round(totalPnlPercent * 100) / 100,
+    weightedApr: Math.round(weightedApr * 100) / 100,
+    sharpeRatio: Math.round(sharpeRatio * 100) / 100,
+    sortinoRatio: Math.round(sortinoRatio * 100) / 100,
+    maxDrawdown: Math.round(maxDrawdown * 100) / 100,
+    riskAdjustedApr: Math.round(riskAdjustedApr * 100) / 100,
+    diversificationScore,
+    allocationByChain,
+    allocationByProtocol,
+    allocationByToken,
+    riskBand,
+  };
+}
+
+// ============================================================
+// 15. AUTO-COMPOUND SIMULATOR
+// ============================================================
+
+export interface AutoCompoundResult {
+  withoutCompound: number;
+  withCompound: number;
+  compoundBenefit: number;
+  compoundBenefitPercent: number;
+  schedule: { period: number; valueSimple: number; valueCompound: number; feesEarned: number }[];
+  optimalFrequency: string;
+  gasCostEstimate: number;
+}
+
+/**
+ * Simulate auto-compounding vs simple fee accrual.
+ * compound benefit = (1 + r/n)^(n*t) - (1 + r*t)
+ */
+export function calcAutoCompound(params: {
+  capital: number;
+  apr: number;           // annual % (e.g. 25.5)
+  periodDays: number;
+  compoundFrequency: 'daily' | 'weekly' | 'biweekly' | 'monthly';
+  gasPerCompound: number; // USD gas cost per compound tx
+}): AutoCompoundResult {
+  const { capital, apr, periodDays, compoundFrequency, gasPerCompound } = params;
+
+  const freqMap: Record<string, number> = { daily: 1, weekly: 7, biweekly: 14, monthly: 30 };
+  const intervalDays = freqMap[compoundFrequency] || 7;
+  const dailyRate = apr / 100 / 365;
+
+  const totalCompounds = Math.floor(periodDays / intervalDays);
+  const schedule: AutoCompoundResult['schedule'] = [];
+
+  let valueSimple = capital;
+  let valueCompound = capital;
+  let totalGas = 0;
+
+  for (let p = 1; p <= Math.ceil(periodDays / intervalDays); p++) {
+    const days = Math.min(intervalDays, periodDays - (p - 1) * intervalDays);
+    if (days <= 0) break;
+
+    const feesSimple = capital * dailyRate * days;
+    valueSimple += feesSimple;
+
+    const feesCompound = valueCompound * dailyRate * days;
+    valueCompound += feesCompound;
+    totalGas += gasPerCompound;
+    valueCompound -= gasPerCompound;
+
+    schedule.push({
+      period: p,
+      valueSimple: Math.round(valueSimple * 100) / 100,
+      valueCompound: Math.round(valueCompound * 100) / 100,
+      feesEarned: Math.round(feesCompound * 100) / 100,
+    });
+  }
+
+  const withoutCompound = Math.round(valueSimple * 100) / 100;
+  const withCompound = Math.round(valueCompound * 100) / 100;
+  const compoundBenefit = Math.round((withCompound - withoutCompound) * 100) / 100;
+  const compoundBenefitPercent = capital > 0 ? Math.round((compoundBenefit / capital) * 10000) / 100 : 0;
+
+  // Determine optimal frequency by testing all
+  const frequencies: ('daily' | 'weekly' | 'biweekly' | 'monthly')[] = ['daily', 'weekly', 'biweekly', 'monthly'];
+  let bestFreq = compoundFrequency;
+  let bestValue = 0;
+  for (const freq of frequencies) {
+    const intv = freqMap[freq];
+    let val = capital;
+    const nCompounds = Math.floor(periodDays / intv);
+    for (let i = 0; i < nCompounds; i++) {
+      val += val * dailyRate * intv;
+      val -= gasPerCompound;
+    }
+    const remainingDays = periodDays - nCompounds * intv;
+    val += val * dailyRate * remainingDays;
+    if (val > bestValue) {
+      bestValue = val;
+      bestFreq = freq;
+    }
+  }
+
+  const freqLabels: Record<string, string> = {
+    daily: 'Diario', weekly: 'Semanal', biweekly: 'Quinzenal', monthly: 'Mensal',
+  };
+
+  return {
+    withoutCompound,
+    withCompound,
+    compoundBenefit,
+    compoundBenefitPercent,
+    schedule,
+    optimalFrequency: freqLabels[bestFreq] || bestFreq,
+    gasCostEstimate: Math.round(totalGas * 100) / 100,
+  };
+}
+
+// ============================================================
+// 16. TOKEN CORRELATION
+// ============================================================
+
+export interface TokenCorrelationResult {
+  token0: string;
+  token1: string;
+  correlation: number;         // -1 to 1
+  correlationLabel: string;    // "forte positiva", "fraca", etc.
+  ilImpact: string;            // how correlation affects IL
+  pairType: 'stablecoin' | 'correlated' | 'uncorrelated' | 'inverse';
+  riskAssessment: string;
+  volToken0: number;
+  volToken1: number;
+  combinedVol: number;
+}
+
+/**
+ * Estimate token correlation and its impact on IL.
+ * Uses pool volatility as proxy (no external price feeds).
+ * Low vol pool with high-vol tokens = high correlation = low IL.
+ */
+export function calcTokenCorrelation(params: {
+  token0Symbol: string;
+  token1Symbol: string;
+  poolVolAnn: number;
+  token0VolAnn?: number;   // if known
+  token1VolAnn?: number;   // if known
+  poolType?: 'CL' | 'V2' | 'STABLE';
+  feeTier?: number;
+}): TokenCorrelationResult {
+  const { token0Symbol, token1Symbol, poolVolAnn, poolType, feeTier } = params;
+
+  // Stablecoin detection
+  const stablecoins = ['USDC', 'USDT', 'DAI', 'FRAX', 'LUSD', 'TUSD', 'BUSD', 'GUSD', 'USDP', 'crvUSD', 'GHO', 'PYUSD', 'USDe'];
+  const wrappers = ['WETH', 'ETH', 'WBTC', 'BTC', 'stETH', 'wstETH', 'rETH', 'cbETH', 'WMATIC', 'MATIC', 'WBNB', 'BNB'];
+
+  const t0 = token0Symbol.toUpperCase();
+  const t1 = token1Symbol.toUpperCase();
+  const isStable0 = stablecoins.some(s => t0.includes(s));
+  const isStable1 = stablecoins.some(s => t1.includes(s));
+  const isWrapped0 = wrappers.some(w => t0 === w);
+  const isWrapped1 = wrappers.some(w => t1 === w);
+
+  // Estimate individual vol from pool vol if not provided
+  const vol0 = params.token0VolAnn ?? (isStable0 ? 0.02 : poolVolAnn * 0.8);
+  const vol1 = params.token1VolAnn ?? (isStable1 ? 0.02 : poolVolAnn * 0.8);
+
+  let correlation: number;
+  let pairType: TokenCorrelationResult['pairType'];
+
+  if (isStable0 && isStable1) {
+    // Stable-stable pair
+    correlation = 0.99;
+    pairType = 'stablecoin';
+  } else if (poolType === 'STABLE' || (feeTier && feeTier <= 0.0001)) {
+    // Stable pool or very low fee tier
+    correlation = 0.95;
+    pairType = 'stablecoin';
+  } else if (
+    (isWrapped0 && isWrapped1) ||
+    (t0.includes('ETH') && t1.includes('ETH')) ||
+    (t0.includes('BTC') && t1.includes('BTC'))
+  ) {
+    // Same-asset derivatives (WETH/stETH, WBTC/BTC)
+    correlation = 0.97;
+    pairType = 'correlated';
+  } else if (isStable0 || isStable1) {
+    // One stable: correlation depends on pool vol
+    // Low pool vol = the other token is stable-ish
+    correlation = poolVolAnn < 0.15 ? 0.3 : poolVolAnn < 0.4 ? -0.1 : -0.3;
+    pairType = 'uncorrelated';
+  } else {
+    // Two volatile tokens: estimate from pool vol vs individual vols
+    // If pool vol is much less than individual vols = high correlation
+    const expectedUncorrelatedVol = Math.sqrt(vol0 * vol0 + vol1 * vol1);
+    if (expectedUncorrelatedVol > 0) {
+      // ρ ≈ 1 - (σ_pool / σ_uncorrelated)²
+      const ratio = poolVolAnn / expectedUncorrelatedVol;
+      correlation = clamp(1 - ratio * ratio, -0.5, 0.99);
+    } else {
+      correlation = 0;
+    }
+    pairType = correlation > 0.7 ? 'correlated' : correlation < -0.2 ? 'inverse' : 'uncorrelated';
+  }
+
+  // Combined portfolio vol
+  const combinedVol = Math.sqrt(
+    vol0 * vol0 + vol1 * vol1 + 2 * correlation * vol0 * vol1
+  );
+
+  // Correlation label
+  let correlationLabel: string;
+  if (correlation > 0.8) correlationLabel = 'Forte positiva';
+  else if (correlation > 0.5) correlationLabel = 'Moderada positiva';
+  else if (correlation > 0.1) correlationLabel = 'Fraca positiva';
+  else if (correlation > -0.1) correlationLabel = 'Neutra';
+  else if (correlation > -0.5) correlationLabel = 'Fraca negativa';
+  else correlationLabel = 'Forte negativa';
+
+  // IL impact assessment
+  let ilImpact: string;
+  if (correlation > 0.9) ilImpact = 'IL muito baixo — tokens movem juntos';
+  else if (correlation > 0.6) ilImpact = 'IL baixo a moderado — boa correlacao';
+  else if (correlation > 0.2) ilImpact = 'IL moderado — correlacao parcial';
+  else if (correlation > -0.2) ilImpact = 'IL alto — tokens independentes';
+  else ilImpact = 'IL muito alto — tokens movem em direcoes opostas';
+
+  // Risk assessment
+  let riskAssessment: string;
+  if (pairType === 'stablecoin') riskAssessment = 'Risco minimo de IL. Ideal para estrategia conservadora.';
+  else if (pairType === 'correlated') riskAssessment = 'Baixo risco de IL. Tokens correlacionados reduzem divergencia.';
+  else if (pairType === 'inverse') riskAssessment = 'Alto risco de IL. Considere ranges largos e modo defensivo.';
+  else riskAssessment = 'Risco moderado de IL. Monitorar divergencia de precos.';
+
+  return {
+    token0: token0Symbol,
+    token1: token1Symbol,
+    correlation: Math.round(correlation * 100) / 100,
+    correlationLabel,
+    ilImpact,
+    pairType,
+    riskAssessment,
+    volToken0: Math.round(vol0 * 10000) / 10000,
+    volToken1: Math.round(vol1 * 10000) / 10000,
+    combinedVol: Math.round(combinedVol * 10000) / 10000,
+  };
+}
+
 const calcService = {
   calcAprFee,
   calcVolatilityAnn,
@@ -885,6 +1274,9 @@ const calcService = {
   calcMonteCarlo,
   calcBacktest,
   calcLVR,
+  calcPortfolioAnalytics,
+  calcAutoCompound,
+  calcTokenCorrelation,
 };
 
 export { calcService };

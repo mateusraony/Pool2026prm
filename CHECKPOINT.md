@@ -3,14 +3,40 @@
 ## Status Atual
 **Branch:** `claude/continue-stage-1-improvements-Wl2yZ`
 **Data:** 2026-03-15 UTC
-**Fase:** ETAPAS 1, 2, 3, 4, 5, 6, 7 e 8 concluídas
+**Fase:** ETAPAS 1, 2, 3, 4, 5, 6, 7, 8 e 9 concluídas
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-15 — iniciar ETAPA 9"`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-15 — iniciar ETAPA 10"`
 
 ---
 
 ## O QUE FOI FEITO
+
+### ETAPA 9 — Portfolio Intelligence ✅ (2026-03-15)
+
+- 9.1: Dashboard Portfolio Avançado
+  - `calcPortfolioAnalytics()` em calc.service.ts: Sharpe, Sortino, drawdown, diversificação (HHI)
+  - Endpoint `GET /api/portfolio-analytics`: analisa posições ativas com alocação por chain/protocolo/token
+  - Página `Portfolio` com: métricas-chave, gráficos de alocação (Pie/Bar), exposição por token
+  - Risk band automático: conservative/balanced/aggressive
+  - Sidebar: item "Portfolio" com ícone PieChart na seção Dashboard
+- 9.2: APR Risk-Adjusted (Sharpe-like)
+  - Fórmula: APR * (1 - vol_penalty) onde vol_penalty = min(0.5, vol²)
+  - Comparação visual: APR nominal vs risk-adjusted com barra de penalidade
+  - Sharpe ratio = (portfolio_return - risk_free) / portfolio_stddev
+  - Sortino ratio usando apenas desvio negativo
+- 9.3: Auto-Compound Simulator
+  - `calcAutoCompound()` em calc.service.ts: simula compound vs simples
+  - Endpoint `POST /api/auto-compound`: calcula benefício, frequência ideal, custo de gas
+  - Tab "Compound" no PoolAnalytics: gráfico crescimento (Line), frequência ideal, ganho extra
+  - 4 frequências: diário, semanal, quinzenal, mensal
+- 9.4: Correlação entre Tokens
+  - `calcTokenCorrelation()` em calc.service.ts: estima correlação via volatilidade do pool
+  - Detecção de stablecoins, wrappers, same-asset derivatives
+  - Endpoint `GET /api/token-correlation/:chain/:address`
+  - Componente `TokenCorrelation`: barra visual -1 a +1, classificação, impacto IL, risco
+  - Integrado no ScoutPoolDetail (acima do HODL vs LP)
+  - Pair types: stablecoin, correlated, uncorrelated, inverse
 
 ### ETAPA 8 — Analytics Institucional ✅ (2026-03-15)
 
@@ -201,13 +227,7 @@
 
 ---
 
-## PRÓXIMOS PASSOS → ETAPA 9 (Portfolio Intelligence)
-- 9.1 — Dashboard portfolio avançado (alocação por chain, Sharpe, drawdown)
-- 9.2 — APR risk-adjusted (Sharpe-like metric)
-- 9.3 — Auto-compound simulator
-- 9.4 — Correlação entre tokens do par
-
-## ETAPA 10 (Polish Profissional)
+## PRÓXIMOS PASSOS → ETAPA 10 (Polish Profissional)
 - 10.1 — Glossário/tooltips em todas as métricas
 - 10.2 — i18n (PT-BR + EN)
 - 10.3 — Light theme
