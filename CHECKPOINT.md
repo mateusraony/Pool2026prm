@@ -3,14 +3,47 @@
 ## Status Atual
 **Branch:** `claude/continue-stage-1-improvements-Wl2yZ`
 **Data:** 2026-03-15 UTC
-**Fase:** ETAPAS 1, 2, 3, 4, 5, 6, 7, 8 e 9 concluídas
+**Fase:** ETAPAS 1–10 concluídas
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-15 — iniciar ETAPA 10"`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-15 — iniciar ETAPA 11"`
 
 ---
 
 ## O QUE FOI FEITO
+
+### ETAPA 10 — Polish Profissional ✅ (2026-03-15)
+
+- 10.1: Glossário/Tooltips DeFi
+  - `data/glossary.ts`: 30+ termos DeFi com explicações curtas e longas
+  - `GlossaryTooltip` component: reusável, compact mode, icon-only mode
+  - Integrado no Portfolio (Sharpe, Sortino, Diversificação, APR Risk-Adjusted)
+  - Usa Radix Tooltip já existente (shadcn/ui)
+- 10.2: i18n (PT-BR + EN)
+  - `i18n/` module com Zustand persist: `useTranslation()` hook
+  - `pt-br.ts`: 90+ chaves de tradução (nav, dashboard, portfolio, analytics, common)
+  - `en-us.ts`: tradução completa para inglês
+  - Seletor de idioma na página Configurações (BR/US flags)
+  - Persistência via localStorage (`pool-intel-locale`)
+- 10.3: Light Theme
+  - CSS variables completas para `.light` class em index.css
+  - 45+ variáveis: background, cards, borders, shadows, gradients, sidebar, charts
+  - Seletor de tema (Dark/Light/System) na página Configurações
+  - `next-themes` já estava configurado, agora com visual light funcional
+  - Scrollbars usando CSS variables (adapta ao tema)
+- 10.4: Swagger/OpenAPI Docs
+  - `docs.routes.ts`: OpenAPI 3.0.3 spec com 25+ endpoints documentados
+  - `GET /api/docs`: JSON spec para integração
+  - `GET /api/docs/ui`: Swagger UI via CDN (zero dependências extras)
+  - Schemas: UnifiedPool, PortfolioAnalytics, PoolListResponse
+  - Tags: Pools, Recommendations, Watchlist, Ranges, Alerts, Analytics, Portfolio, Settings
+- 10.5: Onboarding Wizard
+  - `OnboardingWizard` component: 5 steps com progress bar
+  - Steps: Boas-vindas → Banca → Recomendações → Monitoramento → Analytics
+  - Botões de ação por step (navega para a página relevante)
+  - "Pular tutorial" + persistência via localStorage
+  - `useOnboarding()` hook para reset (útil em settings)
+  - Integrado no App.tsx (aparece na primeira visita)
 
 ### ETAPA 9 — Portfolio Intelligence ✅ (2026-03-15)
 
@@ -227,9 +260,8 @@
 
 ---
 
-## PRÓXIMOS PASSOS → ETAPA 10 (Polish Profissional)
-- 10.1 — Glossário/tooltips em todas as métricas
-- 10.2 — i18n (PT-BR + EN)
-- 10.3 — Light theme
-- 10.4 — Swagger/OpenAPI docs
-- 10.5 — Onboarding wizard
+## PRÓXIMOS PASSOS → ETAPA 11+
+- Melhorias contínuas de UX
+- Testes automatizados (Vitest + Playwright)
+- Performance monitoring (web vitals)
+- Mobile-first refinements

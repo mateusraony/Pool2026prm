@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ErrorBoundary } from 'react-error-boundary';
 import Layout from './components/layout/Layout';
 import { Toaster } from './components/ui/sonner';
+import { OnboardingWizard } from './components/common/OnboardingWizard';
 
 // Lazy-loaded pages for bundle splitting
 const ScoutDashboard = lazy(() => import('./pages/ScoutDashboard'));
@@ -117,6 +118,7 @@ export default function App() {
         </Route>
       </Routes>
       <Toaster />
+      <OnboardingWizard />
     </BrowserRouter>
   );
 }

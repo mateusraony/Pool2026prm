@@ -7,6 +7,7 @@ import {
   BarChart3, Activity, AlertTriangle, CheckCircle2,
 } from 'lucide-react';
 import { fetchPortfolioAnalytics, type PortfolioAnalytics } from '@/api/client';
+import { GlossaryTooltip } from '@/components/common/GlossaryTooltip';
 import {
   PieChart as RechartsPie, Pie, Cell,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -90,6 +91,7 @@ export default function Portfolio() {
           label="APR Ponderado"
           value={`${p.weightedApr.toFixed(1)}%`}
           sub={`Risk-adj: ${p.riskAdjustedApr.toFixed(1)}%`}
+          tooltip="riskAdjustedApr"
         />
         <MetricCard
           label="Max Drawdown"
@@ -101,7 +103,7 @@ export default function Portfolio() {
       {/* Sharpe / Sortino / Diversification */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="glass-card p-4 text-center">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Sharpe Ratio</p>
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1"><GlossaryTooltip term="sharpe" compact>Sharpe Ratio</GlossaryTooltip></p>
           <p className={cn('font-mono text-2xl font-bold',
             p.sharpeRatio > 1 ? 'text-success' : p.sharpeRatio > 0.5 ? 'text-primary' : 'text-warning')}>
             {p.sharpeRatio.toFixed(2)}
@@ -111,7 +113,7 @@ export default function Portfolio() {
           </p>
         </div>
         <div className="glass-card p-4 text-center">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Sortino Ratio</p>
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1"><GlossaryTooltip term="sortino" compact>Sortino Ratio</GlossaryTooltip></p>
           <p className={cn('font-mono text-2xl font-bold',
             p.sortinoRatio > 1.5 ? 'text-success' : p.sortinoRatio > 0.7 ? 'text-primary' : 'text-warning')}>
             {p.sortinoRatio.toFixed(2)}
@@ -121,7 +123,7 @@ export default function Portfolio() {
           </p>
         </div>
         <div className="glass-card p-4 text-center">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Diversificacao</p>
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1"><GlossaryTooltip term="diversification" compact>Diversificacao</GlossaryTooltip></p>
           <div className="relative w-16 h-16 mx-auto my-1">
             <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
               <circle cx="18" cy="18" r="15.5" fill="none" stroke="hsl(var(--secondary))" strokeWidth="3" />
@@ -263,13 +265,16 @@ export default function Portfolio() {
   );
 }
 
-function MetricCard({ label, value, sub, variant }: {
+function MetricCard({ label, value, sub, variant, tooltip }: {
   label: string; value: string; sub?: string;
   variant?: 'success' | 'danger' | 'warning';
+  tooltip?: string;
 }) {
   return (
     <div className="glass-card p-4 text-center">
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+        {tooltip ? <GlossaryTooltip term={tooltip} compact>{label}</GlossaryTooltip> : label}
+      </p>
       <p className={cn('font-mono text-2xl font-bold',
         variant === 'success' ? 'text-success' :
         variant === 'danger' ? 'text-destructive' :
