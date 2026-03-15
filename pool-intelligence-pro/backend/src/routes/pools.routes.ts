@@ -11,8 +11,13 @@ import {
 import { memoryStore } from '../services/memory-store.service.js';
 import { config } from '../config/index.js';
 import { poolIntelligenceService } from '../services/pool-intelligence.service.js';
-import { calcRangeRecommendation, calcUserFees, calcILRisk, calcMonteCarlo, calcBacktest, calcLVR } from '../services/calc.service.js';
+import {
+  calcRangeRecommendation, calcUserFees, calcILRisk, calcMonteCarlo, calcBacktest, calcLVR,
+  calcPortfolioAnalytics, calcAutoCompound, calcTokenCorrelation,
+  type PortfolioPosition,
+} from '../services/calc.service.js';
 import { Pool, UnifiedPool } from '../types/index.js';
+import { rangeMonitorService } from '../services/range.service.js';
 import { validate, rangeCalcSchema } from './validation.js';
 import { getPrisma } from './prisma.js';
 
@@ -593,6 +598,110 @@ router.get('/fee-tiers/:chain/:token0/:token1', async (req, res) => {
     });
   } catch (error) {
     logService.error('SYSTEM', 'GET /fee-tiers failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// GET /api/portfolio-analytics — portfolio-level analytics (Sharpe, diversification, allocation)
+router.get('/portfolio-analytics', async (req, res) => {
+  try {
+    const allRangePositions = rangeMonitorService.getPositions();
+    const radarResults = getLatestRadarResults();
+    const activePositions = allRangePositions.filter(rp => rp.isActive);
+
+    const positions: PortfolioPosition[] = activePositions.map(rp => {
+      const fromRadar = radarResults.find(r =>
+        r.pool.chain === rp.chain &&
+        (r.pool.poolAddress === rp.poolAddress || r.pool.externalId === rp.poolAddress)
+      );
+      const memPool = memoryStore.getAllPools().find(p =>
+        p.chain === rp.chain && (p.poolAddress === rp.poolAddress || p.id === rp.poolId)
+      );
+
+      return {
+        poolId: rp.poolId,
+        chain: rp.chain,
+        pair: `${rp.token0Symbol}/${rp.token1Symbol}`,
+        capital: rp.capital,
+        apr: memPool?.aprTotal ?? memPool?.aprFee ?? fromRadar?.pool.apr ?? 0,
+        volAnn: memPool?.volatilityAnn ?? fromRadar?.pool.volatilityAnn ?? 0.3,
+        feesAccrued: (fromRadar?.pool.fees24h || memPool?.fees24hUSD || 0) *
+          (rp.capital / (fromRadar?.pool.tvl || memPool?.tvlUSD || 1)) * 0.75 *
+          (Date.now() - new Date(rp.createdAt).getTime()) / 86400000,
+        ilActual: 0,
+        protocol: memPool?.protocol || fromRadar?.pool.protocol || '',
+        token0Symbol: rp.token0Symbol,
+        token1Symbol: rp.token1Symbol,
+      };
+    });
+
+    const analytics = calcPortfolioAnalytics(positions);
+    res.json({ success: true, data: analytics, timestamp: new Date() });
+  } catch (error) {
+    logService.error('SYSTEM', 'GET /portfolio-analytics failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// POST /api/auto-compound — auto-compound simulation
+router.post('/auto-compound', async (req, res) => {
+  try {
+    const { chain, address, capital = 10000, periodDays = 365, compoundFrequency = 'weekly', gasPerCompound = 2.5 } = req.body;
+
+    const radarResults = getLatestRadarResults();
+    const fromRadar = radarResults.find(r =>
+      r.pool.chain === chain &&
+      (r.pool.poolAddress === address || r.pool.externalId === address)
+    );
+    const memPool = memoryStore.getAllPools().find(p =>
+      p.chain === chain && (p.poolAddress === address || p.id === address)
+    );
+
+    const apr = memPool?.aprTotal ?? memPool?.aprFee ?? fromRadar?.pool.apr ?? 0;
+
+    const result = calcAutoCompound({
+      capital,
+      apr,
+      periodDays: Math.min(periodDays, 730),
+      compoundFrequency,
+      gasPerCompound,
+    });
+
+    res.json({
+      success: true,
+      data: { ...result, pool: { apr, chain, address } },
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    logService.error('SYSTEM', 'POST /auto-compound failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// GET /api/token-correlation/:chain/:address — token pair correlation analysis
+router.get('/token-correlation/:chain/:address', async (req, res) => {
+  try {
+    const { chain, address } = req.params;
+
+    const memPool = memoryStore.getAllPools().find(p =>
+      p.chain === chain && (p.poolAddress === address || p.id === address)
+    );
+
+    if (!memPool) {
+      return res.status(404).json({ success: false, error: 'Pool not found' });
+    }
+
+    const result = calcTokenCorrelation({
+      token0Symbol: memPool.token0?.symbol || memPool.baseToken || 'Token0',
+      token1Symbol: memPool.token1?.symbol || memPool.quoteToken || 'Token1',
+      poolVolAnn: memPool.volatilityAnn || 0.3,
+      poolType: memPool.poolType as 'CL' | 'V2' | 'STABLE' | undefined,
+      feeTier: memPool.feeTier,
+    });
+
+    res.json({ success: true, data: result, timestamp: new Date() });
+  } catch (error) {
+    logService.error('SYSTEM', 'GET /token-correlation failed', { error });
     res.status(500).json({ success: false, error: 'Internal error' });
   }
 });

@@ -565,6 +565,83 @@ export async function fetchFeeTiers(chain: string, token0: string, token1: strin
   }
 }
 
+// Portfolio Analytics
+export interface PortfolioAnalytics {
+  totalCapital: number;
+  totalPnl: number;
+  totalPnlPercent: number;
+  weightedApr: number;
+  sharpeRatio: number;
+  sortinoRatio: number;
+  maxDrawdown: number;
+  riskAdjustedApr: number;
+  diversificationScore: number;
+  allocationByChain: { chain: string; capital: number; percent: number }[];
+  allocationByProtocol: { protocol: string; capital: number; percent: number }[];
+  allocationByToken: { token: string; exposure: number; percent: number }[];
+  riskBand: 'conservative' | 'balanced' | 'aggressive';
+}
+
+export async function fetchPortfolioAnalytics(): Promise<PortfolioAnalytics | null> {
+  try {
+    const { data } = await api.get('/portfolio-analytics');
+    return data.data || null;
+  } catch {
+    return null;
+  }
+}
+
+// Auto-Compound Simulator
+export interface AutoCompoundResult {
+  withoutCompound: number;
+  withCompound: number;
+  compoundBenefit: number;
+  compoundBenefitPercent: number;
+  schedule: { period: number; valueSimple: number; valueCompound: number; feesEarned: number }[];
+  optimalFrequency: string;
+  gasCostEstimate: number;
+  pool: { apr: number; chain: string; address: string };
+}
+
+export async function runAutoCompound(params: {
+  chain: string;
+  address: string;
+  capital?: number;
+  periodDays?: number;
+  compoundFrequency?: string;
+  gasPerCompound?: number;
+}): Promise<AutoCompoundResult | null> {
+  try {
+    const { data } = await api.post('/auto-compound', params);
+    return data.data || null;
+  } catch {
+    return null;
+  }
+}
+
+// Token Correlation
+export interface TokenCorrelationResult {
+  token0: string;
+  token1: string;
+  correlation: number;
+  correlationLabel: string;
+  ilImpact: string;
+  pairType: 'stablecoin' | 'correlated' | 'uncorrelated' | 'inverse';
+  riskAssessment: string;
+  volToken0: number;
+  volToken1: number;
+  combinedVol: number;
+}
+
+export async function fetchTokenCorrelation(chain: string, address: string): Promise<TokenCorrelationResult | null> {
+  try {
+    const { data } = await api.get(`/token-correlation/${chain}/${address}`);
+    return data.data || null;
+  } catch {
+    return null;
+  }
+}
+
 // Favorites
 export async function fetchFavorites(): Promise<FavoritePool[]> {
   try {

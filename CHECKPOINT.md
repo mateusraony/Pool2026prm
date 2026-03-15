@@ -3,14 +3,73 @@
 ## Status Atual
 **Branch:** `claude/continue-stage-1-improvements-Wl2yZ`
 **Data:** 2026-03-15 UTC
-**Fase:** ETAPAS 1, 2, 3, 4, 5, 6, 7 e 8 concluídas
+**Fase:** ETAPAS 1–10 concluídas
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-15 — iniciar ETAPA 9"`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-15 — iniciar ETAPA 11"`
 
 ---
 
 ## O QUE FOI FEITO
+
+### ETAPA 10 — Polish Profissional ✅ (2026-03-15)
+
+- 10.1: Glossário/Tooltips DeFi
+  - `data/glossary.ts`: 30+ termos DeFi com explicações curtas e longas
+  - `GlossaryTooltip` component: reusável, compact mode, icon-only mode
+  - Integrado no Portfolio (Sharpe, Sortino, Diversificação, APR Risk-Adjusted)
+  - Usa Radix Tooltip já existente (shadcn/ui)
+- 10.2: i18n (PT-BR + EN)
+  - `i18n/` module com Zustand persist: `useTranslation()` hook
+  - `pt-br.ts`: 90+ chaves de tradução (nav, dashboard, portfolio, analytics, common)
+  - `en-us.ts`: tradução completa para inglês
+  - Seletor de idioma na página Configurações (BR/US flags)
+  - Persistência via localStorage (`pool-intel-locale`)
+- 10.3: Light Theme
+  - CSS variables completas para `.light` class em index.css
+  - 45+ variáveis: background, cards, borders, shadows, gradients, sidebar, charts
+  - Seletor de tema (Dark/Light/System) na página Configurações
+  - `next-themes` já estava configurado, agora com visual light funcional
+  - Scrollbars usando CSS variables (adapta ao tema)
+- 10.4: Swagger/OpenAPI Docs
+  - `docs.routes.ts`: OpenAPI 3.0.3 spec com 25+ endpoints documentados
+  - `GET /api/docs`: JSON spec para integração
+  - `GET /api/docs/ui`: Swagger UI via CDN (zero dependências extras)
+  - Schemas: UnifiedPool, PortfolioAnalytics, PoolListResponse
+  - Tags: Pools, Recommendations, Watchlist, Ranges, Alerts, Analytics, Portfolio, Settings
+- 10.5: Onboarding Wizard
+  - `OnboardingWizard` component: 5 steps com progress bar
+  - Steps: Boas-vindas → Banca → Recomendações → Monitoramento → Analytics
+  - Botões de ação por step (navega para a página relevante)
+  - "Pular tutorial" + persistência via localStorage
+  - `useOnboarding()` hook para reset (útil em settings)
+  - Integrado no App.tsx (aparece na primeira visita)
+
+### ETAPA 9 — Portfolio Intelligence ✅ (2026-03-15)
+
+- 9.1: Dashboard Portfolio Avançado
+  - `calcPortfolioAnalytics()` em calc.service.ts: Sharpe, Sortino, drawdown, diversificação (HHI)
+  - Endpoint `GET /api/portfolio-analytics`: analisa posições ativas com alocação por chain/protocolo/token
+  - Página `Portfolio` com: métricas-chave, gráficos de alocação (Pie/Bar), exposição por token
+  - Risk band automático: conservative/balanced/aggressive
+  - Sidebar: item "Portfolio" com ícone PieChart na seção Dashboard
+- 9.2: APR Risk-Adjusted (Sharpe-like)
+  - Fórmula: APR * (1 - vol_penalty) onde vol_penalty = min(0.5, vol²)
+  - Comparação visual: APR nominal vs risk-adjusted com barra de penalidade
+  - Sharpe ratio = (portfolio_return - risk_free) / portfolio_stddev
+  - Sortino ratio usando apenas desvio negativo
+- 9.3: Auto-Compound Simulator
+  - `calcAutoCompound()` em calc.service.ts: simula compound vs simples
+  - Endpoint `POST /api/auto-compound`: calcula benefício, frequência ideal, custo de gas
+  - Tab "Compound" no PoolAnalytics: gráfico crescimento (Line), frequência ideal, ganho extra
+  - 4 frequências: diário, semanal, quinzenal, mensal
+- 9.4: Correlação entre Tokens
+  - `calcTokenCorrelation()` em calc.service.ts: estima correlação via volatilidade do pool
+  - Detecção de stablecoins, wrappers, same-asset derivatives
+  - Endpoint `GET /api/token-correlation/:chain/:address`
+  - Componente `TokenCorrelation`: barra visual -1 a +1, classificação, impacto IL, risco
+  - Integrado no ScoutPoolDetail (acima do HODL vs LP)
+  - Pair types: stablecoin, correlated, uncorrelated, inverse
 
 ### ETAPA 8 — Analytics Institucional ✅ (2026-03-15)
 
@@ -201,15 +260,8 @@
 
 ---
 
-## PRÓXIMOS PASSOS → ETAPA 9 (Portfolio Intelligence)
-- 9.1 — Dashboard portfolio avançado (alocação por chain, Sharpe, drawdown)
-- 9.2 — APR risk-adjusted (Sharpe-like metric)
-- 9.3 — Auto-compound simulator
-- 9.4 — Correlação entre tokens do par
-
-## ETAPA 10 (Polish Profissional)
-- 10.1 — Glossário/tooltips em todas as métricas
-- 10.2 — i18n (PT-BR + EN)
-- 10.3 — Light theme
-- 10.4 — Swagger/OpenAPI docs
-- 10.5 — Onboarding wizard
+## PRÓXIMOS PASSOS → ETAPA 11+
+- Melhorias contínuas de UX
+- Testes automatizados (Vitest + Playwright)
+- Performance monitoring (web vitals)
+- Mobile-first refinements

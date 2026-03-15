@@ -11,6 +11,7 @@ import settingsRouter from './settings.routes.js';
 import alertsRouter from './alerts.routes.js';
 import rangesRouter from './ranges.routes.js';
 import dataRouter from './data.routes.js';
+import docsRouter from './docs.routes.js';
 
 const router = Router();
 
@@ -53,5 +54,6 @@ router.use(settingsRouter);
 router.use(alertsRouter);
 router.use(rangesRouter);
 router.use(dataRouter);
+router.use(docsRouter);
 
 export default router;

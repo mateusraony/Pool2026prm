@@ -32,6 +32,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useI18n, type Locale } from '@/i18n';
+import { useTheme } from 'next-themes';
 import {
   fetchSettings,
   updateNotificationSettings,
@@ -317,6 +319,9 @@ export default function ScoutSettings() {
       subtitle="Configure sua banca, perfil de risco e preferencias"
     >
       <div className="max-w-4xl space-y-6">
+        {/* Language & Theme */}
+        <LanguageThemeSettings />
+
         {/* Banca Total */}
         <div className="glass-card p-6">
           <div className="flex items-center gap-3 mb-6">
@@ -952,5 +957,76 @@ export default function ScoutSettings() {
         </div>
       </div>
     </MainLayout>
+  );
+}
+
+function LanguageThemeSettings() {
+  const { locale, setLocale } = useI18n();
+  const { theme, setTheme } = useTheme();
+
+  return (
+    <div className="glass-card p-6">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+          <Settings className="h-5 w-5 text-primary" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold">Aparencia</h2>
+          <p className="text-sm text-muted-foreground">Idioma e tema do aplicativo</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Language */}
+        <div>
+          <Label className="text-sm font-medium mb-2 block">Idioma / Language</Label>
+          <div className="flex gap-2">
+            {([
+              { value: 'pt-BR' as Locale, label: 'Portugues', flag: 'BR' },
+              { value: 'en-US' as Locale, label: 'English', flag: 'US' },
+            ]).map(lang => (
+              <button
+                key={lang.value}
+                onClick={() => setLocale(lang.value)}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors text-sm',
+                  locale === lang.value
+                    ? 'bg-primary/10 border-primary text-primary'
+                    : 'border-border hover:bg-secondary/50'
+                )}
+              >
+                <span className="font-mono text-xs text-muted-foreground">{lang.flag}</span>
+                <span>{lang.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Theme */}
+        <div>
+          <Label className="text-sm font-medium mb-2 block">Tema / Theme</Label>
+          <div className="flex gap-2">
+            {([
+              { value: 'dark', label: 'Dark' },
+              { value: 'light', label: 'Light' },
+              { value: 'system', label: 'System' },
+            ]).map(t => (
+              <button
+                key={t.value}
+                onClick={() => setTheme(t.value)}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors text-sm',
+                  theme === t.value
+                    ? 'bg-primary/10 border-primary text-primary'
+                    : 'border-border hover:bg-secondary/50'
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

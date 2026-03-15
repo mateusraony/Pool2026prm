@@ -11,8 +11,8 @@ import {
   Shield, Zap, Activity, AlertTriangle,
 } from 'lucide-react';
 import {
-  runMonteCarlo, runBacktest, fetchLVR,
-  type MonteCarloResult, type BacktestResult, type LVRResult,
+  runMonteCarlo, runBacktest, fetchLVR, runAutoCompound,
+  type MonteCarloResult, type BacktestResult, type LVRResult, type AutoCompoundResult,
 } from '@/api/client';
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area,
@@ -33,6 +33,7 @@ export default function PoolAnalytics() {
   const [capital, setCapital] = useState(10000);
   const [mode, setMode] = useState('NORMAL');
   const [horizonDays, setHorizonDays] = useState(30);
+  const [compoundFreq, setCompoundFreq] = useState('weekly');
 
   // Monte Carlo
   const mcMutation = useMutation({
@@ -42,6 +43,14 @@ export default function PoolAnalytics() {
   // Backtest
   const btMutation = useMutation({
     mutationFn: () => runBacktest({ chain: chain!, address: address!, capital, periodDays: horizonDays, mode }),
+  });
+
+  // Auto-Compound
+  const acMutation = useMutation({
+    mutationFn: () => runAutoCompound({
+      chain: chain!, address: address!, capital, periodDays: horizonDays,
+      compoundFrequency: compoundFreq, gasPerCompound: 2.5,
+    }),
   });
 
   // LVR
@@ -60,6 +69,7 @@ export default function PoolAnalytics() {
   const mc = mcMutation.data as MonteCarloResult | null | undefined;
   const bt = btMutation.data as BacktestResult | null | undefined;
   const lvr = lvrData as LVRResult | null | undefined;
+  const ac = acMutation.data as AutoCompoundResult | null | undefined;
   const isRunning = mcMutation.isPending || btMutation.isPending;
 
   return (
@@ -112,10 +122,11 @@ export default function PoolAnalytics() {
       </div>
 
       <Tabs defaultValue="monte-carlo">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="monte-carlo">Monte Carlo</TabsTrigger>
           <TabsTrigger value="backtest">Backtest</TabsTrigger>
           <TabsTrigger value="lvr">LVR & Risco</TabsTrigger>
+          <TabsTrigger value="compound">Compound</TabsTrigger>
         </TabsList>
 
         {/* MONTE CARLO TAB */}
@@ -431,6 +442,80 @@ export default function PoolAnalytics() {
                     <p className="font-mono text-sm">{(lvr.pool.volatility * 100).toFixed(1)}%</p>
                   </div>
                 </div>
+              </div>
+            </>
+          )}
+        </TabsContent>
+        {/* AUTO-COMPOUND TAB */}
+        <TabsContent value="compound" className="space-y-4">
+          {!ac && !acMutation.isPending && (
+            <div className="glass-card p-12 text-center">
+              <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground/40 mb-4" />
+              <h3 className="font-medium mb-2">Auto-Compound Simulator</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Compare retornos com e sem auto-compound.
+                Descubra a frequencia ideal considerando custos de gas.
+              </p>
+              <div className="flex gap-2 justify-center mb-4">
+                {(['daily', 'weekly', 'biweekly', 'monthly'] as const).map(f => (
+                  <button key={f} onClick={() => setCompoundFreq(f)}
+                    className={cn('px-3 py-1 rounded text-xs',
+                      compoundFreq === f ? 'bg-primary text-primary-foreground' : 'bg-secondary/60 text-muted-foreground hover:bg-secondary')}>
+                    {{ daily: 'Diario', weekly: 'Semanal', biweekly: 'Quinzenal', monthly: 'Mensal' }[f]}
+                  </button>
+                ))}
+              </div>
+              <Button onClick={() => acMutation.mutate()} disabled={acMutation.isPending}>
+                Simular Compound
+              </Button>
+            </div>
+          )}
+
+          {acMutation.isPending && (
+            <div className="glass-card p-12 text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
+              <p className="text-muted-foreground">Simulando auto-compound...</p>
+            </div>
+          )}
+
+          {ac && (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="glass-card p-4 text-center">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Sem Compound</p>
+                  <p className="font-mono text-xl">${ac.withoutCompound.toLocaleString()}</p>
+                </div>
+                <div className="glass-card p-4 text-center bg-success/5">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Com Compound</p>
+                  <p className="font-mono text-xl text-success">${ac.withCompound.toLocaleString()}</p>
+                </div>
+                <div className="glass-card p-4 text-center">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Ganho Extra</p>
+                  <p className={cn('font-mono text-xl font-bold', ac.compoundBenefit > 0 ? 'text-success' : 'text-destructive')}>
+                    +${ac.compoundBenefit.toFixed(2)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">+{ac.compoundBenefitPercent}%</p>
+                </div>
+                <div className="glass-card p-4 text-center">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Freq. Ideal</p>
+                  <p className="font-mono text-xl">{ac.optimalFrequency}</p>
+                  <p className="text-xs text-muted-foreground">Gas: ${ac.gasCostEstimate}</p>
+                </div>
+              </div>
+
+              {/* Growth Chart */}
+              <div className="glass-card p-6">
+                <h3 className="font-semibold mb-4">Crescimento: Simples vs Compound</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={ac.schedule}>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+                    <XAxis dataKey="period" tick={{ fontSize: 10 }} label={{ value: 'Periodo', position: 'insideBottom', offset: -5, fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `$${(v / 1000).toFixed(1)}k`} />
+                    <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, '']} />
+                    <Line type="monotone" dataKey="valueSimple" stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="5 5" dot={false} name="Simples" />
+                    <Line type="monotone" dataKey="valueCompound" stroke="hsl(var(--success))" strokeWidth={2} dot={false} name="Compound" />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
             </>
           )}

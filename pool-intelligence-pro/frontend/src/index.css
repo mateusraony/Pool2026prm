@@ -87,6 +87,77 @@
     --transition-spring: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
+  /* =====================================================
+     Light Theme — Clean Professional Fintech
+     ===================================================== */
+  .light {
+    --background: 0 0% 98%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 174 72% 40%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 38 92% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 72% 35%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 45%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 220 13% 87%;
+    --input: 220 14% 92%;
+    --ring: 174 72% 40%;
+
+    --chart-1: 174 72% 40%;
+    --chart-2: 142 72% 35%;
+    --chart-3: 38 92% 45%;
+    --chart-4: 0 72% 51%;
+    --chart-5: 262 72% 50%;
+
+    --sidebar-background: 220 14% 96%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 174 72% 40%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 92%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 220 13% 87%;
+    --sidebar-ring: 174 72% 40%;
+
+    --gold: 38 92% 45%;
+    --gold-foreground: 0 0% 100%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(174 72% 40%), hsl(174 72% 30%));
+    --gradient-gold: linear-gradient(135deg, hsl(38 92% 50%), hsl(38 92% 40%));
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(220 14% 98%) 100%);
+    --gradient-card-hover: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(220 14% 96%) 100%);
+    --gradient-success: linear-gradient(135deg, hsl(142 72% 35%), hsl(142 72% 28%));
+    --gradient-danger: linear-gradient(135deg, hsl(0 72% 51%), hsl(0 72% 42%));
+    --gradient-glass: linear-gradient(135deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.4) 100%);
+
+    --shadow-glow: 0 0 20px hsl(174 72% 40% / 0.1);
+    --shadow-glow-gold: 0 0 20px hsl(38 92% 50% / 0.1);
+    --shadow-card: 0 1px 3px hsl(220 13% 70% / 0.12), 0 1px 2px hsl(220 13% 70% / 0.08);
+    --shadow-card-hover: 0 4px 12px hsl(220 13% 70% / 0.15), 0 2px 4px hsl(220 13% 70% / 0.1);
+    --shadow-inner: inset 0 1px 0 rgba(255,255,255,0.6);
+  }
+
   .dark {
     --background: 222 47% 6%;
     --foreground: 210 40% 98%;
@@ -413,14 +484,14 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(222 47% 8%);
+  background: hsl(var(--muted));
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(222 47% 20%);
+  background: hsl(var(--border));
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(174 72% 50%);
+  background: hsl(var(--primary));
 }

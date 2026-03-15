@@ -7,6 +7,7 @@ import { StatCard } from '@/components/common/StatCard';
 import { PerformanceCharts } from '@/components/charts/PerformanceCharts';
 import { PoolNotes } from '@/components/common/PoolNotes';
 import { HodlVsLp } from '@/components/common/HodlVsLp';
+import { TokenCorrelation } from '@/components/common/TokenCorrelation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -236,6 +237,13 @@ export default function ScoutPoolDetail() {
           </div>
         </div>
       </div>
+
+      {/* Token Correlation */}
+      {chain && address && (
+        <div className="mb-6">
+          <TokenCorrelation chain={chain} address={address} />
+        </div>
+      )}
 
       {/* HODL vs LP Comparison */}
       <HodlVsLp pool={pool} className="mb-6" />

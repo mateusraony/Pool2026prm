@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ErrorBoundary } from 'react-error-boundary';
 import Layout from './components/layout/Layout';
 import { Toaster } from './components/ui/sonner';
+import { OnboardingWizard } from './components/common/OnboardingWizard';
 
 // Lazy-loaded pages for bundle splitting
 const ScoutDashboard = lazy(() => import('./pages/ScoutDashboard'));
@@ -20,6 +21,7 @@ const AlertsPage = lazy(() => import('./pages/Alerts'));
 const StatusPage = lazy(() => import('./pages/Status'));
 const PoolComparePage = lazy(() => import('./pages/PoolCompare'));
 const PoolAnalyticsPage = lazy(() => import('./pages/PoolAnalytics'));
+const PortfolioPage = lazy(() => import('./pages/Portfolio'));
 
 function PageLoader() {
   return (
@@ -104,6 +106,7 @@ export default function App() {
           <Route path="alerts" element={<LazyPage><AlertsPage /></LazyPage>} />
           <Route path="compare" element={<LazyPage><PoolComparePage /></LazyPage>} />
           <Route path="analytics/:chain/:address" element={<LazyPage><PoolAnalyticsPage /></LazyPage>} />
+          <Route path="portfolio" element={<LazyPage><PortfolioPage /></LazyPage>} />
           <Route path="status" element={<LazyPage><StatusPage /></LazyPage>} />
           {/* Redirects: old routes → Scout equivalents */}
           <Route path="positions" element={<Navigate to="/active" replace />} />
@@ -115,6 +118,7 @@ export default function App() {
         </Route>
       </Routes>
       <Toaster />
+      <OnboardingWizard />
     </BrowserRouter>
   );
 }
