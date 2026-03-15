@@ -533,6 +533,343 @@ export function calcPositionPnL(params: {
   };
 }
 
+// ============================================================
+// 11. MONTE CARLO SIMULATION
+// ============================================================
+
+export interface MonteCarloResult {
+  scenarios: number;
+  horizonDays: number;
+  percentiles: {
+    p5: MonteCarloOutcome;
+    p25: MonteCarloOutcome;
+    p50: MonteCarloOutcome;
+    p75: MonteCarloOutcome;
+    p95: MonteCarloOutcome;
+  };
+  probProfit: number;        // % of scenarios where LP is profitable
+  probOutOfRange: number;    // % of scenarios where price exits range
+  avgPnl: number;            // average PnL across all scenarios
+  worstCase: MonteCarloOutcome;
+  bestCase: MonteCarloOutcome;
+  distribution: { bucket: string; count: number }[]; // histogram of returns
+}
+
+export interface MonteCarloOutcome {
+  finalPrice: number;
+  priceChange: number;       // % change from entry
+  feesEarned: number;
+  ilLoss: number;
+  pnl: number;
+  pnlPercent: number;
+  isInRange: boolean;
+}
+
+/** Box-Muller transform: generate standard normal random variate */
+function randNormal(): number {
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+}
+
+/**
+ * Run Monte Carlo simulation for a concentrated liquidity position.
+ * Simulates Geometric Brownian Motion for price, then calculates IL + fees for each path.
+ */
+export function calcMonteCarlo(params: {
+  currentPrice: number;
+  rangeLower: number;
+  rangeUpper: number;
+  capital: number;
+  volAnn: number;
+  fees24h: number;
+  tvl: number;
+  horizonDays: number;
+  scenarios?: number;
+  mode: 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE';
+}): MonteCarloResult {
+  const {
+    currentPrice, rangeLower, rangeUpper, capital,
+    volAnn, fees24h, tvl, horizonDays, mode,
+  } = params;
+  const numScenarios = Math.min(params.scenarios || 1000, 5000);
+
+  const kMap: Record<string, number> = { DEFENSIVE: 0.55, NORMAL: 0.75, AGGRESSIVE: 0.95 };
+  const k_active = kMap[mode] ?? 0.75;
+  const userShare = tvl > 0 ? capital / tvl : 0;
+  const dailyFees = fees24h * userShare * k_active;
+
+  const dailyVol = volAnn / Math.sqrt(365);
+  const dailyDrift = -0.5 * dailyVol * dailyVol; // risk-neutral drift
+
+  const outcomes: MonteCarloOutcome[] = [];
+
+  for (let s = 0; s < numScenarios; s++) {
+    // Simulate price path using GBM
+    let price = currentPrice;
+    let daysInRange = 0;
+
+    for (let d = 0; d < horizonDays; d++) {
+      const z = randNormal();
+      price = price * Math.exp(dailyDrift + dailyVol * z);
+      if (price >= rangeLower && price <= rangeUpper) {
+        daysInRange++;
+      }
+    }
+
+    // Fees earned (only for days in range)
+    const feesEarned = dailyFees * daysInRange;
+
+    // IL calculation (concentrated liquidity formula)
+    const priceRatio = price / currentPrice;
+    let ilFraction = 0;
+    if (priceRatio > 0 && priceRatio !== 1) {
+      const sqrtR = Math.sqrt(priceRatio);
+      ilFraction = (2 * sqrtR) / (1 + priceRatio) - 1;
+    }
+
+    // Amplify IL for out-of-range positions
+    const isInRange = price >= rangeLower && price <= rangeUpper;
+    if (!isInRange) {
+      const rangeWidth = (rangeUpper - rangeLower) / currentPrice;
+      const concFactor = rangeWidth > 0 ? Math.min(2.5, 1 / rangeWidth) : 1;
+      ilFraction = ilFraction * concFactor;
+    }
+
+    const ilLoss = Math.abs(ilFraction * capital);
+    const pnl = feesEarned - ilLoss;
+    const pnlPercent = capital > 0 ? (pnl / capital) * 100 : 0;
+
+    outcomes.push({
+      finalPrice: Math.round(price * 10000) / 10000,
+      priceChange: Math.round(((price - currentPrice) / currentPrice) * 10000) / 100,
+      feesEarned: Math.round(feesEarned * 100) / 100,
+      ilLoss: Math.round(ilLoss * 100) / 100,
+      pnl: Math.round(pnl * 100) / 100,
+      pnlPercent: Math.round(pnlPercent * 100) / 100,
+      isInRange,
+    });
+  }
+
+  // Sort by PnL for percentile extraction
+  outcomes.sort((a, b) => a.pnl - b.pnl);
+
+  const getPercentile = (p: number): MonteCarloOutcome => {
+    const idx = Math.min(Math.floor(p / 100 * numScenarios), numScenarios - 1);
+    return outcomes[idx];
+  };
+
+  const probProfit = Math.round((outcomes.filter(o => o.pnl > 0).length / numScenarios) * 10000) / 100;
+  const probOutOfRange = Math.round((outcomes.filter(o => !o.isInRange).length / numScenarios) * 10000) / 100;
+  const avgPnl = Math.round(outcomes.reduce((s, o) => s + o.pnl, 0) / numScenarios * 100) / 100;
+
+  // Build histogram of returns (10 buckets)
+  const pnlValues = outcomes.map(o => o.pnlPercent);
+  const minPnl = Math.min(...pnlValues);
+  const maxPnl = Math.max(...pnlValues);
+  const bucketSize = (maxPnl - minPnl) / 10 || 1;
+  const distribution: { bucket: string; count: number }[] = [];
+  for (let i = 0; i < 10; i++) {
+    const lo = minPnl + i * bucketSize;
+    const hi = lo + bucketSize;
+    const label = `${lo.toFixed(1)}%`;
+    const count = outcomes.filter(o => o.pnlPercent >= lo && (i === 9 ? o.pnlPercent <= hi : o.pnlPercent < hi)).length;
+    distribution.push({ bucket: label, count });
+  }
+
+  return {
+    scenarios: numScenarios,
+    horizonDays,
+    percentiles: {
+      p5: getPercentile(5),
+      p25: getPercentile(25),
+      p50: getPercentile(50),
+      p75: getPercentile(75),
+      p95: getPercentile(95),
+    },
+    probProfit,
+    probOutOfRange,
+    avgPnl,
+    worstCase: outcomes[0],
+    bestCase: outcomes[numScenarios - 1],
+    distribution,
+  };
+}
+
+// ============================================================
+// 12. BACKTESTING
+// ============================================================
+
+export interface BacktestResult {
+  periodDays: number;
+  totalFees: number;
+  totalIL: number;
+  netPnl: number;
+  netPnlPercent: number;
+  maxDrawdown: number;      // worst peak-to-trough in %
+  timeInRange: number;      // % of time price was in range
+  rebalances: number;       // times price exited and re-entered range
+  dailyReturns: { day: number; cumPnl: number; fees: number; il: number }[];
+}
+
+/**
+ * Backtest a range strategy using historical price snapshots.
+ * If no history provided, simulates with random walk based on volatility.
+ */
+export function calcBacktest(params: {
+  capital: number;
+  entryPrice: number;
+  rangeLower: number;
+  rangeUpper: number;
+  volAnn: number;
+  fees24h: number;
+  tvl: number;
+  mode: 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE';
+  periodDays: number;
+  priceHistory?: number[];
+}): BacktestResult {
+  const { capital, entryPrice, rangeLower, rangeUpper, volAnn, fees24h, tvl, mode, periodDays } = params;
+
+  const kMap: Record<string, number> = { DEFENSIVE: 0.55, NORMAL: 0.75, AGGRESSIVE: 0.95 };
+  const k_active = kMap[mode] ?? 0.75;
+  const userShare = tvl > 0 ? capital / tvl : 0;
+  const dailyFees = fees24h * userShare * k_active;
+
+  // Generate or use price history
+  let prices: number[];
+  if (params.priceHistory && params.priceHistory.length >= periodDays) {
+    prices = params.priceHistory.slice(0, periodDays);
+  } else {
+    // Simulate with GBM
+    const dailyVol = volAnn / Math.sqrt(365);
+    prices = [entryPrice];
+    for (let d = 1; d < periodDays; d++) {
+      const z = randNormal();
+      const prevPrice = prices[d - 1];
+      prices.push(prevPrice * Math.exp(-0.5 * dailyVol * dailyVol + dailyVol * z));
+    }
+  }
+
+  let totalFees = 0;
+  let totalIL = 0;
+  let maxPnl = 0;
+  let maxDrawdown = 0;
+  let daysInRange = 0;
+  let rebalances = 0;
+  let wasInRange = true;
+  const dailyReturns: BacktestResult['dailyReturns'] = [];
+
+  for (let d = 0; d < prices.length; d++) {
+    const price = prices[d];
+    const inRange = price >= rangeLower && price <= rangeUpper;
+
+    if (inRange) {
+      totalFees += dailyFees;
+      daysInRange++;
+    }
+
+    // Track range exits/re-entries
+    if (!inRange && wasInRange) rebalances++;
+    wasInRange = inRange;
+
+    // Cumulative IL
+    const priceRatio = price / entryPrice;
+    let ilFrac = 0;
+    if (priceRatio > 0 && priceRatio !== 1) {
+      const sqrtR = Math.sqrt(priceRatio);
+      ilFrac = (2 * sqrtR) / (1 + priceRatio) - 1;
+    }
+    totalIL = Math.abs(ilFrac * capital);
+
+    const cumPnl = totalFees - totalIL;
+    if (cumPnl > maxPnl) maxPnl = cumPnl;
+    const drawdown = maxPnl > 0 ? ((maxPnl - cumPnl) / capital) * 100 : 0;
+    if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+
+    dailyReturns.push({
+      day: d + 1,
+      cumPnl: Math.round(cumPnl * 100) / 100,
+      fees: Math.round(totalFees * 100) / 100,
+      il: Math.round(totalIL * 100) / 100,
+    });
+  }
+
+  const netPnl = totalFees - totalIL;
+
+  return {
+    periodDays: prices.length,
+    totalFees: Math.round(totalFees * 100) / 100,
+    totalIL: Math.round(totalIL * 100) / 100,
+    netPnl: Math.round(netPnl * 100) / 100,
+    netPnlPercent: capital > 0 ? Math.round((netPnl / capital) * 10000) / 100 : 0,
+    maxDrawdown: Math.round(maxDrawdown * 100) / 100,
+    timeInRange: prices.length > 0 ? Math.round((daysInRange / prices.length) * 10000) / 100 : 0,
+    rebalances,
+    dailyReturns,
+  };
+}
+
+// ============================================================
+// 13. LVR (LOSS-VERSUS-REBALANCING)
+// ============================================================
+
+export interface LVRResult {
+  lvrDaily: number;           // daily LVR in USD
+  lvrAnnualized: number;      // annualized LVR in USD
+  lvrPercent: number;          // LVR as % of capital
+  feeToLvrRatio: number;      // fees / LVR — >1 means profitable after LVR
+  netAfterLvr: number;        // fees - LVR per day
+  verdict: 'profitable' | 'marginal' | 'unprofitable';
+}
+
+/**
+ * Calculate Loss-Versus-Rebalancing (LVR) for a position.
+ * LVR measures the adverse selection cost of providing liquidity.
+ * Formula: LVR ≈ σ² * L * Δt / 2 (for infinitesimal intervals)
+ * Simplified: daily LVR ≈ capital * σ²_daily / 2
+ */
+export function calcLVR(params: {
+  capital: number;
+  volAnn: number;
+  fees24h: number;
+  tvl: number;
+  mode: 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE';
+}): LVRResult {
+  const { capital, volAnn, fees24h, tvl, mode } = params;
+
+  const kMap: Record<string, number> = { DEFENSIVE: 0.55, NORMAL: 0.75, AGGRESSIVE: 0.95 };
+  const k_active = kMap[mode] ?? 0.75;
+
+  const dailyVol = volAnn / Math.sqrt(365);
+  const dailyVolSq = dailyVol * dailyVol;
+
+  // LVR daily ≈ capital * σ²_daily / 2
+  const lvrDaily = capital * dailyVolSq / 2;
+  const lvrAnnualized = lvrDaily * 365;
+  const lvrPercent = capital > 0 ? (lvrAnnualized / capital) * 100 : 0;
+
+  // Compare with fee income
+  const userShare = tvl > 0 ? capital / tvl : 0;
+  const dailyFeeIncome = fees24h * userShare * k_active;
+  const feeToLvrRatio = lvrDaily > 0 ? dailyFeeIncome / lvrDaily : Infinity;
+  const netAfterLvr = dailyFeeIncome - lvrDaily;
+
+  let verdict: LVRResult['verdict'];
+  if (feeToLvrRatio > 1.5) verdict = 'profitable';
+  else if (feeToLvrRatio > 0.8) verdict = 'marginal';
+  else verdict = 'unprofitable';
+
+  return {
+    lvrDaily: Math.round(lvrDaily * 100) / 100,
+    lvrAnnualized: Math.round(lvrAnnualized * 100) / 100,
+    lvrPercent: Math.round(lvrPercent * 100) / 100,
+    feeToLvrRatio: Math.round(feeToLvrRatio * 100) / 100,
+    netAfterLvr: Math.round(netAfterLvr * 100) / 100,
+    verdict,
+  };
+}
+
 const calcService = {
   calcAprFee,
   calcVolatilityAnn,
@@ -545,6 +882,9 @@ const calcService = {
   inferPoolType,
   isBluechip,
   calcPositionPnL,
+  calcMonteCarlo,
+  calcBacktest,
+  calcLVR,
 };
 
 export { calcService };

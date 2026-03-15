@@ -11,7 +11,7 @@ import {
 import { memoryStore } from '../services/memory-store.service.js';
 import { config } from '../config/index.js';
 import { poolIntelligenceService } from '../services/pool-intelligence.service.js';
-import { calcRangeRecommendation, calcUserFees, calcILRisk } from '../services/calc.service.js';
+import { calcRangeRecommendation, calcUserFees, calcILRisk, calcMonteCarlo, calcBacktest, calcLVR } from '../services/calc.service.js';
 import { Pool, UnifiedPool } from '../types/index.js';
 import { validate, rangeCalcSchema } from './validation.js';
 import { getPrisma } from './prisma.js';
@@ -378,6 +378,221 @@ router.get('/pools-liquidity/:chain/:address', async (req, res) => {
     });
   } catch (error) {
     logService.error('SYSTEM', 'GET /pools-liquidity/:chain/:address failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// POST /api/monte-carlo — Monte Carlo simulation
+router.post('/monte-carlo', async (req, res) => {
+  try {
+    const { chain, address, capital = 10000, horizonDays = 30, scenarios = 1000, mode = 'NORMAL' } = req.body;
+
+    // Find pool data
+    const radarResults = getLatestRadarResults();
+    const fromRadar = radarResults.find(r =>
+      r.pool.chain === chain &&
+      (r.pool.poolAddress === address || r.pool.externalId === address)
+    );
+    const memPool = memoryStore.getAllPools().find(p =>
+      p.chain === chain && (p.poolAddress === address || p.id === address)
+    );
+
+    const price = fromRadar?.pool.price || memPool?.price || 1;
+    const tvl = fromRadar?.pool.tvl || memPool?.tvlUSD || 0;
+    const fees24h = fromRadar?.pool.fees24h || memPool?.fees24hUSD || 0;
+    const vol = memPool?.volatilityAnn || 0.3;
+
+    // Calculate range for selected mode
+    const range = calcRangeRecommendation({
+      price, volAnn: vol, horizonDays, riskMode: mode, poolType: memPool?.poolType,
+    });
+
+    const result = calcMonteCarlo({
+      currentPrice: price,
+      rangeLower: range.lower,
+      rangeUpper: range.upper,
+      capital,
+      volAnn: vol,
+      fees24h,
+      tvl,
+      horizonDays,
+      scenarios: Math.min(scenarios, 5000),
+      mode,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        ...result,
+        pool: {
+          price, tvl, fees24h, volatility: vol,
+          rangeLower: range.lower, rangeUpper: range.upper,
+        },
+      },
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    logService.error('SYSTEM', 'POST /monte-carlo failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// POST /api/backtest — backtest a range strategy
+router.post('/backtest', async (req, res) => {
+  try {
+    const { chain, address, capital = 10000, periodDays = 30, mode = 'NORMAL' } = req.body;
+
+    const radarResults = getLatestRadarResults();
+    const fromRadar = radarResults.find(r =>
+      r.pool.chain === chain &&
+      (r.pool.poolAddress === address || r.pool.externalId === address)
+    );
+    const memPool = memoryStore.getAllPools().find(p =>
+      p.chain === chain && (p.poolAddress === address || p.id === address)
+    );
+
+    const price = fromRadar?.pool.price || memPool?.price || 1;
+    const tvl = fromRadar?.pool.tvl || memPool?.tvlUSD || 0;
+    const fees24h = fromRadar?.pool.fees24h || memPool?.fees24hUSD || 0;
+    const vol = memPool?.volatilityAnn || 0.3;
+
+    const range = calcRangeRecommendation({
+      price, volAnn: vol, horizonDays: periodDays, riskMode: mode, poolType: memPool?.poolType,
+    });
+
+    const result = calcBacktest({
+      capital,
+      entryPrice: price,
+      rangeLower: range.lower,
+      rangeUpper: range.upper,
+      volAnn: vol,
+      fees24h,
+      tvl,
+      mode,
+      periodDays: Math.min(periodDays, 365),
+    });
+
+    res.json({
+      success: true,
+      data: {
+        ...result,
+        pool: { price, tvl, fees24h, volatility: vol, rangeLower: range.lower, rangeUpper: range.upper },
+      },
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    logService.error('SYSTEM', 'POST /backtest failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// POST /api/lvr — Loss-Versus-Rebalancing analysis
+router.post('/lvr', async (req, res) => {
+  try {
+    const { chain, address, capital = 10000, mode = 'NORMAL' } = req.body;
+
+    const radarResults = getLatestRadarResults();
+    const fromRadar = radarResults.find(r =>
+      r.pool.chain === chain &&
+      (r.pool.poolAddress === address || r.pool.externalId === address)
+    );
+    const memPool = memoryStore.getAllPools().find(p =>
+      p.chain === chain && (p.poolAddress === address || p.id === address)
+    );
+
+    const tvl = fromRadar?.pool.tvl || memPool?.tvlUSD || 0;
+    const fees24h = fromRadar?.pool.fees24h || memPool?.fees24hUSD || 0;
+    const vol = memPool?.volatilityAnn || 0.3;
+
+    const result = calcLVR({ capital, volAnn: vol, fees24h, tvl, mode });
+
+    res.json({
+      success: true,
+      data: {
+        ...result,
+        pool: { tvl, fees24h, volatility: vol },
+      },
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    logService.error('SYSTEM', 'POST /lvr failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// GET /api/fee-tiers/:chain/:token0/:token1 — compare fee tiers for same pair
+router.get('/fee-tiers/:chain/:token0/:token1', async (req, res) => {
+  try {
+    const { chain, token0, token1 } = req.params;
+    const { capital = '10000', mode = 'NORMAL' } = req.query;
+    const capUSD = parseFloat(capital as string) || 10000;
+
+    // Find all pools matching this pair across fee tiers
+    const allPools = memoryStore.getAllPools();
+    const matchingPools = allPools.filter(p => {
+      if (p.chain !== chain) return false;
+      const t0 = (p.token0?.symbol || p.baseToken || '').toUpperCase();
+      const t1 = (p.token1?.symbol || p.quoteToken || '').toUpperCase();
+      const searchT0 = token0.toUpperCase();
+      const searchT1 = token1.toUpperCase();
+      return (t0 === searchT0 && t1 === searchT1) || (t0 === searchT1 && t1 === searchT0);
+    });
+
+    if (matchingPools.length === 0) {
+      return res.json({ success: true, data: [], message: 'No pools found for this pair' });
+    }
+
+    // Calculate metrics for each fee tier
+    const tierComparison = matchingPools.map(p => {
+      const vol = p.volatilityAnn || 0.3;
+      const price = p.price || 1;
+      const range = calcRangeRecommendation({
+        price, volAnn: vol, horizonDays: 30, riskMode: mode as 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE',
+        poolType: p.poolType,
+      });
+      const feeEst = calcUserFees({
+        tvl: p.tvlUSD, fees24h: p.fees24hUSD, fees1h: p.volume1hUSD ? p.volume1hUSD * (p.feeTier || 0) : undefined,
+        userCapital: capUSD, riskMode: mode as 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE',
+      });
+      const ilRisk = calcILRisk({
+        price, rangeLower: range.lower, rangeUpper: range.upper, volAnn: vol, horizonDays: 30,
+      });
+      const lvr = calcLVR({
+        capital: capUSD, volAnn: vol, fees24h: p.fees24hUSD || 0, tvl: p.tvlUSD || 0,
+        mode: mode as 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE',
+      });
+
+      return {
+        poolAddress: p.poolAddress,
+        feeTier: p.feeTier,
+        feeTierBps: Math.round((p.feeTier || 0) * 10000),
+        tvl: p.tvlUSD,
+        volume24h: p.volume24hUSD,
+        fees24h: p.fees24hUSD,
+        apr: p.aprTotal ?? p.aprFee,
+        volatility: vol,
+        healthScore: p.healthScore,
+        feeEstimate30d: feeEst.expectedFees30d,
+        ilRisk: ilRisk.probOutOfRange,
+        lvr: lvr.lvrPercent,
+        lvrVerdict: lvr.verdict,
+        rangeWidth: range.widthPct,
+        protocol: p.protocol,
+      };
+    });
+
+    // Sort by estimated fees descending
+    tierComparison.sort((a, b) => (b.feeEstimate30d || 0) - (a.feeEstimate30d || 0));
+
+    res.json({
+      success: true,
+      data: tierComparison,
+      pair: `${token0}/${token1}`,
+      chain,
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    logService.error('SYSTEM', 'GET /fee-tiers failed', { error });
     res.status(500).json({ success: false, error: 'Internal error' });
   }
 });

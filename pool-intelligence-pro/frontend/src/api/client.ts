@@ -437,6 +437,134 @@ export async function fetchLiquidityDistribution(chain: string, address: string,
   }
 }
 
+// Monte Carlo Simulation
+export interface MonteCarloOutcome {
+  finalPrice: number;
+  priceChange: number;
+  feesEarned: number;
+  ilLoss: number;
+  pnl: number;
+  pnlPercent: number;
+  isInRange: boolean;
+}
+
+export interface MonteCarloResult {
+  scenarios: number;
+  horizonDays: number;
+  percentiles: {
+    p5: MonteCarloOutcome;
+    p25: MonteCarloOutcome;
+    p50: MonteCarloOutcome;
+    p75: MonteCarloOutcome;
+    p95: MonteCarloOutcome;
+  };
+  probProfit: number;
+  probOutOfRange: number;
+  avgPnl: number;
+  worstCase: MonteCarloOutcome;
+  bestCase: MonteCarloOutcome;
+  distribution: { bucket: string; count: number }[];
+  pool: { price: number; tvl: number; fees24h: number; volatility: number; rangeLower: number; rangeUpper: number };
+}
+
+export async function runMonteCarlo(params: {
+  chain: string;
+  address: string;
+  capital?: number;
+  horizonDays?: number;
+  scenarios?: number;
+  mode?: string;
+}): Promise<MonteCarloResult | null> {
+  try {
+    const { data } = await api.post('/monte-carlo', params);
+    return data.data || null;
+  } catch {
+    return null;
+  }
+}
+
+// Backtest
+export interface BacktestResult {
+  periodDays: number;
+  totalFees: number;
+  totalIL: number;
+  netPnl: number;
+  netPnlPercent: number;
+  maxDrawdown: number;
+  timeInRange: number;
+  rebalances: number;
+  dailyReturns: { day: number; cumPnl: number; fees: number; il: number }[];
+  pool: { price: number; tvl: number; fees24h: number; volatility: number; rangeLower: number; rangeUpper: number };
+}
+
+export async function runBacktest(params: {
+  chain: string;
+  address: string;
+  capital?: number;
+  periodDays?: number;
+  mode?: string;
+}): Promise<BacktestResult | null> {
+  try {
+    const { data } = await api.post('/backtest', params);
+    return data.data || null;
+  } catch {
+    return null;
+  }
+}
+
+// LVR (Loss-Versus-Rebalancing)
+export interface LVRResult {
+  lvrDaily: number;
+  lvrAnnualized: number;
+  lvrPercent: number;
+  feeToLvrRatio: number;
+  netAfterLvr: number;
+  verdict: 'profitable' | 'marginal' | 'unprofitable';
+  pool: { tvl: number; fees24h: number; volatility: number };
+}
+
+export async function fetchLVR(params: {
+  chain: string;
+  address: string;
+  capital?: number;
+  mode?: string;
+}): Promise<LVRResult | null> {
+  try {
+    const { data } = await api.post('/lvr', params);
+    return data.data || null;
+  } catch {
+    return null;
+  }
+}
+
+// Fee Tier Comparison
+export interface FeeTierComparison {
+  poolAddress: string;
+  feeTier: number;
+  feeTierBps: number;
+  tvl: number;
+  volume24h: number;
+  fees24h: number;
+  apr: number;
+  volatility: number;
+  healthScore: number;
+  feeEstimate30d: number;
+  ilRisk: number;
+  lvr: number;
+  lvrVerdict: string;
+  rangeWidth: number;
+  protocol: string;
+}
+
+export async function fetchFeeTiers(chain: string, token0: string, token1: string, capital?: number, mode?: string): Promise<FeeTierComparison[]> {
+  try {
+    const { data } = await api.get(`/fee-tiers/${chain}/${token0}/${token1}`, { params: { capital, mode } });
+    return data.data || [];
+  } catch {
+    return [];
+  }
+}
+
 // Favorites
 export async function fetchFavorites(): Promise<FavoritePool[]> {
   try {

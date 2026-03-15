@@ -144,6 +144,9 @@ export default function ScoutPoolDetail() {
             )}
             Favoritar
           </Button>
+          <Button variant="outline" onClick={() => navigate(`/analytics/${pool.chain}/${pool.poolAddress}`)}>
+            <BarChart3 className="h-4 w-4 mr-1" /> Analytics
+          </Button>
           <Button onClick={() => navigate(`/simulation/${pool.chain}/${pool.poolAddress}`)}>
             <Activity className="h-4 w-4 mr-1" /> Simular
           </Button>
