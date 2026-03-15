@@ -3,14 +3,40 @@
 ## Status Atual
 **Branch:** `claude/continue-stage-1-improvements-Wl2yZ`
 **Data:** 2026-03-15 UTC
-**Fase:** ETAPAS 1, 2, 3, 4, 5, 6 e 7 concluídas
+**Fase:** ETAPAS 1, 2, 3, 4, 5, 6, 7 e 8 concluídas
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-15 — iniciar ETAPA 8"`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-15 — iniciar ETAPA 9"`
 
 ---
 
 ## O QUE FOI FEITO
+
+### ETAPA 8 — Analytics Institucional ✅ (2026-03-15)
+
+- 8.1: Monte Carlo Simulation
+  - `calcMonteCarlo()` em calc.service.ts: GBM (Geometric Brownian Motion) com N cenários
+  - Endpoint `POST /api/monte-carlo`: simula preço, calcula fees + IL por cenário
+  - Resultado: percentis (P5-P95), prob. lucro, prob. fora do range, distribuição de retornos
+  - UI: histograma de retornos (Recharts BarChart) + tabela de cenários por percentil
+- 8.2: Backtesting de Ranges
+  - `calcBacktest()` em calc.service.ts: simula performance diária com GBM ou price history
+  - Endpoint `POST /api/backtest`: calcula fees, IL, drawdown, tempo em range
+  - Resultado: PnL acumulado por dia, max drawdown, rebalanceamentos, time-in-range
+  - UI: gráfico PnL acumulado (Recharts AreaChart + LineChart) + cards de métricas
+- 8.3: Fee Tier Comparison
+  - Endpoint `GET /api/fee-tiers/:chain/:token0/:token1`: busca pools do mesmo par
+  - Calcula para cada tier: fee estimate 30d, IL risk, LVR, range width, health score
+  - Ordena por estimated fees (melhor tier primeiro)
+  - API frontend `fetchFeeTiers()` pronta para UI
+- 8.4: LVR (Loss-Versus-Rebalancing)
+  - `calcLVR()` em calc.service.ts: LVR ≈ capital * σ²_daily / 2
+  - Endpoint `POST /api/lvr`: calcula LVR diário/anualizado, fee/LVR ratio, veredicto
+  - Veredicto: profitable (>1.5x), marginal (0.8-1.5x), unprofitable (<0.8x)
+  - UI: barra visual Fee vs LVR, métricas detalhadas, veredicto com cores
+- Página `PoolAnalytics` com 3 tabs: Monte Carlo, Backtest, LVR & Risco
+- Rota `/analytics/:chain/:address` registrada no App.tsx
+- Botão "Analytics" no ScoutPoolDetail (ao lado de Simular)
 
 ### ETAPA 7 — Credibilidade dos Dados ✅ (2026-03-15)
 
@@ -175,13 +201,7 @@
 
 ---
 
-## PRÓXIMOS PASSOS → ETAPA 8 (Analytics Institucional)
-- 8.1 — Monte Carlo simulation (stress test: "e se ETH cair 40%?")
-- 8.2 — Backtesting de ranges (performance histórica simulada)
-- 8.3 — Fee tier comparison (mesmo par, tiers diferentes)
-- 8.4 — LVR (Loss-Versus-Rebalancing) como métrica de risco
-
-## ETAPA 9 (Portfolio Intelligence)
+## PRÓXIMOS PASSOS → ETAPA 9 (Portfolio Intelligence)
 - 9.1 — Dashboard portfolio avançado (alocação por chain, Sharpe, drawdown)
 - 9.2 — APR risk-adjusted (Sharpe-like metric)
 - 9.3 — Auto-compound simulator
