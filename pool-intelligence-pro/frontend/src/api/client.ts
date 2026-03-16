@@ -861,3 +861,46 @@ export async function createRangePosition(params: {
 export async function deleteRangePosition(id: string): Promise<void> {
   await api.delete('/ranges/' + id);
 }
+
+// ============================================
+// HISTORY
+// ============================================
+
+export interface PositionHistoryEntry {
+  id: string;
+  poolId: string;
+  chain: string;
+  poolAddress: string;
+  token0: string;
+  token1: string;
+  type: 'ENTRY' | 'EXIT' | 'REBALANCE' | 'FEE_COLLECT';
+  mode?: string;
+  capital?: number;
+  pnl?: number;
+  rangeLower?: number;
+  rangeUpper?: number;
+  price?: number;
+  note?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export async function fetchHistory(params?: {
+  poolId?: string; chain?: string; type?: string; limit?: number; offset?: number;
+}): Promise<{ data: PositionHistoryEntry[]; total: number }> {
+  try {
+    const { data } = await api.get('/history', { params });
+    return { data: data.data || [], total: data.total || 0 };
+  } catch {
+    return { data: [], total: 0 };
+  }
+}
+
+export async function createHistoryEntry(entry: Omit<PositionHistoryEntry, 'id' | 'createdAt'>): Promise<PositionHistoryEntry> {
+  const { data } = await api.post('/history', entry);
+  return data.data;
+}
+
+export async function deleteHistoryEntry(id: string): Promise<void> {
+  await api.delete('/history/' + id);
+}

@@ -18,7 +18,7 @@ import {
 } from '../services/calc.service.js';
 import { Pool, UnifiedPool } from '../types/index.js';
 import { rangeMonitorService } from '../services/range.service.js';
-import { validate, rangeCalcSchema } from './validation.js';
+import { validate, rangeCalcSchema, monteCarloSchema, backtestSchema, lvrSchema, autoCompoundSchema } from './validation.js';
 import { getPrisma } from './prisma.js';
 
 const router = Router();
@@ -266,7 +266,16 @@ router.get('/pools-detail/:chain/:address', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Pool not found' });
     }
 
-    const unified = poolIntelligenceService.enrichToUnifiedPool(pool, { updatedAt: new Date() });
+    // Also try GeckoTerminal OHLCV if TheGraph history is empty
+    if (history.length === 0) {
+      try {
+        const { geckoTerminalAdapter } = await import('../adapters/index.js');
+        const geckoHistory = await geckoTerminalAdapter.getPoolHistory(chain, address, 30);
+        if (geckoHistory.length > 0) history = geckoHistory;
+      } catch { /* ignore — use proxy volatility */ }
+    }
+
+    const unified = poolIntelligenceService.enrichToUnifiedPool(pool, { updatedAt: new Date(), history });
     const score = memoryStore.getScore(pool.externalId) || scoreService.calculateScore(pool);
 
     const horizonD = parseInt(horizonDays as string) || 7;
@@ -340,8 +349,8 @@ router.get('/pools-liquidity/:chain/:address', async (req, res) => {
     const tvl = fromRadar?.pool.tvl || memUnified?.tvlUSD || 0;
     const vol = memUnified?.volatilityAnn || 0.3;
 
-    // Generate realistic liquidity distribution using Gaussian model
-    // Concentrated around current price, width based on volatility
+    // NOTE: Synthetic liquidity distribution (Gaussian model)
+    // Real on-chain tick liquidity requires subgraph queries not yet implemented
     const sigma = price * vol * 0.5; // half-year volatility as spread
     const rangeMin = price * (1 - vol * 0.8);
     const rangeMax = price * (1 + vol * 0.8);
@@ -378,6 +387,8 @@ router.get('/pools-liquidity/:chain/:address', async (req, res) => {
         volatility: vol,
         rangeMin,
         rangeMax,
+        synthetic: true,
+        disclaimer: 'Liquidity distribution is estimated (Gaussian model). Real tick-level data requires on-chain subgraph integration.',
       },
       timestamp: new Date(),
     });
@@ -388,7 +399,7 @@ router.get('/pools-liquidity/:chain/:address', async (req, res) => {
 });
 
 // POST /api/monte-carlo — Monte Carlo simulation
-router.post('/monte-carlo', async (req, res) => {
+router.post('/monte-carlo', validate(monteCarloSchema), async (req, res) => {
   try {
     const { chain, address, capital = 10000, horizonDays = 30, scenarios = 1000, mode = 'NORMAL' } = req.body;
 
@@ -443,7 +454,7 @@ router.post('/monte-carlo', async (req, res) => {
 });
 
 // POST /api/backtest — backtest a range strategy
-router.post('/backtest', async (req, res) => {
+router.post('/backtest', validate(backtestSchema), async (req, res) => {
   try {
     const { chain, address, capital = 10000, periodDays = 30, mode = 'NORMAL' } = req.body;
 
@@ -465,6 +476,19 @@ router.post('/backtest', async (req, res) => {
       price, volAnn: vol, horizonDays: periodDays, riskMode: mode, poolType: memPool?.poolType,
     });
 
+    // Fetch real OHLCV for backtest when available
+    let priceHistory: number[] | undefined;
+    try {
+      const { geckoTerminalAdapter } = await import('../adapters/index.js');
+      const history = await geckoTerminalAdapter.getPoolHistory(chain, address, Math.min(periodDays, 90));
+      if (history.length >= 7) {
+        priceHistory = history
+          .filter(h => h.price != null && h.price > 0)
+          .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+          .map(h => h.price!);
+      }
+    } catch { /* fall back to GBM simulation */ }
+
     const result = calcBacktest({
       capital,
       entryPrice: price,
@@ -475,12 +499,15 @@ router.post('/backtest', async (req, res) => {
       tvl,
       mode,
       periodDays: Math.min(periodDays, 365),
+      priceHistory,
     });
 
     res.json({
       success: true,
       data: {
         ...result,
+        dataSource: priceHistory ? 'historical_ohlcv' : 'gbm_simulation',
+        historicalDays: priceHistory?.length ?? 0,
         pool: { price, tvl, fees24h, volatility: vol, rangeLower: range.lower, rangeUpper: range.upper },
       },
       timestamp: new Date(),
@@ -492,7 +519,7 @@ router.post('/backtest', async (req, res) => {
 });
 
 // POST /api/lvr — Loss-Versus-Rebalancing analysis
-router.post('/lvr', async (req, res) => {
+router.post('/lvr', validate(lvrSchema), async (req, res) => {
   try {
     const { chain, address, capital = 10000, mode = 'NORMAL' } = req.body;
 
@@ -609,6 +636,32 @@ router.get('/portfolio-analytics', async (req, res) => {
     const radarResults = getLatestRadarResults();
     const activePositions = allRangePositions.filter(rp => rp.isActive);
 
+    // Try to fetch OHLCV daily returns for each position (parallel, best-effort)
+    let ohlcvMap = new Map<string, number[]>(); // poolKey → daily returns %
+    try {
+      const { geckoTerminalAdapter } = await import('../adapters/index.js');
+      const fetches = activePositions.map(async (rp) => {
+        try {
+          const history = await geckoTerminalAdapter.getPoolHistory(rp.chain, rp.poolAddress, 30);
+          if (history && history.length >= 7) {
+            // Compute daily log-returns from OHLCV close prices
+            const dailyReturns: number[] = [];
+            for (let i = 1; i < history.length; i++) {
+              const prev = history[i - 1].price ?? history[i - 1].tvl;
+              const curr = history[i].price ?? history[i].tvl;
+              if (prev > 0 && curr > 0) {
+                dailyReturns.push(((curr - prev) / prev) * 100);
+              }
+            }
+            if (dailyReturns.length >= 7) {
+              ohlcvMap.set(`${rp.chain}_${rp.poolAddress}`, dailyReturns);
+            }
+          }
+        } catch { /* best-effort: skip this position */ }
+      });
+      await Promise.allSettled(fetches);
+    } catch { /* OHLCV unavailable — will use snapshot method */ }
+
     const positions: PortfolioPosition[] = activePositions.map(rp => {
       const fromRadar = radarResults.find(r =>
         r.pool.chain === rp.chain &&
@@ -632,6 +685,7 @@ router.get('/portfolio-analytics', async (req, res) => {
         protocol: memPool?.protocol || fromRadar?.pool.protocol || '',
         token0Symbol: rp.token0Symbol,
         token1Symbol: rp.token1Symbol,
+        dailyReturns: ohlcvMap.get(`${rp.chain}_${rp.poolAddress}`),
       };
     });
 
@@ -644,7 +698,7 @@ router.get('/portfolio-analytics', async (req, res) => {
 });
 
 // POST /api/auto-compound — auto-compound simulation
-router.post('/auto-compound', async (req, res) => {
+router.post('/auto-compound', validate(autoCompoundSchema), async (req, res) => {
   try {
     const { chain, address, capital = 10000, periodDays = 365, compoundFrequency = 'weekly', gasPerCompound = 2.5 } = req.body;
 
@@ -691,12 +745,25 @@ router.get('/token-correlation/:chain/:address', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Pool not found' });
     }
 
+    // Try to fetch OHLCV for real Pearson correlation
+    let priceHistory: { timestamp: Date; price: number }[] | undefined;
+    try {
+      const { geckoTerminalAdapter } = await import('../adapters/index.js');
+      const history = await geckoTerminalAdapter.getPoolHistory(chain, address, 30);
+      if (history.length >= 10) {
+        priceHistory = history
+          .filter(h => h.price != null && h.price > 0)
+          .map(h => ({ timestamp: h.timestamp, price: h.price! }));
+      }
+    } catch { /* fall back to rule-based */ }
+
     const result = calcTokenCorrelation({
       token0Symbol: memPool.token0?.symbol || memPool.baseToken || 'Token0',
       token1Symbol: memPool.token1?.symbol || memPool.quoteToken || 'Token1',
       poolVolAnn: memPool.volatilityAnn || 0.3,
       poolType: memPool.poolType as 'CL' | 'V2' | 'STABLE' | undefined,
       feeTier: memPool.feeTier,
+      priceHistory,
     });
 
     res.json({ success: true, data: result, timestamp: new Date() });

@@ -96,6 +96,11 @@ async function radarJobRunner() {
     );
     memoryStore.setPools(unifiedPools);
 
+    // Record TVL snapshots for liquidity drop detection
+    for (const p of unifiedPools) {
+      memoryStore.recordTvl(p.id, p.tvlUSD);
+    }
+
     // Armazena scores por pool no MemoryStore
     for (const r of radarResults) {
       memoryStore.setScore(r.pool.externalId, r.score);

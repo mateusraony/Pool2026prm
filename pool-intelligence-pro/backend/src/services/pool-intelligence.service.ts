@@ -10,10 +10,13 @@ import {
   calcHealthScore,
   calcAprAdjusted,
   calcVolatilityProxy,
+  calcVolatilityAnn,
   inferPoolType,
   isBluechip,
   PoolType,
+  type VolatilityResult,
 } from './calc.service.js';
+import type { PoolSnapshot } from '../types/index.js';
 import { logService } from './log.service.js';
 
 // In-memory token registry for autocomplete
@@ -21,7 +24,7 @@ const tokenRegistry = new Map<string, string>(); // symbol → symbol (normalize
 
 export function enrichToUnifiedPool(
   pool: Pool,
-  opts?: { warnings?: string[]; updatedAt?: Date }
+  opts?: { warnings?: string[]; updatedAt?: Date; history?: PoolSnapshot[] }
 ): UnifiedPool {
   const warnings = opts?.warnings ?? [];
   const updatedAt = opts?.updatedAt ?? new Date();
@@ -61,15 +64,34 @@ export function enrichToUnifiedPool(
     ? aprFee + aprIncentive
     : (pool.apr != null ? pool.apr : null);
 
-  // Volatility (proxy using price vs estimate)
-  // We don't have historical price series per-pool in memory, so use proxy
-  // If pool.apr is set, we can use that as a rough estimate
-  const volAnn = 0.20; // Default 20% annualized — override when history available
-  const { volAnn: computedVol } = calcVolatilityProxy(
-    pool.price ?? 1,
-    pool.price != null ? pool.price * (1 + (pool.apr || 0) / 100 / 365) : 1
-  );
-  const finalVolAnn = computedVol > 0.05 ? computedVol : volAnn;
+  // Volatility — prefer real OHLCV data, fall back to proxy
+  let volResult: VolatilityResult;
+  const history = opts?.history;
+
+  if (history && history.length >= 3) {
+    // Use real historical prices (log-returns method)
+    const pricePoints = history
+      .filter(h => h.price != null && h.price > 0)
+      .map(h => ({ timestamp: h.timestamp, price: h.price! }));
+
+    if (pricePoints.length >= 3) {
+      const interval = pricePoints.length > 48 ? 'hourly' as const : 'hourly' as const;
+      volResult = calcVolatilityAnn(pricePoints, interval);
+    } else {
+      volResult = calcVolatilityProxy(
+        pool.price ?? 1,
+        pool.price != null ? pool.price * (1 + (pool.apr || 0) / 100 / 365) : 1
+      );
+    }
+  } else {
+    // Proxy: use current price + APR-based estimate
+    volResult = calcVolatilityProxy(
+      pool.price ?? 1,
+      pool.price != null ? pool.price * (1 + (pool.apr || 0) / 100 / 365) : 1
+    );
+  }
+
+  const finalVolAnn = volResult.volAnn > 0.05 ? volResult.volAnn : 0.20;
 
   // Health score
   const healthResult = calcHealthScore({
@@ -124,6 +146,19 @@ export function enrichToUnifiedPool(
     bluechip: p.bluechip ?? isBluechip(pool.token0.symbol, pool.token1.symbol),
     warnings,
     updatedAt: updatedAt.toISOString(),
+    // Data confidence metadata
+    dataConfidence: {
+      volatility: {
+        method: volResult.method,
+        dataPoints: volResult.dataPoints,
+        confidence: volResult.method === 'log_returns' && volResult.dataPoints >= 24
+          ? 'high' : volResult.method === 'log_returns' ? 'medium' : 'low',
+      },
+      apr: {
+        method: aprRes.fees24hUSD != null ? 'real_fees' : (pool.apr != null ? 'adapter_apy' : 'unavailable'),
+        confidence: aprRes.fees24hUSD != null ? 'high' : (pool.apr != null ? 'medium' : 'low'),
+      },
+    },
     // Backward compat
     apr: pool.apr,
     tvl: pool.tvl,

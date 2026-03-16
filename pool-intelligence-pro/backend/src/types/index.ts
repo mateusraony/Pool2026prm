@@ -86,6 +86,12 @@ export interface UnifiedPool {
   warnings: string[];
   updatedAt: string;             // ISO string
 
+  // Data confidence metadata
+  dataConfidence?: {
+    volatility: { method: 'log_returns' | 'proxy'; dataPoints: number; confidence: 'high' | 'medium' | 'low' };
+    apr: { method: 'real_fees' | 'adapter_apy' | 'unavailable'; confidence: 'high' | 'medium' | 'low' };
+  };
+
   // Raw fields for compatibility
   apr?: number;
   tvl: number;
@@ -301,4 +307,4 @@ export interface SystemHealth {
 }
 
 export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'CRITICAL';
-export type LogComponent = 'RADAR' | 'WATCHLIST' | 'SCORE' | 'RECOMMENDATION' | 'ALERT' | 'PROVIDER' | 'SYSTEM' | 'METRICS';
+export type LogComponent = 'RADAR' | 'WATCHLIST' | 'SCORE' | 'RECOMMENDATION' | 'ALERT' | 'PROVIDER' | 'SYSTEM' | 'METRICS' | 'HISTORY';
