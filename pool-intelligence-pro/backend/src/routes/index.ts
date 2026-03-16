@@ -123,4 +123,26 @@ router.delete('/macro/events/:id', (req, res) => {
   }
 });
 
+// ============================================
+// WEB VITALS METRICS ENDPOINT
+// ============================================
+
+// POST /api/metrics/vitals — Receive Web Vitals from frontend
+router.post('/metrics/vitals', (req, res) => {
+  try {
+    const { name, value, rating } = req.body;
+    if (name && typeof value === 'number') {
+      logService.info('METRICS', `Web Vital: ${name}=${value.toFixed(2)} (${rating || 'unknown'})`, {
+        component: 'WEB_VITALS',
+        vital: name,
+        value,
+        rating,
+      });
+    }
+    res.status(204).end();
+  } catch {
+    res.status(204).end(); // Never fail — monitoring should be transparent
+  }
+});
+
 export default router;

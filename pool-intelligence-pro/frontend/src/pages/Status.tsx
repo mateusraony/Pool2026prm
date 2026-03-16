@@ -5,6 +5,7 @@ import {
   HardDrive, Copy, Check, Cpu, Zap, BarChart3, Timer
 } from 'lucide-react';
 import { fetchHealth, fetchLogs } from '../api/client';
+import { WebVitalsWidget } from '../components/common/WebVitalsWidget';
 import { format } from 'date-fns';
 import clsx from 'clsx';
 
@@ -412,6 +413,9 @@ export default function StatusPage() {
           </div>
         </div>
       )}
+
+      {/* === WEB VITALS === */}
+      <WebVitalsWidget />
 
       {/* === PROVEDORES + LOGS (existente) === */}
       <div className="grid md:grid-cols-2 gap-6">

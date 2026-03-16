@@ -384,6 +384,11 @@
    Utility Animations & Scrollbar
    ===================================================== */
 @layer utilities {
+  /* iOS safe area for bottom navigation */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
   .animate-fade-in {
     animation: fadeIn 0.3s ease-out;
   }

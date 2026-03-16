@@ -4,7 +4,11 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from 'next-themes';
 import App from './App';
+import { initWebVitals } from './lib/web-vitals';
 import './index.css';
+
+// Initialize Web Vitals monitoring (LCP, FID, CLS, TTFB, INP)
+initWebVitals();
 
 function GlobalErrorFallback({ error, resetErrorBoundary }: { error: unknown; resetErrorBoundary: () => void }) {
   const message = error instanceof Error ? error.message : String(error);

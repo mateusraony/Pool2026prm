@@ -3,14 +3,43 @@
 ## Status Atual
 **Branch:** `claude/review-audit-checkpoint-ZFYUM`
 **Data:** 2026-03-16 UTC
-**Fase:** ETAPAS 1–10 concluídas + Auditoria Stage 1 + ETAPA 11 (Testes Automatizados)
+**Fase:** ETAPAS 1–11 concluídas + ETAPA 12 (Mobile-First + Performance)
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-16 — ETAPA 11 testes concluída, planejar ETAPA 12"`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-16 — ETAPA 12 concluída, planejar ETAPA 13"`
 
 ---
 
 ## O QUE FOI FEITO
+
+### ETAPA 12 — Mobile-First + Performance ✅ (2026-03-16)
+
+**Fix Render Build:**
+- Removido `prisma db push --accept-data-loss` do script `build`
+- A tabela AppConfig já é criada no startup via `persistService.init()` → `ensureTable()`
+- Elimina warning triangle no Render
+
+**Web Vitals Monitoring (NOVO):**
+- `web-vitals` v5 instalado (LCP, CLS, TTFB, INP)
+- `lib/web-vitals.ts`: initWebVitals(), subscribeVitals(), getVitalRating()
+- Métricas enviadas ao backend via `navigator.sendBeacon` (fire-and-forget)
+- Endpoint `POST /api/metrics/vitals` para receber e logar métricas
+- `WebVitalsWidget` integrado na página Status
+- Color-coded por rating (good/needs-improvement/poor)
+
+**Bottom Navigation Mobile (NOVO):**
+- `BottomNav.tsx`: 5 ícones (Dashboard, Pools, Favoritas, Alertas, Config)
+- Touch-friendly: min-height 48px (WCAG AAA)
+- `lg:hidden` — só visível em mobile
+- Badge de notificações no ícone Alertas
+- CSS `safe-area-bottom` para iPhone notch
+- `pb-16 lg:pb-6` no main para não sobrepor conteúdo
+
+**Já Implementado (verificado):**
+- Sidebar responsiva com drawer slide-in ✅
+- Cards/tabelas com grids responsivos ✅
+- Lazy loading em todas as páginas (React.lazy) ✅
+- Header com conteúdo adaptativo por breakpoint ✅
 
 ### ETAPA 11 — Testes Automatizados ✅ (2026-03-16)
 
@@ -342,9 +371,9 @@
 
 ---
 
-## PRÓXIMOS PASSOS → ETAPA 12+
-- CI/CD completo com Playwright E2E no GitHub Actions (start-server-and-test)
-- Performance monitoring (web vitals: LCP, FID, CLS)
-- Mobile-first refinements e responsive review
-- WebSocket real-time para preços e scores
-- Cobertura de testes para componentes React (cards, modais)
+## PRÓXIMOS PASSOS → ETAPA 13+
+- WebSocket real-time para preços e scores (Socket.io)
+- Playwright E2E no GitHub Actions (start-server-and-test)
+- Multi-wallet tracking (WalletConnect)
+- Webhooks externos (Discord, Slack)
+- Cobertura de testes expandida (componentes React, E2E)
