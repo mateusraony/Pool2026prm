@@ -1,16 +1,54 @@
 # CHECKPOINT - Pool Intelligence Pro
 
 ## Status Atual
-**Branch:** `claude/continue-stage-1-improvements-Wl2yZ`
+**Branch:** `claude/review-audit-checkpoint-ZFYUM`
 **Data:** 2026-03-16 UTC
-**Fase:** ETAPAS 1–10 concluídas + Auditoria Completa + Melhorias Stage 1
+**Fase:** ETAPAS 1–10 concluídas + Auditoria Stage 1 + ETAPA 11 (Testes Automatizados)
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-16 — revisar resultados da auditoria e planejar próxima fase"`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-16 — ETAPA 11 testes concluída, planejar ETAPA 12"`
 
 ---
 
 ## O QUE FOI FEITO
+
+### ETAPA 11 — Testes Automatizados ✅ (2026-03-16)
+
+**Backend Coverage:**
+- `vitest.config.ts` explícito com provider v8
+- `@vitest/coverage-v8` instalado
+- Script `test:coverage` adicionado ao package.json
+- 94 testes existentes continuam passando
+
+**Frontend — Infraestrutura de Testes (NOVA):**
+- Vitest 4.1.0 + @testing-library/react + @testing-library/jest-dom + jsdom instalados
+- `vitest.config.ts` com jsdom environment + react plugin + `@` alias
+- `src/setupTests.ts` com @testing-library/jest-dom setup
+- Scripts `test`, `test:watch`, `test:coverage` adicionados
+
+**Frontend — 5 Arquivos de Teste (NOVOS, 54 testes):**
+- `src/__tests__/glossary.test.ts` — 28 termos DeFi, campos obrigatórios, getGlossaryEntry
+- `src/__tests__/export.test.ts` — poolColumns, formatters, exportCSV trigger download
+- `src/__tests__/useNotifications.test.ts` — addNotification, markRead, clearAll, persistência
+- `src/__tests__/i18n.test.ts` — 90+ chaves PT-BR/EN-US, consistência, t() fallback
+- `src/__tests__/utils.test.ts` — cn(), formatCurrency, formatPercent, scoreToRisk, capitalize, feeTierToBps/Percent
+
+**Playwright E2E (NOVO):**
+- `playwright.config.ts` — chromium, baseURL localhost:5173, retry on CI
+- `e2e/dashboard.spec.ts` — page load, sidebar links, navegação entre rotas
+- `e2e/pool-detail.spec.ts` — rota /pools/:chain/:address, loading state, sem crashes
+- `e2e/navigation.spec.ts` — 9+ rotas principais sem JS crash, root redirect
+- `@playwright/test` instalado em pool-intelligence-pro/
+
+**GitHub Actions CI (NOVO):**
+- `.github/workflows/tests.yml` — 3 jobs: backend-tests, frontend-tests, typecheck
+- Roda em push para main/claude/** e PRs para main
+
+**Totais de Testes:**
+- Backend: 94 testes (4 arquivos)
+- Frontend: 54 testes (5 arquivos)
+- E2E: 14 specs Playwright (3 arquivos, requer servidor)
+- **Total unitário: 148 testes passando**
 
 ### Auditoria + Melhorias Stage 1 ✅ (2026-03-16)
 
@@ -304,8 +342,9 @@
 
 ---
 
-## PRÓXIMOS PASSOS → ETAPA 11+
-- Melhorias contínuas de UX
-- Testes automatizados (Vitest + Playwright)
-- Performance monitoring (web vitals)
-- Mobile-first refinements
+## PRÓXIMOS PASSOS → ETAPA 12+
+- CI/CD completo com Playwright E2E no GitHub Actions (start-server-and-test)
+- Performance monitoring (web vitals: LCP, FID, CLS)
+- Mobile-first refinements e responsive review
+- WebSocket real-time para preços e scores
+- Cobertura de testes para componentes React (cards, modais)
