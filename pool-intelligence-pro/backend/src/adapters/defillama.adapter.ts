@@ -149,13 +149,13 @@ export class DefiLlamaAdapter extends BaseAdapter {
           `https://api.geckoterminal.com/api/v2/networks/${geckoChain}/pools/multi/${addresses}`,
           { timeout: 15000, headers: { Accept: 'application/json' } }
         );
-        const geckoData: any[] = res.data?.data || [];
+        const geckoData: Array<{ attributes?: { address?: string; volume_usd?: { h24?: string }; reserve_in_usd?: string } }> = res.data?.data || [];
 
         for (const gp of geckoData) {
           const addr = gp.attributes?.address?.toLowerCase();
           if (!addr) continue;
 
-          const vol24h = parseFloat(gp.attributes?.volume_usd?.h24) || 0;
+          const vol24h = parseFloat(gp.attributes?.volume_usd?.h24 ?? '0') || 0;
           if (vol24h <= 0) continue;
 
           const match = batch.find(p => p.poolAddress.toLowerCase() === addr);

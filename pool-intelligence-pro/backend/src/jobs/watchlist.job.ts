@@ -25,7 +25,7 @@ let previousPools: Map<string, Pool> = new Map();
  * used by the watchlist result consumers (alerts, etc).
  */
 function unifiedToPool(u: { id: string; chain: string; protocol: string; poolAddress: string;
-  token0: any; token1: any; feeTier: number; price?: number; tvlUSD: number;
+  token0: { symbol: string; address: string; decimals: number }; token1: { symbol: string; address: string; decimals: number }; feeTier: number; price?: number; tvlUSD: number;
   volume24hUSD: number; fees24hUSD: number | null; aprTotal: number | null; aprFee: number | null; apr?: number;
 }): Pool {
   return {

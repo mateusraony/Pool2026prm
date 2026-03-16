@@ -197,7 +197,6 @@ app.get('*', (req, res) => {
 
 // Error handler
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('[ERROR]', err.message, err.stack);
   logService.error('SYSTEM', 'Unhandled error', { error: err.message, stack: err.stack });
   res.status(500).json({ success: false, error: 'Internal server error' });
 });
