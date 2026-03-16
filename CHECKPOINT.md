@@ -2,15 +2,59 @@
 
 ## Status Atual
 **Branch:** `claude/continue-stage-1-improvements-Wl2yZ`
-**Data:** 2026-03-15 UTC
-**Fase:** ETAPAS 1–10 concluídas
+**Data:** 2026-03-16 UTC
+**Fase:** ETAPAS 1–10 concluídas + Auditoria Completa + Melhorias Stage 1
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-15 — iniciar ETAPA 11"`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-16 — revisar resultados da auditoria e planejar próxima fase"`
 
 ---
 
 ## O QUE FOI FEITO
+
+### Auditoria + Melhorias Stage 1 ✅ (2026-03-16)
+
+**Score Calibration (BUG CRÍTICO CORRIGIDO):**
+- Recalibração completa do score engine — pools saudáveis passaram de ~38/100 para 60+/100
+- Ajuste de normalização: TVL, volume/TVL, fee efficiency, age score (thresholds realistas)
+- Pesos atualizados: health 50 + return 40 - risk 25 (antes: 40+35-25, max teórico 75)
+- Penalty de volatilidade desconhecida reduzida de 5 para 2 pontos
+- Default fee efficiency: de 20 (pessimista) para 50 (neutro) quando sem dados
+- 6 novos testes de calibração (94 total, todos passando)
+
+**Range Persistence (BUG CRÍTICO CORRIGIDO):**
+- Range positions agora persistidas no PostgreSQL (model RangePositionRecord)
+- Load automático no boot do servidor via loadFromDb()
+- Create/delete assíncronos para não bloquear API
+- Antes: posições perdidas no restart do servidor
+
+**Telegram Bot Melhorias:**
+- HTML escaping para prevenir XSS em mensagens
+- Null check em sendRecommendation()
+- VOLATILITY_SPIKE alert implementado (antes era stub vazio)
+- checkHealth() para verificar conectividade
+- Rate limit aumentado de 10 para 30 alertas/hora
+
+**Macro Calendar Normalizer (NOVO):**
+- Serviço macro-calendar.service.ts para tracking de eventos macroeconômicos
+- Eventos recorrentes projetados: FOMC, CPI, NFP, Options Expiry
+- Suporte a eventos customizados (token unlocks, upgrades, regulatório)
+- API: GET/POST/DELETE /api/macro/events, GET /api/macro
+- Contexto de risco macro para análise de liquidez
+
+**Skills de Qualidade (4 NOVAS):**
+- market-data-integrity.md — regras de validação de dados reais
+- data-quality-grading.md — classificação A/B/C/D
+- backend-contract-guard.md — proteção de contrato de API
+- dashboard-safe-render.md — renderização segura
+- team-leader.md — definição do agente orquestrador
+
+**Fixes Menores:**
+- Settings icon import faltante no ScoutSettings.tsx
+- Empty catch block em pools.routes.ts → logService.warn
+- Tipos `any` eliminados em watchlist.job.ts e defillama.adapter.ts
+- console.error redundante removido em index.ts
+- LogComponent expandido com 'RANGE' e 'POOLS'
 
 ### ETAPA 10 — Polish Profissional ✅ (2026-03-15)
 

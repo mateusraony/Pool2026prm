@@ -145,8 +145,8 @@ export class ScoreService {
     const feeWeight = 0.3;
     const aprWeight = 0.4;
     
-    // Normalize APR (cap at 100% for scoring)
-    const normalizedApr = Math.min(returnData.aprEstimate, 100) / 100 * 100;
+    // Normalize APR (cap at 100% for scoring — APR already in % form)
+    const normalizedApr = Math.min(returnData.aprEstimate, 100);
     
     return maxReturn * (
       (returnData.volumeTvlRatio / 100) * volumeTvlWeight +
@@ -169,48 +169,54 @@ export class ScoreService {
   }
 
   private normalizeLiquidity(tvl: number): number {
-    // Score based on TVL tiers
-    if (tvl >= 10000000) return 100;  // $10M+
-    if (tvl >= 5000000) return 90;    // $5M+
-    if (tvl >= 1000000) return 75;    // $1M+
-    if (tvl >= 500000) return 60;     // $500k+
-    if (tvl >= 100000) return 40;     // $100k+
-    return 20;
+    // Score based on TVL tiers — calibrated for realistic DeFi pool sizes
+    if (tvl >= 10000000) return 100;  // $10M+ = elite
+    if (tvl >= 5000000) return 95;    // $5M+ = excellent
+    if (tvl >= 1000000) return 85;    // $1M+ = very good
+    if (tvl >= 500000) return 75;     // $500k+ = good
+    if (tvl >= 250000) return 65;     // $250k+ = adequate
+    if (tvl >= 100000) return 50;     // $100k+ = minimum viable
+    return 25;
   }
 
   private calculateVolumeConsistency(pool: Pool): number {
-    // Simple heuristic: if 24h volume is > 1% of TVL, it's consistent
+    // Heuristic: daily volume relative to TVL indicates consistent trading activity
     if (pool.tvl === 0) return 0;
     const ratio = pool.volume24h / pool.tvl;
-    
-    if (ratio >= 0.1) return 100;  // 10%+ daily volume/TVL
-    if (ratio >= 0.05) return 80;
-    if (ratio >= 0.01) return 60;
-    if (ratio >= 0.005) return 40;
+
+    // Calibrated for realistic DeFi: most healthy pools have 5-30% daily volume/TVL
+    if (ratio >= 0.30) return 100;  // 30%+ = very high activity
+    if (ratio >= 0.15) return 90;   // 15%+ = high activity
+    if (ratio >= 0.05) return 75;   // 5%+ = healthy
+    if (ratio >= 0.02) return 60;   // 2%+ = moderate
+    if (ratio >= 0.005) return 40;  // 0.5%+ = low but present
     return 20;
   }
 
   private calculateVolumeTvlRatio(pool: Pool): number {
     if (pool.tvl === 0) return 0;
-    const ratio = pool.volume24h / pool.tvl * 100;
-    
-    // Higher ratio = more efficient capital usage
-    if (ratio >= 20) return 100;
-    if (ratio >= 10) return 80;
-    if (ratio >= 5) return 60;
-    if (ratio >= 1) return 40;
-    return 20;
+    const ratio = pool.volume24h / pool.tvl * 100; // ratio as percentage
+
+    // Calibrated: typical healthy pools have 5-50% daily volume/TVL
+    if (ratio >= 50) return 100;   // 50%+ = extremely efficient
+    if (ratio >= 30) return 90;    // 30%+ = very efficient
+    if (ratio >= 15) return 75;    // 15%+ = good efficiency
+    if (ratio >= 5) return 60;     // 5%+ = adequate
+    if (ratio >= 2) return 45;     // 2%+ = low but active
+    return 25;
   }
 
   private calculateFeeEfficiency(pool: Pool): number {
     // If we have fees data
     if (pool.fees24h && pool.tvl > 0) {
-      const feeRatio = pool.fees24h / pool.tvl * 365 * 100; // Annualized
+      const feeRatio = pool.fees24h / pool.tvl * 365 * 100; // Annualized fee %
+      // Calibrated: 5-20% annualized is typical for healthy pools
       if (feeRatio >= 50) return 100;
-      if (feeRatio >= 30) return 80;
-      if (feeRatio >= 15) return 60;
-      if (feeRatio >= 5) return 40;
-      return 20;
+      if (feeRatio >= 25) return 85;
+      if (feeRatio >= 10) return 70;
+      if (feeRatio >= 5) return 55;
+      if (feeRatio >= 2) return 40;
+      return 25;
     }
     
     // Estimate from fee tier if available
@@ -226,7 +232,7 @@ export class ScoreService {
       return Math.min(100, pool.apr);
     }
 
-    return 20; // No data available — conservative low score
+    return 50; // No data available — neutral score (not pessimistic)
   }
 
   /**
@@ -235,17 +241,19 @@ export class ScoreService {
    * Score: 0-100 (100 = very mature/established pool)
    */
   private estimateAgeScore(pool: Pool): number {
-    let score = 30; // baseline for any pool that passed filters
+    let score = 35; // baseline for any pool that passed filters
 
     // High TVL signals established pool
-    if (pool.tvl >= 10_000_000) score += 30;
+    if (pool.tvl >= 10_000_000) score += 25;
     else if (pool.tvl >= 1_000_000) score += 20;
+    else if (pool.tvl >= 500_000) score += 15;
     else if (pool.tvl >= 100_000) score += 10;
 
     // Consistent volume relative to TVL signals active, mature pool
     if (pool.tvl > 0 && pool.volume24h > 0) {
       const ratio = pool.volume24h / pool.tvl;
-      if (ratio >= 0.01) score += 20;
+      if (ratio >= 0.05) score += 20;
+      else if (ratio >= 0.01) score += 15;
       else if (ratio >= 0.005) score += 10;
     }
 
@@ -268,7 +276,7 @@ export class ScoreService {
   }
 
   private calculateVolatilityPenalty(volatility?: number): number {
-    if (!volatility) return 5; // Default small penalty for unknown
+    if (!volatility) return 2; // Minimal penalty for unknown data — not pool's fault
     
     // Higher volatility = higher penalty
     if (volatility >= 30) return 25;

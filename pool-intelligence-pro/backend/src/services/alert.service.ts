@@ -25,7 +25,7 @@ export class AlertService {
   constructor() {
     this.alertConfig = {
       cooldownMinutes: 60,
-      maxAlertsPerHour: 10,
+      maxAlertsPerHour: 30,
       dedupeWindowMinutes: 30,
     };
   }
@@ -133,7 +133,18 @@ export class AlertService {
         break;
 
       case 'VOLATILITY_SPIKE':
-        // Would need metrics data
+        if (previousPool?.volatilityAnn && pool.volatilityAnn) {
+          const volChange = ((pool.volatilityAnn - previousPool.volatilityAnn) / previousPool.volatilityAnn) * 100;
+          // Trigger if volatility increased by 50%+ (e.g. from 10% to 15%+)
+          if (volChange > 50) {
+            return this.createEvent(rule.type, pool,
+              'Pico de volatilidade em ' + pool.token0.symbol + '/' + pool.token1.symbol +
+              ': +' + volChange.toFixed(0) + '% (de ' + (previousPool.volatilityAnn * 100).toFixed(1) +
+              '% para ' + (pool.volatilityAnn * 100).toFixed(1) + '%)',
+              { currentVolatility: pool.volatilityAnn, previousVolatility: previousPool.volatilityAnn, changePercent: volChange }
+            );
+          }
+        }
         break;
     }
 

@@ -108,6 +108,10 @@ async function initPersistence() {
     notificationSettingsService.loadFromDb();
     console.log('[BOOT] Notification settings loaded from DB');
 
+    const { rangeMonitorService } = await import('./services/range.service.js');
+    await rangeMonitorService.loadFromDb();
+    console.log('[BOOT] Range positions loaded from DB');
+
     // Auto-detect appUrl from RENDER_EXTERNAL_URL if not set by user
     const currentAppUrl = notificationSettingsService.getAppUrl();
     const renderUrl = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || '';
@@ -193,7 +197,6 @@ app.get('*', (req, res) => {
 
 // Error handler
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('[ERROR]', err.message, err.stack);
   logService.error('SYSTEM', 'Unhandled error', { error: err.message, stack: err.stack });
   res.status(500).json({ success: false, error: 'Internal server error' });
 });

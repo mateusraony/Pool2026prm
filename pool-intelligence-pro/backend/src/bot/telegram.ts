@@ -138,8 +138,8 @@ class TelegramBotService {
 
     const message =
       emoji + ' <b>ALERTA: ' + event.type.replace(/_/g, ' ') + '</b>\n\n' +
-      '<b>Pool:</b> ' + poolName + '\n' +
-      '<b>Mensagem:</b> ' + event.message + '\n' +
+      '<b>Pool:</b> ' + this.escapeHtml(poolName) + '\n' +
+      '<b>Mensagem:</b> ' + this.escapeHtml(event.message) + '\n' +
       '<b>Horario:</b> ' + event.timestamp.toISOString() + '\n\n' +
       '<i>Pool Intelligence Pro</i>';
 
@@ -148,6 +148,11 @@ class TelegramBotService {
 
   // Send recommendation notification
   async sendRecommendation(rec: Recommendation): Promise<{ sent: boolean; error?: string }> {
+    if (!rec.pool) {
+      logService.error('SYSTEM', 'sendRecommendation: recommendation missing pool data');
+      return { sent: false, error: 'Invalid recommendation data' };
+    }
+
     const poolName = rec.pool.token0.symbol + '/' + rec.pool.token1.symbol;
     const modeEmoji = rec.mode === 'DEFENSIVE' ? '🛡' : rec.mode === 'NORMAL' ? '⚖' : '🎯';
 
@@ -165,7 +170,7 @@ class TelegramBotService {
       '<b>⚠ Riscos:</b>\n' +
       rec.mainRisks.map(r => '• ' + r).join('\n') + '\n\n' +
       '<b>📝 Analise:</b>\n' +
-      rec.commentary.substring(0, 300) + '...\n\n' +
+      this.escapeHtml(rec.commentary.substring(0, 300)) + '...\n\n' +
       '<i>Valido ate: ' + rec.validUntil.toISOString() + '</i>';
 
     return this.sendMessage(message);
@@ -207,6 +212,30 @@ class TelegramBotService {
       '<i>' + new Date().toISOString() + '</i>';
 
     return this.sendMessage(message);
+  }
+
+  /** Escape HTML entities for safe Telegram message rendering */
+  private escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  /** Check Telegram bot connectivity */
+  async checkHealth(): Promise<{ healthy: boolean; status: string }> {
+    if (!this.bot) {
+      return { healthy: false, status: 'Bot not initialized' };
+    }
+    try {
+      const me = await this.bot.getMe();
+      return { healthy: true, status: `Connected as @${me.username}` };
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('SYSTEM', 'Telegram health check failed', { error: msg });
+      return { healthy: false, status: `Connection error: ${msg}` };
+    }
   }
 
   private getAlertEmoji(type: string): string {

@@ -22,7 +22,7 @@ function makePool(overrides: Partial<Pool> = {}): Pool {
 }
 
 describe('ScoreService', () => {
-  const service = new ScoreService({ health: 40, return: 35, risk: 25 });
+  const service = new ScoreService({ health: 50, return: 40, risk: 25 });
 
   describe('calculateScore', () => {
     it('returns a score with all required fields', () => {
@@ -132,6 +132,74 @@ describe('ScoreService', () => {
       expect(breakdown.return.feeEfficiency).toBeGreaterThanOrEqual(0);
       expect(breakdown.return.aprEstimate).toBeGreaterThanOrEqual(0);
       expect(breakdown.risk.volatilityPenalty).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('score calibration — realistic pools should score appropriately', () => {
+    it('$5M TVL bluechip pool with 10% volume/TVL scores >= 60', () => {
+      const pool = makePool({
+        tvl: 5_000_000,
+        volume24h: 500_000,
+        fees24h: 1500,
+        apr: 25,
+        bluechip: true,
+      });
+      const score = service.calculateScore(pool);
+      expect(score.total).toBeGreaterThanOrEqual(60);
+    });
+
+    it('$1M TVL pool with healthy metrics scores >= 50', () => {
+      const pool = makePool({
+        tvl: 1_000_000,
+        volume24h: 100_000,
+        fees24h: 300,
+        apr: 15,
+        bluechip: false,
+      });
+      const score = service.calculateScore(pool);
+      expect(score.total).toBeGreaterThanOrEqual(50);
+    });
+
+    it('$250k TVL pool with decent activity scores >= 40', () => {
+      const pool = makePool({
+        tvl: 250_000,
+        volume24h: 25_000,
+        fees24h: 75,
+        apr: 20,
+        bluechip: false,
+      });
+      const score = service.calculateScore(pool);
+      expect(score.total).toBeGreaterThanOrEqual(40);
+    });
+
+    it('elite pool ($50M, high volume, bluechip) scores >= 75', () => {
+      const pool = makePool({
+        tvl: 50_000_000,
+        volume24h: 15_000_000,
+        fees24h: 50_000,
+        apr: 40,
+        bluechip: true,
+      });
+      const score = service.calculateScore(pool);
+      expect(score.total).toBeGreaterThanOrEqual(75);
+    });
+
+    it('missing fee data does not crush the score below 30', () => {
+      const pool = makePool({
+        tvl: 2_000_000,
+        volume24h: 200_000,
+        fees24h: undefined as unknown as number,
+        apr: 0,
+        bluechip: true,
+      });
+      const score = service.calculateScore(pool);
+      expect(score.total).toBeGreaterThanOrEqual(30);
+    });
+
+    it('unknown volatility does not penalize more than 2 points', () => {
+      const pool = makePool();
+      const score = service.calculateScore(pool);
+      expect(score.breakdown.risk.volatilityPenalty).toBeLessThanOrEqual(2);
     });
   });
 });
