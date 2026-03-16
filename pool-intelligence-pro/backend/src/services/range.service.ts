@@ -4,6 +4,7 @@ import { logService } from './log.service.js';
 import { telegramBot } from '../bot/telegram.js';
 import { getLatestRadarResults } from '../jobs/index.js';
 import { notificationSettingsService } from './notification-settings.service.js';
+import { getPrisma } from '../routes/prisma.js';
 
 // ============================================================
 // AI Suggestion Engine (rule-based with scoring)
@@ -99,6 +100,41 @@ class RangeMonitorService {
   private positions: Map<string, RangePosition> = new Map();
   private lastAlertTimes: Map<string, Date> = new Map();
   private alertCooldown = 30 * 60 * 1000; // 30 minutes between alerts
+  private dbLoaded = false;
+
+  /** Load positions from DB into memory on first access */
+  async loadFromDb(): Promise<void> {
+    if (this.dbLoaded) return;
+    try {
+      const prisma = getPrisma();
+      const records = await prisma.rangePositionRecord.findMany({ where: { isActive: true } });
+      for (const r of records) {
+        const pos: RangePosition = {
+          id: r.id,
+          poolId: r.poolId,
+          chain: r.chain,
+          poolAddress: r.poolAddress,
+          token0Symbol: r.token0Symbol,
+          token1Symbol: r.token1Symbol,
+          rangeLower: r.rangeLower,
+          rangeUpper: r.rangeUpper,
+          entryPrice: r.entryPrice,
+          capital: r.capital,
+          mode: r.mode as RangePosition['mode'],
+          alertThreshold: r.alertThreshold,
+          createdAt: r.createdAt,
+          lastCheckedAt: r.lastCheckedAt ?? undefined,
+          isActive: r.isActive,
+        };
+        this.positions.set(r.id, pos);
+      }
+      this.dbLoaded = true;
+      logService.info('RANGE', `Loaded ${records.length} range positions from DB`);
+    } catch (err) {
+      logService.warn('RANGE', 'Could not load positions from DB, using memory only', { error: String(err) });
+      this.dbLoaded = true; // Don't retry endlessly
+    }
+  }
 
   createPosition(position: Omit<RangePosition, 'id' | 'createdAt' | 'isActive'>): RangePosition {
     const id = randomUUID();
@@ -110,6 +146,12 @@ class RangeMonitorService {
     };
 
     this.positions.set(id, fullPosition);
+
+    // Persist to DB asynchronously (non-blocking)
+    this.persistPosition(fullPosition).catch(err => {
+      logService.warn('RANGE', 'Failed to persist position to DB', { id, error: String(err) });
+    });
+
     logService.info('ALERT', 'Range position created', {
       id,
       pool: position.token0Symbol + '/' + position.token1Symbol,
@@ -117,6 +159,27 @@ class RangeMonitorService {
     });
 
     return fullPosition;
+  }
+
+  private async persistPosition(pos: RangePosition): Promise<void> {
+    const prisma = getPrisma();
+    await prisma.rangePositionRecord.create({
+      data: {
+        id: pos.id,
+        poolId: pos.poolId,
+        chain: pos.chain,
+        poolAddress: pos.poolAddress,
+        token0Symbol: pos.token0Symbol,
+        token1Symbol: pos.token1Symbol,
+        rangeLower: pos.rangeLower,
+        rangeUpper: pos.rangeUpper,
+        entryPrice: pos.entryPrice,
+        capital: pos.capital,
+        mode: pos.mode,
+        alertThreshold: pos.alertThreshold,
+        isActive: true,
+      },
+    });
   }
 
   getPositions(): RangePosition[] {
@@ -136,6 +199,15 @@ class RangeMonitorService {
     if (position) {
       position.isActive = false;
       logService.info('ALERT', 'Range position deactivated', { id });
+
+      // Persist deactivation to DB asynchronously
+      getPrisma().rangePositionRecord.update({
+        where: { id },
+        data: { isActive: false },
+      }).catch((err: unknown) => {
+        logService.warn('RANGE', 'Failed to persist position deactivation to DB', { id, error: String(err) });
+      });
+
       return true;
     }
     return false;

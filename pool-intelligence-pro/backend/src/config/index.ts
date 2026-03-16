@@ -53,10 +53,10 @@ export const config = {
     dexscreener: parseInt(process.env.RATE_LIMIT_DEXSCREENER || '60'),
   },
   
-  // Score weights
+  // Score weights — calibrated so excellent pools can reach 80-90 range
   scoreWeights: {
-    health: 40,
-    return: 35,
+    health: 50,
+    return: 40,
     risk: 25,
   },
   

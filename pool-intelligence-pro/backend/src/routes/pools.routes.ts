@@ -52,7 +52,9 @@ router.get('/pools', async (req, res) => {
           const unified = allPools.map(p => poolIntelligenceService.enrichToUnifiedPool(p, { updatedAt: new Date() }));
           memoryStore.setPools(unified);
           cacheService.set(theGraphKey, unified, 300);
-        }).catch(() => {});
+        }).catch((err) => {
+          logService.warn('POOLS', 'Background TheGraph refresh failed', { error: String(err) });
+        });
       }
 
       const radarUnified: UnifiedPool[] = radarResults.map(r =>

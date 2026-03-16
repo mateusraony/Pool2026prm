@@ -462,6 +462,31 @@ model Position {
 }
 
 // ============================================
+// RANGE POSITIONS (persisted LP positions for monitoring)
+// ============================================
+
+model RangePositionRecord {
+  id            String   @id @default(uuid())
+  poolId        String
+  chain         String
+  poolAddress   String
+  token0Symbol  String
+  token1Symbol  String
+  rangeLower    Float
+  rangeUpper    Float
+  entryPrice    Float
+  capital       Float
+  mode          String   // DEFENSIVE, NORMAL, AGGRESSIVE
+  alertThreshold Float   @default(5)
+  isActive      Boolean  @default(true)
+  lastCheckedAt DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([isActive])
+  @@index([chain, poolAddress])
+}
+
+// ============================================
 // SAÚDE DO SISTEMA
 // ============================================
 
