@@ -354,7 +354,7 @@ export default function StatusPage() {
             <h3 className="font-semibold">Resumo de Logs (última hora)</h3>
           </div>
           <div className="card-body">
-            <div className="grid grid-cols-4 gap-4 text-center">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
               <div className="p-3 bg-dark-700/50 rounded-lg">
                 <p className="text-2xl font-bold text-blue-400">{health.logs.INFO}</p>
                 <p className="text-sm text-dark-400">INFO</p>

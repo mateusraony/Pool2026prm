@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMemo, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { StatCard } from '@/components/common/StatCard';
 import { PoolCard } from '@/components/common/PoolCard';
 import { ActivePoolCard } from '@/components/common/ActivePoolCard';
+import { PullToRefresh } from '@/components/common/PullToRefresh';
 import { defaultRiskConfig } from '@/data/constants';
 import { fetchUnifiedPools, fetchRangePositions, fetchAlerts, fetchHealth, API_BASE_URL } from '@/api/client';
 import type { RangePosition } from '@/api/client';
@@ -27,6 +28,12 @@ import { useNavigate } from 'react-router-dom';
 
 export default function ScoutDashboard() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const handlePullRefresh = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['scout-pools'] });
+    await queryClient.invalidateQueries({ queryKey: ['scout-positions'] });
+  }, [queryClient]);
 
   // React Query: auto-retry 3x, refetch every 60s, cache
   const { data: poolsData, isLoading: poolsLoading, error: poolsError, refetch } = useQuery({

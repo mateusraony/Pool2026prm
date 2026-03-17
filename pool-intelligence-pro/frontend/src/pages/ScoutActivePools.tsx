@@ -72,7 +72,7 @@ export default function ScoutActivePools() {
           {[...Array(3)].map((_, i) => (
             <div key={i} className="glass-card p-4 space-y-3">
               <Skeleton className="h-8 w-1/2" />
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[...Array(4)].map((_, j) => <Skeleton key={j} className="h-16" />)}
               </div>
             </div>
@@ -106,7 +106,7 @@ export default function ScoutActivePools() {
                   {pos.isActive ? 'Ativa' : 'Inativa'}
                 </Badge>
               </div>
-              <div className="mt-4 grid grid-cols-4 gap-3">
+              <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="rounded-lg bg-secondary/50 p-2 text-center">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Capital</p>
                   <p className="font-mono text-sm">${pos.capital.toLocaleString()}</p>
@@ -126,7 +126,7 @@ export default function ScoutActivePools() {
               </div>
               {/* P&L Data */}
               {pos.pnl && (
-                <div className="mt-3 grid grid-cols-4 gap-3">
+                <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div className="rounded-lg bg-success/10 p-2 text-center">
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Fees Ganhas</p>
                     <p className="font-mono text-sm text-success">+${pos.pnl.feesAccrued.toFixed(2)}</p>

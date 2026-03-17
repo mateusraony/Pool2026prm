@@ -122,7 +122,7 @@ export default function PoolAnalytics() {
       </div>
 
       <Tabs defaultValue="monte-carlo">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
           <TabsTrigger value="monte-carlo">Monte Carlo</TabsTrigger>
           <TabsTrigger value="backtest">Backtest</TabsTrigger>
           <TabsTrigger value="lvr">LVR & Risco</TabsTrigger>

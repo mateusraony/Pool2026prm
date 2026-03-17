@@ -512,7 +512,7 @@ export default function PoolsPage() {
       {/* Table */}
       <div className="bg-dark-800 rounded-xl border border-dark-600 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full text-left min-w-[800px]">
             <thead className="bg-dark-900 border-b border-dark-700">
               <tr>
                 <th className="px-3 py-2 text-xs font-medium text-dark-400">Pool</th>

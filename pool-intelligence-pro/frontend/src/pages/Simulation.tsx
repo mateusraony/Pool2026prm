@@ -325,7 +325,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
 
             <div>
               <label className="block text-sm text-dark-400 mb-3">Modo de Operacao</label>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {(Object.keys(modeConfig) as Mode[]).map((m) => {
                   const cfg = modeConfig[m];
                   const isRecommended = (score?.recommendedMode ?? 'NORMAL') === m;
