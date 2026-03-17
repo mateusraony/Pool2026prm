@@ -2,44 +2,79 @@
 
 ## Status Atual
 **Branch:** `claude/review-audit-checkpoint-ZFYUM`
-**Data:** 2026-03-16 UTC
-**Fase:** ETAPAS 1–11 concluídas + ETAPA 12 (Mobile-First + Performance)
+**Data:** 2026-03-17 UTC
+**Fase:** ETAPAS 1–13 concluídas ✅
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-16 — ETAPA 12 concluída, planejar ETAPA 13"`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-17 — ETAPA 13 concluída, planejar ETAPA 14"`
 
 ---
 
 ## O QUE FOI FEITO
 
-### ETAPA 12 — Mobile-First + Performance ✅ (2026-03-16)
+### Superpowers (obra/superpowers v5.0.4) ✅ (2026-03-17)
+- 14 skills instaladas: TDD, systematic-debugging, brainstorming, writing-plans,
+  executing-plans, code-review, verification-before-completion, subagent-driven-development,
+  dispatching-parallel-agents, using-git-worktrees, finishing-a-development-branch, etc.
+- 3 comandos: superpowers-brainstorm, superpowers-execute-plan, superpowers-write-plan
+- Agente: superpowers-code-reviewer
 
-**Fix Render Build:**
-- Removido `prisma db push --accept-data-loss` do script `build`
-- A tabela AppConfig já é criada no startup via `persistService.init()` → `ensureTable()`
-- Elimina warning triangle no Render
+### ETAPA 13 — WebSocket Real-Time (Socket.io) ✅ (2026-03-17)
 
-**Web Vitals Monitoring (NOVO):**
+**Backend:**
+- `websocket.service.ts`: Socket.io no path `/ws`, rooms, reconexão automática
+- Eventos: `pools:updated`, `score:updated`, `system:status`
+- Integrado ao HTTP server via `createServer(app)` em index.ts
+- Broadcast automático após radar job atualizar pools
+
+**Frontend:**
+- `useWebSocket.ts`: hook singleton com reconexão, invalida React Query ao receber updates
+- `LiveIndicator.tsx`: badge verde pulsante "Live" / cinza "Offline"
+- Integrado no ScoutDashboard (banner de status operacional)
+- `socket.io-client` instalado
+
+### ETAPA 12 — Mobile-First + Performance ✅ (2026-03-16/17)
+
+**12.1 — Sidebar responsiva:** drawer slide-in em mobile ✅
+**12.3 — Web Vitals Monitoring:**
 - `web-vitals` v5 instalado (LCP, CLS, TTFB, INP)
 - `lib/web-vitals.ts`: initWebVitals(), subscribeVitals(), getVitalRating()
-- Métricas enviadas ao backend via `navigator.sendBeacon` (fire-and-forget)
-- Endpoint `POST /api/metrics/vitals` para receber e logar métricas
-- `WebVitalsWidget` integrado na página Status
-- Color-coded por rating (good/needs-improvement/poor)
+- Métricas enviadas ao backend via `navigator.sendBeacon`
+- Endpoint `POST /api/metrics/vitals`
+- `WebVitalsWidget` na página Status (color-coded por rating)
 
-**Bottom Navigation Mobile (NOVO):**
+**12.5 — Bottom Navigation Mobile:**
 - `BottomNav.tsx`: 5 ícones (Dashboard, Pools, Favoritas, Alertas, Config)
-- Touch-friendly: min-height 48px (WCAG AAA)
-- `lg:hidden` — só visível em mobile
-- Badge de notificações no ícone Alertas
-- CSS `safe-area-bottom` para iPhone notch
-- `pb-16 lg:pb-6` no main para não sobrepor conteúdo
+- Touch-friendly: min-height 48px (WCAG AAA), `lg:hidden`
+- Badge de notificações no ícone Alertas, CSS `safe-area-bottom`
 
-**Já Implementado (verificado):**
-- Sidebar responsiva com drawer slide-in ✅
-- Cards/tabelas com grids responsivos ✅
-- Lazy loading em todas as páginas (React.lazy) ✅
-- Header com conteúdo adaptativo por breakpoint ✅
+**12.6 — Fix grid-cols sem breakpoints:**
+- 11 páginas atualizadas: `grid-cols-N` → `grid-cols-1 sm:grid-cols-N md:grid-cols-N`
+- Portfolio, ScoutActivePools, ScoutDashboard, ScoutPoolDetail, Simulation, Status,
+  TokenAnalyzer, Watchlist, PoolAnalytics, PoolCompare, Pools
+
+**12.7 — Tabelas com overflow horizontal:**
+- `min-w-[800px]` nas tabelas largas para scroll horizontal funcionar corretamente em mobile
+- PoolAnalytics: TabsList com `grid-cols-2 md:grid-cols-4`
+
+**12.8 — Pull-to-Refresh mobile:**
+- `usePullToRefresh.ts`: hook touch com threshold 80px, haptic-like feedback
+- `PullToRefresh.tsx`: wrapper component com indicador animado
+- Integrado no ScoutDashboard (invalida queries de pools e posições)
+
+**12.9 — Card view mobile para tabela de Pools:**
+- `PoolMobileCard` component em Pools.tsx
+- Em mobile (`sm:hidden`): cards com metrics grid (TVL, APR, APR Aj., Vol 1h, Fees, Volat.)
+- Em desktop (`hidden sm:block`): tabela original preservada
+- Touch-friendly: active state + border hover
+
+**Fix Render Build:**
+- Removido `prisma db push --accept-data-loss` do script `build` (elimina warning triangle)
+
+**Testes ETAPA 12 (39 novos testes):**
+- `src/__tests__/etapa12.test.ts`: getVitalRating (21 casos), getVitalsSnapshot (2),
+  subscribeVitals (2), usePullToRefresh (4), tabela de thresholds completa (21 parametrizados)
+- **Total frontend: 93 testes passando (6 arquivos)**
 
 ### ETAPA 11 — Testes Automatizados ✅ (2026-03-16)
 
@@ -371,9 +406,9 @@
 
 ---
 
-## PRÓXIMOS PASSOS → ETAPA 13+
-- WebSocket real-time para preços e scores (Socket.io)
+## PRÓXIMOS PASSOS → ETAPA 14+
 - Playwright E2E no GitHub Actions (start-server-and-test)
 - Multi-wallet tracking (WalletConnect)
 - Webhooks externos (Discord, Slack)
 - Cobertura de testes expandida (componentes React, E2E)
+- WebSocket: broadcast de scores individuais (por pool) em tempo real
