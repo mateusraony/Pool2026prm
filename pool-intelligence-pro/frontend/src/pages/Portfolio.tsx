@@ -101,7 +101,7 @@ export default function Portfolio() {
       </div>
 
       {/* Sharpe / Sortino / Diversification */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div className="glass-card p-4 text-center">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1"><GlossaryTooltip term="sharpe" compact>Sharpe Ratio</GlossaryTooltip></p>
           <p className={cn('font-mono text-2xl font-bold',

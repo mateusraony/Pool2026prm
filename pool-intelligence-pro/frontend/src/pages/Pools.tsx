@@ -164,6 +164,83 @@ function PoolRow({ pool, isFav, onToggleFav, onClick }: {
 }
 
 // ============================================================
+// POOL MOBILE CARD (12.9)
+// ============================================================
+
+function PoolMobileCard({ pool, isFav, onToggleFav, onClick }: {
+  pool: UnifiedPool; isFav: boolean;
+  onToggleFav: (pool: UnifiedPool) => void;
+  onClick: (pool: UnifiedPool) => void;
+}) {
+  const poolType = pool.poolType || 'V2';
+  const modeColor = poolType === 'STABLE' ? 'bg-blue-500/20 text-blue-400' : poolType === 'CL' ? 'bg-purple-500/20 text-purple-400' : 'bg-gray-500/20 text-gray-400';
+  const healthScore = pool.healthScore ?? 0;
+  const warnings = pool.warnings || [];
+
+  return (
+    <div
+      className="bg-dark-800 border border-dark-600 rounded-xl p-3 cursor-pointer hover:border-dark-500 transition-colors active:bg-dark-700"
+      onClick={() => onClick(pool)}
+    >
+      {/* Header row: pair + fav + health */}
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            onClick={e => { e.stopPropagation(); onToggleFav(pool); }}
+            className="flex-shrink-0 text-dark-500 hover:text-yellow-400"
+          >
+            {isFav ? <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" /> : <StarOff className="w-4 h-4" />}
+          </button>
+          <div className="min-w-0">
+            <p className="font-semibold text-sm truncate">
+              {pool.baseToken}/{pool.quoteToken}
+              {pool.bluechip && <span className="ml-1 text-blue-400 text-xs">★</span>}
+              {warnings.length > 0 && <AlertTriangle className="inline w-3 h-3 ml-1 text-yellow-500" />}
+            </p>
+            <div className="flex items-center gap-1 mt-0.5">
+              <span className={clsx('text-[10px] px-1.5 rounded', modeColor)}>{poolType}</span>
+              <span className="text-[10px] text-dark-500">{pool.protocol}</span>
+              <span className="text-[10px] text-dark-500 capitalize">· {pool.chain}</span>
+            </div>
+          </div>
+        </div>
+        <span className={clsx('px-2 py-0.5 rounded text-xs font-bold flex-shrink-0', healthBg(healthScore))}>
+          {healthScore}
+        </span>
+      </div>
+
+      {/* Metrics grid */}
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div>
+          <p className="text-[10px] text-dark-500 mb-0.5">TVL</p>
+          <p className="text-xs font-mono font-medium">{fmt(pool.tvlUSD)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-dark-500 mb-0.5">APR</p>
+          <p className={clsx('text-xs font-mono font-medium', (pool.aprTotal ?? 0) > 50 ? 'text-green-400' : '')}>{fmtPct(pool.aprTotal)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-dark-500 mb-0.5">APR Aj.</p>
+          <p className="text-xs font-mono font-medium text-yellow-400">{fmtPct(pool.aprAdjusted)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-dark-500 mb-0.5">Vol. 1h</p>
+          <p className="text-xs font-mono text-dark-300">{fmt(pool.volume1hUSD)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-dark-500 mb-0.5">Fees 1h</p>
+          <p className="text-xs font-mono text-dark-300">{fmt(pool.fees1hUSD)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-dark-500 mb-0.5">Volat.</p>
+          <p className="text-xs font-mono text-dark-400">{fmtPct((pool.volatilityAnn ?? 0) * 100, 0)}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // TOP 3 RECOMMENDATION CARDS
 // ============================================================
 
@@ -509,10 +586,34 @@ export default function PoolsPage() {
         <Top3Cards pools={sorted} onClick={handlePoolClick} />
       )}
 
-      {/* Table */}
-      <div className="bg-dark-800 rounded-xl border border-dark-600 overflow-hidden">
+      {/* Mobile card list (12.9) — visível apenas em mobile */}
+      <div className="sm:hidden space-y-2">
+        {isLoading ? (
+          <div className="py-12 text-center text-dark-400">
+            <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+            Carregando pools...
+          </div>
+        ) : sorted.length === 0 ? (
+          <div className="py-12 text-center text-dark-400">
+            Nenhuma pool encontrada. Ajuste os filtros.
+          </div>
+        ) : (
+          sorted.map(pool => (
+            <PoolMobileCard
+              key={pool.id}
+              pool={pool}
+              isFav={favSet.has(pool.id)}
+              onToggleFav={handleToggleFav}
+              onClick={handlePoolClick}
+            />
+          ))
+        )}
+      </div>
+
+      {/* Table — visível em sm+ */}
+      <div className="hidden sm:block bg-dark-800 rounded-xl border border-dark-600 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full text-left min-w-[800px]">
             <thead className="bg-dark-900 border-b border-dark-700">
               <tr>
                 <th className="px-3 py-2 text-xs font-medium text-dark-400">Pool</th>

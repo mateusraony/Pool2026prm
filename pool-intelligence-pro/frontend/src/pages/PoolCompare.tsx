@@ -45,8 +45,8 @@ interface MetricRowProps {
 
 function MetricRow({ label, values, rawValues, higherIsBetter = true }: MetricRowProps) {
   return (
-    <div className="grid items-center border-b border-border/30 last:border-0" style={{ gridTemplateColumns: `180px repeat(${values.length}, 1fr)` }}>
-      <div className="py-2.5 px-3 text-xs text-muted-foreground font-display uppercase tracking-wider">
+    <div className="grid items-center border-b border-border/30 last:border-0" style={{ gridTemplateColumns: `minmax(100px, 180px) repeat(${values.length}, 1fr)` }}>
+      <div className="py-2.5 px-2 md:px-3 text-[10px] md:text-xs text-muted-foreground font-display uppercase tracking-wider">
         {label}
       </div>
       {values.map((v, i) => (

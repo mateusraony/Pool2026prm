@@ -83,7 +83,7 @@ export default function ScoutPoolDetail() {
         <div className="space-y-4">
           <Skeleton className="h-12 w-1/2" />
           <Skeleton className="h-64 w-full" />
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24" />)}
           </div>
         </div>

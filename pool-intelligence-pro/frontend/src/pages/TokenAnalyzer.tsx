@@ -93,7 +93,7 @@ function PoolCard({ pool, rank, onClick }: { pool: UnifiedPool; rank: number; on
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-3 text-center">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
         <div>
           <div className="text-[10px] text-dark-500 mb-0.5">TVL</div>
           <div className="text-sm font-mono">{fmt(pool.tvlUSD)}</div>
