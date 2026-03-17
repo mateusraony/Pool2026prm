@@ -5,6 +5,7 @@ import { StatCard } from '@/components/common/StatCard';
 import { PoolCard } from '@/components/common/PoolCard';
 import { ActivePoolCard } from '@/components/common/ActivePoolCard';
 import { PullToRefresh } from '@/components/common/PullToRefresh';
+import { LiveIndicator } from '@/components/common/LiveIndicator';
 import { defaultRiskConfig } from '@/data/constants';
 import { fetchUnifiedPools, fetchRangePositions, fetchAlerts, fetchHealth, API_BASE_URL } from '@/api/client';
 import type { RangePosition } from '@/api/client';
@@ -228,12 +229,15 @@ export default function ScoutDashboard() {
               </p>
             </div>
           </div>
-          {canOperate && (
-            <Button onClick={() => navigate('/recommended')}>
-              Ver Recomendadas
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          )}
+          <div className="flex items-center gap-3">
+            <LiveIndicator />
+            {canOperate && (
+              <Button onClick={() => navigate('/recommended')}>
+                Ver Recomendadas
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
       )}
 

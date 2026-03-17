@@ -1,4 +1,5 @@
 import express from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -8,6 +9,7 @@ import fs from 'fs';
 import { config } from './config/index.js';
 import { logService } from './services/log.service.js';
 import { metricsService } from './services/metrics.service.js';
+import { wsService } from './services/websocket.service.js';
 
 // Catch unhandled errors so they show in Render logs
 process.on('uncaughtException', (err) => {
@@ -18,6 +20,9 @@ process.on('unhandledRejection', (reason) => {
 });
 
 const app = express();
+const server = createServer(app);
+// Initialize WebSocket server (Socket.io) on the same HTTP server
+wsService.init(server);
 
 // Middleware
 app.use(helmet({
@@ -204,7 +209,7 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 // Start server
 const PORT = config.port;
 
-const server = app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log('[BOOT] Server started on port ' + PORT);
   console.log('[BOOT] Environment: ' + config.nodeEnv);
   console.log('[BOOT] Frontend: ' + frontendPath + (hasFrontend ? ' (OK)' : ' (NOT FOUND)'));

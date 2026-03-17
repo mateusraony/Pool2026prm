@@ -13,6 +13,7 @@ import { Pool, Score, Recommendation } from '../types/index.js';
 import { memoryStore } from '../services/memory-store.service.js';
 import { poolIntelligenceService } from '../services/pool-intelligence.service.js';
 import { metricsService } from '../services/metrics.service.js';
+import { wsService } from '../services/websocket.service.js';
 
 // ============================================
 // JOB STATE MANAGER — encapsula todo estado mutável
@@ -95,6 +96,9 @@ async function radarJobRunner() {
       poolIntelligenceService.enrichToUnifiedPool(r.pool, { updatedAt: new Date() })
     );
     memoryStore.setPools(unifiedPools);
+
+    // Broadcast real-time update to WebSocket clients
+    wsService.broadcastPoolsUpdated(unifiedPools.length);
 
     // Record TVL snapshots for liquidity drop detection
     for (const p of unifiedPools) {
