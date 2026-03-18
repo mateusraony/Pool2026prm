@@ -100,6 +100,11 @@ async function radarJobRunner() {
     // Broadcast real-time update to WebSocket clients
     wsService.broadcastPoolsUpdated(unifiedPools.length);
 
+    // Broadcast per-pool updates para clientes inscritos em rooms individuais
+    for (const pool of unifiedPools) {
+      wsService.broadcastPoolUpdate(pool);
+    }
+
     // Record TVL snapshots for liquidity drop detection
     for (const p of unifiedPools) {
       memoryStore.recordTvl(p.id, p.tvlUSD);
