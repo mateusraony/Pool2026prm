@@ -203,9 +203,19 @@ async function healthJobRunner() {
       notificationSettingsService.isEnabled('systemAlerts') &&
       now - jobState.getLastHealthAlertTime() > jobState.HEALTH_ALERT_COOLDOWN;
 
-    // Provider health check
+    // Provider health check — só WARN para provedores mandatórios
     if (unhealthy.length > 0) {
-      logService.warn('SYSTEM', 'Unhealthy providers detected', { unhealthy });
+      const mandatoryUnhealthy = unhealthy.filter(h => !h.isOptional);
+      const optionalUnhealthy = unhealthy.filter(h => h.isOptional);
+
+      if (mandatoryUnhealthy.length > 0) {
+        logService.warn('SYSTEM', 'Unhealthy providers detected', { unhealthy: mandatoryUnhealthy });
+      } else if (optionalUnhealthy.length > 0) {
+        // Provedores opcionais sem config são esperados — não gerar ruído de WARN
+        logService.info('SYSTEM', 'Optional providers not configured', {
+          providers: optionalUnhealthy.map(h => ({ name: h.name, note: h.note })),
+        });
+      }
 
       if (unhealthy.length >= health.length / 2 && canAlert) {
         jobState.setLastHealthAlertTime(now);
