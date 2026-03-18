@@ -18,6 +18,7 @@ import {
 } from '../services/calc.service.js';
 import { Pool, UnifiedPool } from '../types/index.js';
 import { rangeMonitorService } from '../services/range.service.js';
+import { priceHistoryService } from '../services/price-history.service.js';
 import { validate, rangeCalcSchema, monteCarloSchema, backtestSchema, lvrSchema, autoCompoundSchema } from './validation.js';
 import { getPrisma } from './prisma.js';
 
@@ -795,6 +796,45 @@ router.post('/range-calc', validate(rangeCalcSchema), async (req, res) => {
   } catch (error) {
     logService.error('SYSTEM', 'POST /range-calc failed', { error });
     res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
+// ============================================================
+// PRICE HISTORY (OHLCV) — ETAPA 15
+// GET /api/pools/:chain/:address/ohlcv
+// Params: timeframe (day|hour|minute), limit, token (base|quote)
+// ============================================================
+router.get('/pools/:chain/:address/ohlcv', async (req, res) => {
+  try {
+    const { chain, address } = req.params;
+    if (!chain || !address) {
+      return res.status(400).json({ success: false, error: 'chain and address are required', timestamp: new Date() });
+    }
+
+    const timeframe = (req.query.timeframe as string) || 'hour';
+    if (!['day', 'hour', 'minute'].includes(timeframe)) {
+      return res.status(400).json({ success: false, error: 'timeframe must be day, hour or minute', timestamp: new Date() });
+    }
+
+    const limit = Math.min(parseInt(req.query.limit as string) || 168, 1000);
+    const token = (req.query.token as string) === 'quote' ? 'quote' : 'base';
+
+    const result = await priceHistoryService.getOhlcv(
+      chain,
+      address,
+      timeframe as 'day' | 'hour' | 'minute',
+      limit,
+      token
+    );
+
+    if (!result) {
+      return res.status(404).json({ success: false, error: 'Price history not available for this pool', timestamp: new Date() });
+    }
+
+    res.json({ success: true, data: result, timestamp: new Date() });
+  } catch (error) {
+    logService.error('SYSTEM', 'GET /pools/ohlcv failed', { error });
+    res.status(500).json({ success: false, error: 'Failed to fetch price history', timestamp: new Date() });
   }
 });
 

@@ -3,14 +3,53 @@
 ## Status Atual
 **Branch:** `claude/review-audit-checkpoint-ZFYUM`
 **Data:** 2026-03-18 UTC
-**Fase:** ETAPAS 1–14 concluídas ✅
+**Fase:** ETAPAS 1–15 concluídas ✅
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-18 — ETAPA 14 concluída, planejar ETAPA 15"`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-18 — ETAPA 15 concluída, planejar ETAPA 16"`
 
 ---
 
 ## O QUE FOI FEITO
+
+### ETAPA 15 — Price History Real + CandlestickChart ✅ (2026-03-18)
+
+**Fix Render (chunk warning):**
+- `vite.config.ts`: `build.rollupOptions.output.manualChunks` adicionado
+- Lucide-react → chunk `icons` (34 kB), React → `react-vendor`, Recharts → `charts`,
+  Radix → `radix`, TanStack → `query`, Socket.io → `socketio`
+- `circle-alert-B9-JSvsP.js` (0.42 kB fragmentado) eliminado — todos ícones consolidados
+
+**Backend:**
+- `price-history.service.ts`: busca OHLCV da GeckoTerminal API
+  - Endpoint: `/networks/{network}/pools/{address}/ohlcv/{timeframe}?limit=N&currency=usd&token=base`
+  - Chain mapping: ethereum→eth, polygon→polygon_pos, etc.
+  - Converte timestamps segundos→ms, reverte para ordem cronológica
+  - Cache TTL: minute=60s, hour=300s, day=900s
+  - Clamp de limit por timeframe (minute≤720, hour≤720, day≤365)
+  - `getMultiTimeframe()`: busca hour+day em paralelo
+- `GET /api/pools/:chain/:address/ohlcv?timeframe=hour&limit=168&token=base`
+  - Validação de timeframe, limit, token query params
+
+**Frontend:**
+- `CandlestickChart.tsx`: componente Recharts ComposedChart com custom shapes
+  - `CandleShape`: SVG custom com corpo (open-close) + pavio (high-low), verde/vermelho
+  - Tooltip customizado: O/H/L/C + variação % + volume formatado
+  - `PriceStats`: bar com variação acumulada, máxima, mínima, preço atual
+  - Volume mini-chart em baixo (barras coloridas por isUp/isDown)
+  - `ReferenceLine` para preço atual (dashed primary)
+  - Seletor de timeframe (1H/1D com desc tooltip)
+  - Loading/Error/Empty states
+- `ScoutPoolDetail.tsx`: query OHLCV integrada
+  - `useQuery(['ohlcv', chain, address, timeframe])` com staleTime por tf
+  - `<CandlestickChart>` inserido antes de PoolNotes
+  - Estado `ohlcvTimeframe` com `handleTimeframeChange` callback
+- `api/client.ts`: `fetchOhlcv(chain, address, timeframe, limit)`
+
+**Testes (14 novos — 123 backend total):**
+- `price-history.service.test.ts`: lista vazia, fetch error, HTTP 404, ordem cronológica,
+  conversão timestamps, mapeamento OHLCV, cache hit, clamp limit, chain maps,
+  timeframe na URL, set cache, getMultiTimeframe
 
 ### ETAPA 14 — Integrações Externas (Discord + Slack + Webhook) ✅ (2026-03-18)
 
@@ -436,9 +475,9 @@
 
 ---
 
-## PRÓXIMOS PASSOS → ETAPA 15+
-- Playwright E2E no GitHub Actions (start-server-and-test + `start-server-and-test` package)
-- Multi-wallet tracking (importar posições via endereço wallet)
-- Price History real via GeckoTerminal OHLCV + chart candlestick (Recharts ComposedChart)
+## PRÓXIMOS PASSOS → ETAPA 16+
+- Playwright E2E no GitHub Actions (start-server-and-test package)
+- Multi-wallet tracking (importar posições via endereço wallet on-chain)
 - WebSocket: broadcast de score por pool individual em tempo real
 - Notificações push (PWA Push API + service worker) para alertas críticos
+- AI Insights: análise sumária de pool via Claude API (pool summary, recomendação em linguagem natural)

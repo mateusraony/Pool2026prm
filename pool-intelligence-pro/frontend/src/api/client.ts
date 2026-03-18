@@ -957,3 +957,42 @@ export async function testIntegrationUrl(url: string, type: string): Promise<{ o
   const res = await api.post<{ success: boolean; data: { ok: boolean; statusCode?: number; error?: string } }>('/integrations/test-url', { url, type });
   return res.data.data;
 }
+
+// ============================================================
+// PRICE HISTORY (OHLCV) API — ETAPA 15
+// ============================================================
+
+export interface OhlcvCandle {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface OhlcvResult {
+  chain: string;
+  address: string;
+  timeframe: 'day' | 'hour' | 'minute';
+  candles: OhlcvCandle[];
+  currency: 'usd';
+  token: 'base' | 'quote';
+  fetchedAt: string;
+}
+
+export async function fetchOhlcv(
+  chain: string,
+  address: string,
+  timeframe: 'day' | 'hour' | 'minute' = 'hour',
+  limit = 168
+): Promise<OhlcvResult | null> {
+  try {
+    const res = await api.get<{ success: boolean; data: OhlcvResult }>(
+      `/pools/${chain}/${address}/ohlcv?timeframe=${timeframe}&limit=${limit}`
+    );
+    return res.data.data ?? null;
+  } catch {
+    return null;
+  }
+}

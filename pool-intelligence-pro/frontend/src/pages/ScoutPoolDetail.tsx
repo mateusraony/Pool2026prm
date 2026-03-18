@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RangeChart } from '@/components/common/RangeChart';
 import { StatCard } from '@/components/common/StatCard';
 import { PerformanceCharts } from '@/components/charts/PerformanceCharts';
+import { CandlestickChart, type Timeframe } from '@/components/charts/CandlestickChart';
 import { PoolNotes } from '@/components/common/PoolNotes';
 import { HodlVsLp } from '@/components/common/HodlVsLp';
 import { TokenCorrelation } from '@/components/common/TokenCorrelation';
@@ -26,7 +27,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { fetchPoolDetail, addFavorite, API_BASE_URL } from '@/api/client';
+import { fetchPoolDetail, addFavorite, fetchOhlcv, API_BASE_URL } from '@/api/client';
 import { unifiedPoolToViewPool } from '@/data/adapters';
 import { networkColors, dexLogos } from '@/data/constants';
 import type { Pool } from '@/types/pool';
@@ -36,6 +37,11 @@ export default function ScoutPoolDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [selectedRange, setSelectedRange] = useState<'defensive' | 'optimized' | 'aggressive'>('optimized');
+  const [ohlcvTimeframe, setOhlcvTimeframe] = useState<Timeframe>('hour');
+
+  const handleTimeframeChange = useCallback((tf: Timeframe) => {
+    setOhlcvTimeframe(tf);
+  }, []);
 
   // React Query: auto-retry 3x, cache, background refetch
   const { data: detailData, isLoading, error, refetch, isFetching } = useQuery({
@@ -58,6 +64,19 @@ export default function ScoutPoolDetail() {
 
   const pool = detailData?.pool ?? null;
   const history = detailData?.history ?? [];
+
+  // OHLCV query — carrega histórico de preços
+  const { data: ohlcvData, isLoading: ohlcvLoading, error: ohlcvError } = useQuery({
+    queryKey: ['ohlcv', chain, address, ohlcvTimeframe],
+    queryFn: () => {
+      if (!chain || !address) return null;
+      const limit = ohlcvTimeframe === 'hour' ? 168 : 90;
+      return fetchOhlcv(chain, address, ohlcvTimeframe, limit);
+    },
+    enabled: !!chain && !!address && !!pool,
+    staleTime: ohlcvTimeframe === 'hour' ? 300000 : 900000,
+    retry: 1,
+  });
 
   // Mutation: add to favorites
   const favoriteMutation = useMutation({
@@ -255,6 +274,20 @@ export default function ScoutPoolDetail() {
           <p className="text-muted-foreground">{pool.explanation}</p>
         </div>
       )}
+
+      {/* Price History (OHLCV) — ETAPA 15 */}
+      <div className="glass-card p-6 mb-6">
+        <CandlestickChart
+          candles={ohlcvData?.candles ?? null}
+          loading={ohlcvLoading}
+          error={ohlcvError ? 'Falha ao carregar histórico' : null}
+          timeframe={ohlcvTimeframe}
+          onTimeframeChange={handleTimeframeChange}
+          title={`Histórico de Preço — ${pool.token0}/${pool.token1}`}
+          currentPrice={ohlcvData?.candles?.at(-1)?.close}
+          height={320}
+        />
+      </div>
 
       {/* Notes */}
       <PoolNotes poolId={pool.id} />
