@@ -39,7 +39,7 @@ export const watchlistSchema = z.object({
 export const alertSchema = z.object({
   poolId: z.string().optional(),
   type: z.string().min(1),
-  threshold: z.number(),
+  threshold: z.number().finite().min(0),
 });
 
 export const rangePositionSchema = z.object({
@@ -54,6 +54,9 @@ export const rangePositionSchema = z.object({
   capital: z.number().optional().default(1000),
   mode: z.enum(['DEFENSIVE', 'NORMAL', 'AGGRESSIVE']).optional().default('NORMAL'),
   alertThreshold: z.number().optional().default(5),
+}).refine(data => data.rangeUpper > data.rangeLower, {
+  message: 'rangeUpper must be greater than rangeLower',
+  path: ['rangeUpper'],
 });
 
 export const rangeCalcSchema = z.object({

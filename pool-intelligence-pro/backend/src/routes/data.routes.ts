@@ -131,7 +131,7 @@ router.delete('/notes/:id', validateIdParam, async (req, res) => {
 router.get('/logs', async (req, res) => {
   const { level, component, limit } = req.query;
   const logs = logService.getRecentLogs(
-    parseInt(limit as string) || 100,
+    (() => { const p = parseInt(limit as string, 10); return (!Number.isNaN(p) && p > 0) ? Math.min(p, 1000) : 100; })(),
     level as any,
     component as any
   );

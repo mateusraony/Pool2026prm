@@ -29,8 +29,10 @@ const historyCreateSchema = z.object({
 router.get('/history', async (req, res) => {
   try {
     const { poolId, chain, type, limit: limitStr = '100', offset: offsetStr = '0' } = req.query;
-    const limit = Math.min(parseInt(limitStr as string) || 100, 500);
-    const offset = parseInt(offsetStr as string) || 0;
+    const limParsedH = parseInt(limitStr as string, 10);
+    const limit = Math.min((!Number.isNaN(limParsedH) && limParsedH > 0) ? limParsedH : 100, 500);
+    const offParsedH = parseInt(offsetStr as string, 10);
+    const offset = (!Number.isNaN(offParsedH) && offParsedH >= 0) ? offParsedH : 0;
 
     const where: Record<string, unknown> = {};
     if (poolId) where.poolId = poolId;

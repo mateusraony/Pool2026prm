@@ -79,7 +79,8 @@ router.get('/macro', (req, res) => {
 // GET /api/macro/events — List upcoming events
 router.get('/macro/events', (req, res) => {
   try {
-    const days = parseInt(req.query.days as string) || 7;
+    const daysParsed = parseInt(req.query.days as string, 10);
+    const days = (!Number.isNaN(daysParsed) && daysParsed > 0) ? daysParsed : 7;
     const events = macroCalendarService.getUpcomingEvents(Math.min(days, 90));
     res.json({ success: true, data: events, timestamp: new Date() });
   } catch (error) {
