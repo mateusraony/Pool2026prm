@@ -30,6 +30,9 @@ import {
   Plus,
   Trash2,
   Settings,
+  Webhook,
+  Globe,
+  AlertCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -43,6 +46,12 @@ import {
   testTelegramRecommendations,
   sendPortfolioReport,
   NotificationSettings,
+  fetchIntegrations,
+  createIntegration,
+  updateIntegration,
+  deleteIntegration,
+  testIntegration,
+  Integration,
 } from '@/api/client';
 
 interface NotificationOption {
@@ -945,6 +954,9 @@ export default function ScoutSettings() {
           </div>
         )}
 
+        {/* Integrations */}
+        <IntegrationsSection />
+
         {/* Save Risk Config Actions */}
         <div className="flex gap-4">
           <Button onClick={handleSave} className="flex-1" variant="glow">
@@ -1028,6 +1040,316 @@ function LanguageThemeSettings() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+// INTEGRATIONS SECTION — ETAPA 14
+// ============================================================
+
+const INTEGRATION_TYPES = [
+  {
+    type: 'discord' as const,
+    label: 'Discord',
+    description: 'Envia alertas como embeds formatados para um canal Discord',
+    placeholder: 'https://discord.com/api/webhooks/...',
+    icon: '🎮',
+    color: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20',
+  },
+  {
+    type: 'slack' as const,
+    label: 'Slack',
+    description: 'Envia alertas com Block Kit para um canal Slack',
+    placeholder: 'https://hooks.slack.com/services/...',
+    icon: '💬',
+    color: 'text-green-400 bg-green-500/10 border-green-500/20',
+  },
+  {
+    type: 'webhook' as const,
+    label: 'Webhook Genérico',
+    description: 'HTTP POST com payload JSON para qualquer URL',
+    placeholder: 'https://seu-servidor.com/webhook',
+    icon: '⚡',
+    color: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
+  },
+];
+
+const ALERT_EVENTS = [
+  { value: 'OUT_OF_RANGE', label: 'Fora do Range' },
+  { value: 'NEAR_RANGE_EXIT', label: 'Próximo do Limite' },
+  { value: 'NEW_RECOMMENDATION', label: 'Nova Recomendação' },
+  { value: 'LIQUIDITY_FLIGHT', label: 'Fuga de Liquidez' },
+  { value: 'VOLATILITY_SPIKE', label: 'Spike de Volatilidade' },
+  { value: 'PRICE_ABOVE', label: 'Preço Acima' },
+  { value: 'PRICE_BELOW', label: 'Preço Abaixo' },
+];
+
+function IntegrationsSection() {
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState<'discord' | 'slack' | 'webhook' | null>(null);
+  const [formName, setFormName] = useState('');
+  const [formUrl, setFormUrl] = useState('');
+  const [formEvents, setFormEvents] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, 'ok' | 'error' | null>>({});
+
+  useEffect(() => {
+    fetchIntegrations()
+      .then(setIntegrations)
+      .catch(() => toast.error('Falha ao carregar integrações'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleAdd = async () => {
+    if (!adding || !formName.trim() || !formUrl.trim()) {
+      toast.error('Nome e URL são obrigatórios');
+      return;
+    }
+    setSaving(true);
+    try {
+      const created = await createIntegration({
+        name: formName.trim(),
+        type: adding,
+        url: formUrl.trim(),
+        enabled: true,
+        events: formEvents,
+      });
+      setIntegrations(prev => [...prev, created]);
+      setAdding(null);
+      setFormName('');
+      setFormUrl('');
+      setFormEvents([]);
+      toast.success('Integração criada!');
+    } catch {
+      toast.error('Falha ao criar integração');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggle = async (integration: Integration) => {
+    try {
+      const updated = await updateIntegration(integration.id, { enabled: !integration.enabled });
+      setIntegrations(prev => prev.map(i => i.id === updated.id ? updated : i));
+    } catch {
+      toast.error('Falha ao atualizar integração');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteIntegration(id);
+      setIntegrations(prev => prev.filter(i => i.id !== id));
+      toast.success('Integração removida');
+    } catch {
+      toast.error('Falha ao remover integração');
+    }
+  };
+
+  const handleTest = async (id: string) => {
+    setTestingId(id);
+    setTestResults(prev => ({ ...prev, [id]: null }));
+    try {
+      const result = await testIntegration(id);
+      setTestResults(prev => ({ ...prev, [id]: result.ok ? 'ok' : 'error' }));
+      if (result.ok) {
+        toast.success('Teste enviado com sucesso!');
+      } else {
+        toast.error(`Teste falhou: ${result.error ?? `HTTP ${result.statusCode}`}`);
+      }
+    } catch {
+      setTestResults(prev => ({ ...prev, [id]: 'error' }));
+      toast.error('Erro ao testar integração');
+    } finally {
+      setTestingId(null);
+    }
+  };
+
+  const toggleEvent = (event: string) => {
+    setFormEvents(prev =>
+      prev.includes(event) ? prev.filter(e => e !== event) : [...prev, event]
+    );
+  };
+
+  const typeInfo = (type: string) => INTEGRATION_TYPES.find(t => t.type === type);
+
+  return (
+    <div className="glass-card p-6">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+          <Webhook className="h-5 w-5 text-primary" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold">Integrações Externas</h2>
+          <p className="text-sm text-muted-foreground">Discord, Slack e Webhooks para receber alertas</p>
+        </div>
+      </div>
+
+      {/* Existing integrations */}
+      {loading ? (
+        <div className="flex items-center gap-2 py-4 text-muted-foreground text-sm">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Carregando integrações...
+        </div>
+      ) : integrations.length === 0 && !adding ? (
+        <div className="text-center py-8 text-muted-foreground">
+          <Globe className="w-8 h-8 mx-auto mb-2 opacity-40" />
+          <p className="text-sm">Nenhuma integração configurada</p>
+          <p className="text-xs mt-1 opacity-70">Adicione Discord, Slack ou um webhook para receber alertas externamente</p>
+        </div>
+      ) : (
+        <div className="space-y-3 mb-4">
+          {integrations.map(integration => {
+            const info = typeInfo(integration.type);
+            const testResult = testResults[integration.id];
+            return (
+              <div key={integration.id} className="flex items-center gap-3 p-3 rounded-lg border border-border bg-secondary/20">
+                <span className="text-lg flex-shrink-0">{info?.icon ?? '⚡'}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium truncate">{integration.name}</p>
+                    <span className={cn('text-[10px] px-1.5 py-0.5 rounded border', info?.color ?? '')}>
+                      {info?.label ?? integration.type}
+                    </span>
+                    {integration.events.length > 0 && (
+                      <span className="text-[10px] text-muted-foreground">
+                        {integration.events.length} evento{integration.events.length > 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground truncate mt-0.5">{integration.url}</p>
+                  {integration.lastError && (
+                    <p className="text-[10px] text-red-400 flex items-center gap-1 mt-0.5">
+                      <AlertCircle className="w-3 h-3" /> {integration.lastError}
+                    </p>
+                  )}
+                  <div className="flex gap-3 mt-0.5">
+                    <span className="text-[10px] text-green-400">✓ {integration.successCount}</span>
+                    <span className="text-[10px] text-red-400">✗ {integration.errorCount}</span>
+                    {integration.lastTriggeredAt && (
+                      <span className="text-[10px] text-muted-foreground">
+                        Último: {new Date(integration.lastTriggeredAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {/* Test result indicator */}
+                  {testResult === 'ok' && <Check className="w-4 h-4 text-green-400" />}
+                  {testResult === 'error' && <X className="w-4 h-4 text-red-400" />}
+                  {/* Test button */}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleTest(integration.id)}
+                    disabled={testingId === integration.id}
+                    className="h-7 px-2 text-xs"
+                  >
+                    {testingId === integration.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                  </Button>
+                  {/* Toggle */}
+                  <Switch
+                    checked={integration.enabled}
+                    onCheckedChange={() => handleToggle(integration)}
+                  />
+                  {/* Delete */}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleDelete(integration.id)}
+                    className="h-7 w-7 p-0 text-muted-foreground hover:text-red-400"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Add form */}
+      {adding ? (
+        <div className="border border-border rounded-xl p-4 bg-secondary/10 space-y-4">
+          <div className="flex items-center gap-2">
+            <span className="text-base">{typeInfo(adding)?.icon}</span>
+            <p className="text-sm font-medium">Nova integração {typeInfo(adding)?.label}</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs mb-1 block">Nome</Label>
+              <Input
+                value={formName}
+                onChange={e => setFormName(e.target.value)}
+                placeholder={`Ex: Alertas ${typeInfo(adding)?.label}`}
+                className="h-8 text-sm"
+              />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">URL do Webhook</Label>
+              <Input
+                value={formUrl}
+                onChange={e => setFormUrl(e.target.value)}
+                placeholder={typeInfo(adding)?.placeholder}
+                className="h-8 text-sm font-mono"
+              />
+            </div>
+          </div>
+          {/* Event filter */}
+          <div>
+            <Label className="text-xs mb-2 block text-muted-foreground">
+              Eventos (vazio = todos os alertas)
+            </Label>
+            <div className="flex flex-wrap gap-2">
+              {ALERT_EVENTS.map(ev => (
+                <button
+                  key={ev.value}
+                  type="button"
+                  onClick={() => toggleEvent(ev.value)}
+                  className={cn(
+                    'text-xs px-2 py-1 rounded-md border transition-colors',
+                    formEvents.includes(ev.value)
+                      ? 'bg-primary/20 border-primary text-primary'
+                      : 'border-border text-muted-foreground hover:border-primary/50'
+                  )}
+                >
+                  {ev.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" variant="glow" onClick={handleAdd} disabled={saving}>
+              {saving ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Check className="w-3.5 h-3.5 mr-1.5" />}
+              Salvar
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => { setAdding(null); setFormName(''); setFormUrl(''); setFormEvents([]); }}>
+              <X className="w-3.5 h-3.5 mr-1.5" />
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      ) : (
+        /* Add buttons */
+        <div className="flex flex-wrap gap-2">
+          {INTEGRATION_TYPES.map(t => (
+            <Button
+              key={t.type}
+              size="sm"
+              variant="outline"
+              onClick={() => setAdding(t.type)}
+              className="text-xs h-8"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1.5" />
+              {t.icon} {t.label}
+            </Button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
