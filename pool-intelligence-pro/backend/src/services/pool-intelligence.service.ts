@@ -43,9 +43,10 @@ export function enrichToUnifiedPool(
     feeTier: pool.feeTier,
   });
 
-  const volume1h = p.volume1h ?? null;
+  // Fallback: quando volume/fees de 1h não disponíveis, estima de 24h (DefiLlama, GeckoTerminal)
+  const volume1h = p.volume1h ?? (pool.volume24h > 0 ? pool.volume24h / 24 : null);
   const volume5m = p.volume5m ?? null;
-  const fees1h = p.fees1h ?? null;
+  const fees1h = p.fees1h ?? (pool.fees24h != null && pool.fees24h > 0 ? pool.fees24h / 24 : null);
   const fees5m = p.fees5m ?? null;
 
   // APR from fees
