@@ -2,15 +2,45 @@
 
 ## Status Atual
 **Branch:** `claude/review-audit-checkpoint-ZFYUM`
-**Data:** 2026-03-17 UTC
-**Fase:** ETAPAS 1–13 concluídas ✅
+**Data:** 2026-03-18 UTC
+**Fase:** ETAPAS 1–14 concluídas ✅
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-17 — ETAPA 13 concluída, planejar ETAPA 14"`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-18 — ETAPA 14 concluída, planejar ETAPA 15"`
 
 ---
 
 ## O QUE FOI FEITO
+
+### ETAPA 14 — Integrações Externas (Discord + Slack + Webhook) ✅ (2026-03-18)
+
+**Backend:**
+- `webhook.service.ts`: serviço central de dispatch com suporte a Discord, Slack e webhook genérico
+- Discord Embeds: título colorido por tipo de alerta, campos pool/chain/TVL/APR, timestamp
+- Slack Block Kit: header + section + fields + context block
+- Webhook Genérico: payload JSON padronizado (`source`, `type`, `message`, `pool`, `data`)
+- Timeout de 8s por request, contadores `successCount`/`errorCount`, `lastError`
+- `integrations.routes.ts`: CRUD completo `/api/integrations` (GET/POST/PUT/DELETE)
+- `POST /api/integrations/:id/test` — testa conectividade de uma integração salva
+- `POST /api/integrations/test-url` — testa URL avulsa antes de salvar
+- Persistência via `persistService.set/get('integrations')` — sem novo modelo Prisma
+- `persist.service.ts`: métodos genéricos `get(key)` e `set(key, value)` adicionados
+- `alert.service.ts`: dispara `webhookService.dispatch(event)` após cada alert (fire-and-forget)
+- Boot: `loadIntegrations()` restaura configurações da DB
+
+**Frontend:**
+- `IntegrationsSection` component em `ScoutSettings.tsx`
+- Cards visuais para Discord (indigo), Slack (verde), Webhook Genérico (roxo)
+- Formulário com: nome, URL, filtro de eventos por badge clicável
+- Toggle on/off por integração, botão teste, indicador OK/erro
+- Contadores de sucesso/erro + timestamp do último disparo
+- Empty state com ícone Globe
+- API client: `fetchIntegrations`, `createIntegration`, `updateIntegration`, `deleteIntegration`, `testIntegration`, `testIntegrationUrl`
+
+**Testes (15 novos, 109 backend total):**
+- `webhook.service.test.ts`: upsert/getAll/delete (5 testes), dispatch filtros (4 testes),
+  test() retornos (3 testes), contadores successCount/errorCount (3 testes)
+- Mock de `global.fetch` com vi.spyOn para testes isolados
 
 ### Superpowers (obra/superpowers v5.0.4) ✅ (2026-03-17)
 - 14 skills instaladas: TDD, systematic-debugging, brainstorming, writing-plans,
@@ -406,9 +436,9 @@
 
 ---
 
-## PRÓXIMOS PASSOS → ETAPA 14+
-- Playwright E2E no GitHub Actions (start-server-and-test)
-- Multi-wallet tracking (WalletConnect)
-- Webhooks externos (Discord, Slack)
-- Cobertura de testes expandida (componentes React, E2E)
-- WebSocket: broadcast de scores individuais (por pool) em tempo real
+## PRÓXIMOS PASSOS → ETAPA 15+
+- Playwright E2E no GitHub Actions (start-server-and-test + `start-server-and-test` package)
+- Multi-wallet tracking (importar posições via endereço wallet)
+- Price History real via GeckoTerminal OHLCV + chart candlestick (Recharts ComposedChart)
+- WebSocket: broadcast de score por pool individual em tempo real
+- Notificações push (PWA Push API + service worker) para alertas críticos

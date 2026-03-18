@@ -151,6 +151,17 @@ class PersistService {
     this.cache.riskConfig = riskConfig;
     this.saveToDb('riskConfig', riskConfig);
   }
+
+  /** Generic getter — reads any persisted key from cache */
+  get(key: string): unknown {
+    return this.cache[key];
+  }
+
+  /** Generic setter — persists any key to cache + DB */
+  async set(key: string, value: unknown): Promise<void> {
+    this.cache[key] = value;
+    await this.saveToDb(key, value);
+  }
 }
 
 export const persistService = new PersistService();

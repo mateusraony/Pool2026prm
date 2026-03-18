@@ -13,6 +13,7 @@ import rangesRouter from './ranges.routes.js';
 import dataRouter from './data.routes.js';
 import docsRouter from './docs.routes.js';
 import historyRouter from './history.routes.js';
+import integrationsRouter from './integrations.routes.js';
 import { macroCalendarService } from '../services/macro-calendar.service.js';
 
 const router = Router();
@@ -58,6 +59,7 @@ router.use(rangesRouter);
 router.use(dataRouter);
 router.use(docsRouter);
 router.use(historyRouter);
+router.use(integrationsRouter);
 
 // ============================================
 // MACRO CALENDAR ROUTES

@@ -904,3 +904,56 @@ export async function createHistoryEntry(entry: Omit<PositionHistoryEntry, 'id' 
 export async function deleteHistoryEntry(id: string): Promise<void> {
   await api.delete('/history/' + id);
 }
+
+// ============================================================
+// INTEGRATIONS API — ETAPA 14
+// ============================================================
+
+export interface Integration {
+  id: string;
+  type: 'discord' | 'slack' | 'webhook';
+  name: string;
+  url: string;
+  enabled: boolean;
+  events: string[];
+  createdAt: string;
+  lastTriggeredAt?: string;
+  successCount: number;
+  errorCount: number;
+  lastError?: string;
+}
+
+export async function fetchIntegrations(): Promise<Integration[]> {
+  const res = await api.get<{ success: boolean; data: Integration[] }>('/integrations');
+  return res.data.data ?? [];
+}
+
+export async function createIntegration(params: {
+  name: string;
+  type: 'discord' | 'slack' | 'webhook';
+  url: string;
+  enabled?: boolean;
+  events?: string[];
+}): Promise<Integration> {
+  const res = await api.post<{ success: boolean; data: Integration }>('/integrations', params);
+  return res.data.data;
+}
+
+export async function updateIntegration(id: string, params: Partial<Pick<Integration, 'name' | 'url' | 'enabled' | 'events'>>): Promise<Integration> {
+  const res = await api.put<{ success: boolean; data: Integration }>(`/integrations/${id}`, params);
+  return res.data.data;
+}
+
+export async function deleteIntegration(id: string): Promise<void> {
+  await api.delete(`/integrations/${id}`);
+}
+
+export async function testIntegration(id: string): Promise<{ ok: boolean; statusCode?: number; error?: string }> {
+  const res = await api.post<{ success: boolean; data: { ok: boolean; statusCode?: number; error?: string } }>(`/integrations/${id}/test`);
+  return res.data.data;
+}
+
+export async function testIntegrationUrl(url: string, type: string): Promise<{ ok: boolean; statusCode?: number; error?: string }> {
+  const res = await api.post<{ success: boolean; data: { ok: boolean; statusCode?: number; error?: string } }>('/integrations/test-url', { url, type });
+  return res.data.data;
+}

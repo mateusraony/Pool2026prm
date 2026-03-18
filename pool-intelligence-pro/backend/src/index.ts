@@ -117,6 +117,10 @@ async function initPersistence() {
     await rangeMonitorService.loadFromDb();
     console.log('[BOOT] Range positions loaded from DB');
 
+    const { loadIntegrations } = await import('./routes/integrations.routes.js');
+    await loadIntegrations();
+    console.log('[BOOT] Webhook integrations loaded from DB');
+
     // Auto-detect appUrl from RENDER_EXTERNAL_URL if not set by user
     const currentAppUrl = notificationSettingsService.getAppUrl();
     const renderUrl = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || '';
