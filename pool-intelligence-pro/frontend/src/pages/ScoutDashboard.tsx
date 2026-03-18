@@ -6,7 +6,7 @@ import { PoolCard } from '@/components/common/PoolCard';
 import { ActivePoolCard } from '@/components/common/ActivePoolCard';
 import { PullToRefresh } from '@/components/common/PullToRefresh';
 import { LiveIndicator } from '@/components/common/LiveIndicator';
-import { defaultRiskConfig } from '@/data/constants';
+import { useRiskConfig } from '@/hooks/useRiskConfig';
 import { fetchUnifiedPools, fetchRangePositions, fetchAlerts, fetchHealth, API_BASE_URL } from '@/api/client';
 import type { RangePosition } from '@/api/client';
 import { unifiedPoolToViewPool } from '@/data/adapters';
@@ -30,6 +30,7 @@ import { useNavigate } from 'react-router-dom';
 export default function ScoutDashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { config } = useRiskConfig();
 
   const handlePullRefresh = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: ['scout-pools'] });
@@ -123,7 +124,7 @@ export default function ScoutDashboard() {
       return {
         ...base,
         capital: pos.capital,
-        capitalPercent: (pos.capital / defaultRiskConfig.totalBanca) * 100,
+        capitalPercent: (pos.capital / config.totalBanca) * 100,
         entryDate: pos.createdAt,
         pnl: pnlPercent,
         feesAccrued,
@@ -146,7 +147,7 @@ export default function ScoutDashboard() {
     });
     return Object.entries(exposure).map(([network, capital]) => ({
       network,
-      percent: (capital / defaultRiskConfig.totalBanca) * 100,
+      percent: (capital / config.totalBanca) * 100,
     }));
   }, [activePools]);
 
@@ -245,13 +246,13 @@ export default function ScoutDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard
           label="Banca Total"
-          value={formatCurrency(defaultRiskConfig.totalBanca)}
+          value={formatCurrency(config.totalBanca)}
           icon={<Wallet className="h-5 w-5" />}
         />
         <StatCard
           label="Capital Alocado"
           value={formatCurrency(totalCapitalDeployed)}
-          change={totalCapitalDeployed > 0 ? ((totalCapitalDeployed / defaultRiskConfig.totalBanca) * 100) : 0}
+          change={totalCapitalDeployed > 0 ? ((totalCapitalDeployed / config.totalBanca) * 100) : 0}
           icon={<Activity className="h-5 w-5" />}
         />
         <StatCard
@@ -405,12 +406,12 @@ export default function ScoutDashboard() {
                   <div key={network}>
                     <div className="flex items-center justify-between text-sm mb-1">
                       <span>{network}</span>
-                      <span className="font-mono">{percent.toFixed(1)}% / {defaultRiskConfig.maxPerNetwork}%</span>
+                      <span className="font-mono">{percent.toFixed(1)}% / {config.maxPerNetwork}%</span>
                     </div>
                     <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
                       <div
                         className="h-full rounded-full bg-primary transition-all"
-                        style={{ width: `${Math.min(100, (percent / defaultRiskConfig.maxPerNetwork) * 100)}%` }}
+                        style={{ width: `${Math.min(100, (percent / config.maxPerNetwork) * 100)}%` }}
                       />
                     </div>
                   </div>

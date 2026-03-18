@@ -16,7 +16,7 @@ interface WsStatus {
 let sharedSocket: Socket | null = null;
 let refCount = 0;
 
-function getSocket(): Socket {
+export function getSocket(): Socket {
   if (!sharedSocket) {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     sharedSocket = io(origin, {

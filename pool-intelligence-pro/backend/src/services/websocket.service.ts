@@ -1,16 +1,20 @@
 /**
  * WebSocket Service — Socket.io real-time updates
  * Emite eventos de atualização de pools, preços e scores para clientes conectados.
+ * Suporte a rooms por pool via pool:subscribe / pool:unsubscribe.
  */
 
 import { Server, type Socket } from 'socket.io';
 import type { Server as HttpServer } from 'http';
 import { logService } from './log.service.js';
+import type { UnifiedPool } from '../types/index.js';
+import { rangeMonitorService } from './range.service.js';
 
-type WsEvent = 'pools:updated' | 'score:updated' | 'price:updated' | 'system:status';
+type WsEvent = 'pools:updated' | 'score:updated' | 'price:updated' | 'system:status' | 'pool:updated';
 
 class WebSocketService {
   private io: Server | null = null;
+  private poolBroadcastThrottle = new Map<string, number>(); // poolKey → timestamp ms
 
   init(httpServer: HttpServer) {
     this.io = new Server(httpServer, {
@@ -35,6 +39,25 @@ class WebSocketService {
 
       socket.on('unsubscribe', (room: string) => {
         socket.leave(room);
+      });
+
+      // Rooms por pool — subscribe/unsubscribe direcionado
+      socket.on('pool:subscribe', (data: unknown) => {
+        if (data && typeof data === 'object' && 'chain' in data && 'address' in data) {
+          const { chain, address } = data as { chain: string; address: string };
+          if (typeof chain === 'string' && typeof address === 'string') {
+            socket.join(`pool:${chain}:${address}`);
+          }
+        }
+      });
+
+      socket.on('pool:unsubscribe', (data: unknown) => {
+        if (data && typeof data === 'object' && 'chain' in data && 'address' in data) {
+          const { chain, address } = data as { chain: string; address: string };
+          if (typeof chain === 'string' && typeof address === 'string') {
+            socket.leave(`pool:${chain}:${address}`);
+          }
+        }
       });
 
       socket.on('disconnect', () => {
@@ -78,6 +101,51 @@ class WebSocketService {
       score,
       timestamp: new Date().toISOString(),
     });
+  }
+
+  /**
+   * Broadcast de update para clientes inscritos na room de uma pool específica.
+   * Throttle: mínimo 10s entre broadcasts por pool.
+   */
+  broadcastPoolUpdate(pool: UnifiedPool) {
+    if (!this.io) return;
+
+    const poolKey = `${pool.chain}:${pool.poolAddress}`;
+    const now = Date.now();
+    const last = this.poolBroadcastThrottle.get(poolKey) ?? 0;
+
+    if (now - last < 10_000) return;
+    this.poolBroadcastThrottle.set(poolKey, now);
+
+    const positionAlert = this.calcPositionAlert(pool);
+
+    this.io.to(`pool:${pool.chain}:${pool.poolAddress}`).emit('pool:updated', {
+      pool,
+      updatedAt: new Date().toISOString(),
+      ...(positionAlert !== undefined && { positionAlert }),
+    });
+  }
+
+  private calcPositionAlert(pool: UnifiedPool): 'in_range' | 'out_of_range' | 'near_edge' | undefined {
+    const positions = rangeMonitorService.getPositions();
+    const pos = positions.find(
+      p => p.poolAddress.toLowerCase() === pool.poolAddress.toLowerCase() && p.chain === pool.chain
+    );
+    if (!pos) return undefined;
+
+    const price = pool.price ?? pos.entryPrice;
+    const { rangeLower, rangeUpper } = pos;
+
+    if (price < rangeLower || price > rangeUpper) return 'out_of_range';
+
+    // near_edge: dentro de 5% da borda em relação ao preço atual
+    const distToEdgePct = Math.min(
+      Math.abs(price - rangeLower) / price,
+      Math.abs(rangeUpper - price) / price
+    );
+    if (distToEdgePct < 0.05) return 'near_edge';
+
+    return 'in_range';
   }
 }
 
