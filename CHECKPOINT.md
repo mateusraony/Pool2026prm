@@ -12,6 +12,32 @@
 
 ## O QUE FOI FEITO
 
+### ETAPA 16 — WebSocket por Pool (Rooms) ✅ (2026-03-18)
+
+**Backend:**
+- `websocket.service.ts`: listeners `pool:subscribe/unsubscribe` por pool individual,
+  método `broadcastPoolUpdate(pool)` com throttle 10s por pool,
+  cálculo de `positionAlert` (`in_range` / `near_edge` / `out_of_range`) consultando `rangeMonitorService`
+- `jobs/index.ts`: loop `broadcastPoolUpdate` após `setPools` no radar job
+- `__tests__/websocket.service.test.ts`: 6 novos testes (emit correto, throttle, positionAlert)
+
+**Frontend:**
+- `hooks/useWebSocket.ts`: `getSocket` exportado para reuso por outros hooks
+- `hooks/usePoolWebSocket.ts`: hook que faz join/leave da room da pool específica,
+  expõe `liveData: UnifiedPool | null`, `lastUpdated: Date | null`, `isConnected`, `positionAlert`
+  — filtra eventos de outras pools, invalida React Query ao receber update
+- `ScoutPoolDetail.tsx`:
+  - Banner "Live · Atualizado há Xs" (verde pulsante < 15s, cinza se mais antigo ou offline)
+  - Flash verde (`ring-1 ring-green-500/40`) por 2s nos cards TVL, Volume 24h e Score ao receber update
+  - Toast `warning("Posição saiu do range!")` com throttle de 2min quando `positionAlert = 'out_of_range'`
+  - TVL e Volume 24h mostram valor live do WebSocket quando disponível
+- `pages/ScoutDashboard.tsx`: correção de 2 referências remanescentes a `defaultRiskConfig.maxPerNetwork`
+- `__tests__/usePoolWebSocket.test.ts`: 5 novos testes (subscribe, unsubscribe, liveData, filtro de pool)
+
+**Totais após ETAPA 16:**
+- Backend: 129 testes (7 arquivos)
+- Frontend: 98 testes (7 arquivos)
+
 ### ETAPA 15 — Price History Real + CandlestickChart ✅ (2026-03-18)
 
 **Fix Render (chunk warning):**
@@ -475,9 +501,8 @@
 
 ---
 
-## PRÓXIMOS PASSOS → ETAPA 16+
+## PRÓXIMOS PASSOS → ETAPA 17+
 - Playwright E2E no GitHub Actions (start-server-and-test package)
 - Multi-wallet tracking (importar posições via endereço wallet on-chain)
-- WebSocket: broadcast de score por pool individual em tempo real
 - Notificações push (PWA Push API + service worker) para alertas críticos
 - AI Insights: análise sumária de pool via Claude API (pool summary, recomendação em linguagem natural)

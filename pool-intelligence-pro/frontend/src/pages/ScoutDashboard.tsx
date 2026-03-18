@@ -406,12 +406,12 @@ export default function ScoutDashboard() {
                   <div key={network}>
                     <div className="flex items-center justify-between text-sm mb-1">
                       <span>{network}</span>
-                      <span className="font-mono">{percent.toFixed(1)}% / {defaultRiskConfig.maxPerNetwork}%</span>
+                      <span className="font-mono">{percent.toFixed(1)}% / {config.maxPerNetwork}%</span>
                     </div>
                     <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
                       <div
                         className="h-full rounded-full bg-primary transition-all"
-                        style={{ width: `${Math.min(100, (percent / defaultRiskConfig.maxPerNetwork) * 100)}%` }}
+                        style={{ width: `${Math.min(100, (percent / config.maxPerNetwork) * 100)}%` }}
                       />
                     </div>
                   </div>

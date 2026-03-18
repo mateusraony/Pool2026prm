@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MainLayout } from '@/components/layout/MainLayout';
@@ -30,7 +30,23 @@ import { toast } from 'sonner';
 import { fetchPoolDetail, addFavorite, fetchOhlcv, API_BASE_URL } from '@/api/client';
 import { unifiedPoolToViewPool } from '@/data/adapters';
 import { networkColors, dexLogos } from '@/data/constants';
+import { usePoolWebSocket } from '@/hooks/usePoolWebSocket';
 import type { Pool } from '@/types/pool';
+
+/** Flash visual por 2s quando um valor muda — indica update live */
+function useValueFlash(value: unknown): boolean {
+  const [flashing, setFlashing] = useState(false);
+  const prev = useRef(value);
+  useEffect(() => {
+    if (prev.current !== value && value !== undefined && value !== null) {
+      prev.current = value;
+      setFlashing(true);
+      const t = setTimeout(() => setFlashing(false), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [value]);
+  return flashing;
+}
 
 export default function ScoutPoolDetail() {
   const { chain, address } = useParams<{ chain: string; address: string }>();
@@ -38,6 +54,41 @@ export default function ScoutPoolDetail() {
   const queryClient = useQueryClient();
   const [selectedRange, setSelectedRange] = useState<'defensive' | 'optimized' | 'aggressive'>('optimized');
   const [ohlcvTimeframe, setOhlcvTimeframe] = useState<Timeframe>('hour');
+
+  // WebSocket real-time por pool
+  const { liveData, lastUpdated, isConnected, positionAlert } = usePoolWebSocket(chain, address);
+
+  // Contador de segundos desde último update (re-renderiza a cada 1s quando há update)
+  const [, forceRender] = useState(0);
+  useEffect(() => {
+    if (!lastUpdated) return;
+    const interval = setInterval(() => forceRender(n => n + 1), 1000);
+    return () => clearInterval(interval);
+  }, [lastUpdated]);
+  const secondsSince = lastUpdated ? Math.floor((Date.now() - lastUpdated.getTime()) / 1000) : 0;
+
+  // Toast quando posição sai do range (throttle: 1 toast a cada 2 min)
+  const prevAlertRef = useRef<string | undefined>(undefined);
+  const lastToastRef = useRef<number>(0);
+  useEffect(() => {
+    if (
+      positionAlert === 'out_of_range' &&
+      prevAlertRef.current !== 'out_of_range' &&
+      Date.now() - lastToastRef.current > 120_000
+    ) {
+      lastToastRef.current = Date.now();
+      toast.warning('Posicao saiu do range!', {
+        description: 'Considere reposicionar sua liquidez.',
+        action: { label: 'Ver posicoes', onClick: () => navigate('/active') },
+      });
+    }
+    prevAlertRef.current = positionAlert;
+  }, [positionAlert, navigate]);
+
+  // Flash nos valores que mudam com liveData
+  const tvlFlash = useValueFlash(liveData?.tvlUSD);
+  const volFlash = useValueFlash(liveData?.volume24hUSD);
+  const scoreFlash = useValueFlash(liveData?.healthScore);
 
   const handleTimeframeChange = useCallback((tf: Timeframe) => {
     setOhlcvTimeframe(tf);
@@ -173,6 +224,22 @@ export default function ScoutPoolDetail() {
         </div>
       </div>
 
+      {/* Banner Live — mostra quando dados foram atualizados via WebSocket */}
+      {lastUpdated && (
+        <div className={cn(
+          'flex items-center gap-2 text-xs mb-4 transition-colors duration-500',
+          isConnected && secondsSince < 15 ? 'text-green-500' : 'text-muted-foreground'
+        )}>
+          <span className={cn(
+            'h-1.5 w-1.5 rounded-full flex-shrink-0',
+            isConnected && secondsSince < 15 ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground'
+          )} />
+          {isConnected
+            ? `Live · Atualizado ha ${secondsSince < 60 ? `${secondsSince}s` : `${Math.floor(secondsSince / 60)}min`}`
+            : 'Reconectando...'}
+        </div>
+      )}
+
       {/* Pool Info Card */}
       <div className="glass-card p-6 mb-6">
         <div className="flex items-start justify-between">
@@ -194,10 +261,15 @@ export default function ScoutPoolDetail() {
               </div>
             </div>
           </div>
-          <div className="text-right">
+          <div className={cn(
+            'text-right p-2 rounded-xl transition-all duration-300',
+            scoreFlash && 'ring-1 ring-green-500/40'
+          )}>
             <div className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-primary" />
-              <span className="font-mono text-3xl font-bold text-primary">{pool.score}</span>
+              <span className="font-mono text-3xl font-bold text-primary">
+                {liveData?.healthScore ?? pool.score}
+              </span>
             </div>
             <span className="text-xs uppercase tracking-wider text-muted-foreground">Score IA</span>
           </div>
@@ -206,8 +278,18 @@ export default function ScoutPoolDetail() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <StatCard label="TVL" value={`$${(pool.tvl / 1e6).toFixed(1)}M`} icon={<DollarSign className="h-5 w-5" />} />
-        <StatCard label="Volume 24h" value={`$${(pool.volume24h / 1e6).toFixed(1)}M`} icon={<BarChart3 className="h-5 w-5" />} />
+        <StatCard
+          label="TVL"
+          value={`$${((liveData?.tvlUSD ?? pool.tvl) / 1e6).toFixed(1)}M`}
+          icon={<DollarSign className="h-5 w-5" />}
+          className={cn(tvlFlash && 'ring-1 ring-green-500/40 transition-all duration-300')}
+        />
+        <StatCard
+          label="Volume 24h"
+          value={`$${((liveData?.volume24hUSD ?? pool.volume24h) / 1e6).toFixed(1)}M`}
+          icon={<BarChart3 className="h-5 w-5" />}
+          className={cn(volFlash && 'ring-1 ring-green-500/40 transition-all duration-300')}
+        />
         <StatCard label="APR" value={`${pool.apr.toFixed(1)}%`} icon={<TrendingUp className="h-5 w-5" />} variant="success" />
         <StatCard label="Risco" value={riskLabels[pool.risk]} icon={<Shield className="h-5 w-5" />}
           variant={pool.risk === 'low' ? 'success' : pool.risk === 'medium' ? 'warning' : 'danger'} />
