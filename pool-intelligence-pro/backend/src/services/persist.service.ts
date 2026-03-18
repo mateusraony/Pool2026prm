@@ -121,7 +121,10 @@ class PersistService {
       );
       logService.info('SYSTEM', `Config "${key}" saved to database`);
     } catch (error: any) {
-      logService.error('SYSTEM', `Failed to persist "${key}": ${error?.message}`);
+      logService.error('SYSTEM', `Failed to persist config key "${key}" to DB`, {
+        error: String(error),
+        key,
+      });
     }
   }
 
@@ -131,6 +134,7 @@ class PersistService {
 
   setTelegram(telegram: PersistedData['telegram']): void {
     this.cache.telegram = telegram;
+    logService.info('SYSTEM', 'Persisting Telegram config to DB...');
     this.saveToDb('telegram', telegram);
   }
 
@@ -140,6 +144,7 @@ class PersistService {
 
   setNotifications(notifications: PersistedData['notifications']): void {
     this.cache.notifications = notifications;
+    logService.info('SYSTEM', 'Persisting notifications config to DB...');
     this.saveToDb('notifications', notifications);
   }
 
@@ -149,6 +154,7 @@ class PersistService {
 
   setRiskConfig(riskConfig: PersistedData['riskConfig']): void {
     this.cache.riskConfig = riskConfig;
+    logService.info('SYSTEM', 'Persisting risk config to DB...');
     this.saveToDb('riskConfig', riskConfig);
   }
 
