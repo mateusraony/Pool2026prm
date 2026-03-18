@@ -854,7 +854,7 @@ export function calcLVR(params: {
   // Compare with fee income
   const userShare = tvl > 0 ? capital / tvl : 0;
   const dailyFeeIncome = fees24h * userShare * k_active;
-  const feeToLvrRatio = lvrDaily > 0 ? dailyFeeIncome / lvrDaily : Infinity;
+  const feeToLvrRatio = lvrDaily > 0 ? dailyFeeIncome / lvrDaily : 999999;
   const netAfterLvr = dailyFeeIncome - lvrDaily;
 
   let verdict: LVRResult['verdict'];

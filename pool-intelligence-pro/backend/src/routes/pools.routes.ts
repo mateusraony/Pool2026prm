@@ -74,13 +74,15 @@ router.get('/pools', async (req, res) => {
     }
 
     // ── 3. Filtros e ordenação ──
+    const minTVLParsed = parseFloat(minTVL as string);
+    const minHealthParsed = parseFloat(minHealth as string);
     pools = poolIntelligenceService.applyPoolFilters(pools, {
       chain: chain as string | undefined,
       protocol: protocol as string | undefined,
       token: token as string | undefined,
       bluechip: bluechip === 'true' ? true : undefined,
-      minTVL: minTVL ? parseFloat(minTVL as string) : undefined,
-      minHealth: minHealth ? parseFloat(minHealth as string) : undefined,
+      minTVL: minTVL && !Number.isNaN(minTVLParsed) ? minTVLParsed : undefined,
+      minHealth: minHealth && !Number.isNaN(minHealthParsed) ? minHealthParsed : undefined,
       poolType: poolType as string | undefined,
     });
 
@@ -91,8 +93,10 @@ router.get('/pools', async (req, res) => {
 
     // ── 4. Paginação ──
     const total = pools.length;
-    const lim = limitStr ? Math.min(parseInt(limitStr as string), 200) : 50;
-    const pg = page ? parseInt(page as string) : null;
+    const limParsed = parseInt(limitStr as string, 10);
+    const lim = (!Number.isNaN(limParsed) && limParsed > 0) ? Math.min(limParsed, 200) : 50;
+    const pgParsed = parseInt(page as string, 10);
+    const pg = page && !Number.isNaN(pgParsed) && pgParsed > 0 ? pgParsed : null;
     pools = pg != null
       ? pools.slice((pg - 1) * lim, pg * lim)
       : pools.slice(0, lim);
@@ -118,11 +122,12 @@ router.get('/pools', async (req, res) => {
 router.get('/pools/:chain/:address', async (req, res) => {
   try {
     const { chain, address } = req.params;
+    const normalizedAddress = address?.toLowerCase();
 
     const radarResults = getLatestRadarResults();
     const fromRadar = radarResults.find(r =>
       r.pool.chain === chain &&
-      (r.pool.poolAddress === address || r.pool.externalId === address)
+      (r.pool.poolAddress === normalizedAddress || r.pool.externalId === normalizedAddress)
     );
 
     if (fromRadar) {
@@ -136,7 +141,7 @@ router.get('/pools/:chain/:address', async (req, res) => {
     }
 
     const memUnified = memoryStore.getAllPools().find(p =>
-      p.chain === chain && (p.poolAddress === address || p.id === address)
+      p.chain === chain && (p.poolAddress === normalizedAddress || p.id === normalizedAddress)
     );
     if (memUnified) {
       const pool: Pool = {
@@ -166,7 +171,7 @@ router.get('/pools/:chain/:address', async (req, res) => {
       });
     }
 
-    const { pool, provider, usedFallback } = await getPoolWithFallback(chain, address);
+    const { pool, provider, usedFallback } = await getPoolWithFallback(chain, normalizedAddress);
 
     if (!pool) {
       return res.status(404).json({ success: false, error: 'Pool not found' });
@@ -212,7 +217,8 @@ router.get('/recommendations', async (req, res) => {
       recommendations = recommendations.filter(r => r.mode === mode.toUpperCase());
     }
 
-    const maxLimit = Math.min(parseInt(limit as string) || 10, 20);
+    const limitParsedRec = parseInt(limit as string, 10);
+    const maxLimit = Math.min(!Number.isNaN(limitParsedRec) && limitParsedRec > 0 ? limitParsedRec : 10, 20);
     recommendations = recommendations.slice(0, maxLimit);
 
     res.json({
@@ -253,14 +259,15 @@ router.get('/tokens', async (req, res) => {
 router.get('/pools-detail/:chain/:address', async (req, res) => {
   try {
     const { chain, address } = req.params;
+    const normalizedAddress = address?.toLowerCase();
     const { horizonDays = '7', riskMode = 'NORMAL', capital = '1000' } = req.query;
 
-    let pool = await theGraphAdapter.getPool(chain, address);
-    let history = pool ? await theGraphAdapter.getPoolHistory(chain, address, 7) : [];
+    let pool = await theGraphAdapter.getPool(chain, normalizedAddress);
+    let history = pool ? await theGraphAdapter.getPoolHistory(chain, normalizedAddress, 7) : [];
     let provider = 'thegraph';
 
     if (!pool) {
-      const result = await getPoolWithFallback(chain, address);
+      const result = await getPoolWithFallback(chain, normalizedAddress);
       pool = result.pool;
       provider = result.provider;
     }
@@ -273,7 +280,7 @@ router.get('/pools-detail/:chain/:address', async (req, res) => {
     if (history.length === 0) {
       try {
         const { geckoTerminalAdapter } = await import('../adapters/index.js');
-        const geckoHistory = await geckoTerminalAdapter.getPoolHistory(chain, address, 30);
+        const geckoHistory = await geckoTerminalAdapter.getPoolHistory(chain, normalizedAddress, 30);
         if (geckoHistory.length > 0) history = geckoHistory;
       } catch { /* ignore — use proxy volatility */ }
     }
@@ -281,8 +288,10 @@ router.get('/pools-detail/:chain/:address', async (req, res) => {
     const unified = poolIntelligenceService.enrichToUnifiedPool(pool, { updatedAt: new Date(), history });
     const score = memoryStore.getScore(pool.externalId) || scoreService.calculateScore(pool);
 
-    const horizonD = parseInt(horizonDays as string) || 7;
-    const capUSD = parseFloat(capital as string) || 1000;
+    const horizonDParsed = parseInt(horizonDays as string, 10);
+    const horizonD = !Number.isNaN(horizonDParsed) && horizonDParsed > 0 ? horizonDParsed : 7;
+    const capRaw = parseFloat(capital as string);
+    const capUSD = !Number.isNaN(capRaw) && capRaw >= 0 ? capRaw : 1000;
     const p = pool.price || 1;
     const vol = unified.volatilityAnn;
     const tickSpacing = (pool as Pool & { tickSpacing?: number }).tickSpacing;
@@ -334,18 +343,20 @@ router.get('/pools-detail/:chain/:address', async (req, res) => {
 router.get('/pools-liquidity/:chain/:address', async (req, res) => {
   try {
     const { chain, address } = req.params;
+    const normalizedAddress = address?.toLowerCase();
     const { bars: barsStr = '50' } = req.query;
-    const numBars = Math.min(Math.max(parseInt(barsStr as string) || 50, 20), 100);
+    const barsParsed = parseInt(barsStr as string, 10);
+    const numBars = Math.min(Math.max(!Number.isNaN(barsParsed) && barsParsed > 0 ? barsParsed : 50, 20), 100);
 
     // Find pool data from memory/radar
     const radarResults = getLatestRadarResults();
     const fromRadar = radarResults.find(r =>
       r.pool.chain === chain &&
-      (r.pool.poolAddress === address || r.pool.externalId === address)
+      (r.pool.poolAddress === normalizedAddress || r.pool.externalId === normalizedAddress)
     );
 
     const memUnified = memoryStore.getAllPools().find(p =>
-      p.chain === chain && (p.poolAddress === address || p.id === address)
+      p.chain === chain && (p.poolAddress === normalizedAddress || p.id === normalizedAddress)
     );
 
     const price = fromRadar?.pool.price || memUnified?.price || 1;
@@ -560,7 +571,8 @@ router.get('/fee-tiers/:chain/:token0/:token1', async (req, res) => {
   try {
     const { chain, token0, token1 } = req.params;
     const { capital = '10000', mode = 'NORMAL' } = req.query;
-    const capUSD = parseFloat(capital as string) || 10000;
+    const capRawFt = parseFloat(capital as string);
+    const capUSD = !Number.isNaN(capRawFt) && capRawFt >= 0 ? capRawFt : 10000;
 
     // Find all pools matching this pair across fee tiers
     const allPools = memoryStore.getAllPools();
@@ -739,9 +751,10 @@ router.post('/auto-compound', validate(autoCompoundSchema), async (req, res) => 
 router.get('/token-correlation/:chain/:address', async (req, res) => {
   try {
     const { chain, address } = req.params;
+    const normalizedAddress = address?.toLowerCase();
 
     const memPool = memoryStore.getAllPools().find(p =>
-      p.chain === chain && (p.poolAddress === address || p.id === address)
+      p.chain === chain && (p.poolAddress === normalizedAddress || p.id === normalizedAddress)
     );
 
     if (!memPool) {
@@ -752,7 +765,7 @@ router.get('/token-correlation/:chain/:address', async (req, res) => {
     let priceHistory: { timestamp: Date; price: number }[] | undefined;
     try {
       const { geckoTerminalAdapter } = await import('../adapters/index.js');
-      const history = await geckoTerminalAdapter.getPoolHistory(chain, address, 30);
+      const history = await geckoTerminalAdapter.getPoolHistory(chain, normalizedAddress, 30);
       if (history.length >= 10) {
         priceHistory = history
           .filter(h => h.price != null && h.price > 0)
@@ -807,6 +820,7 @@ router.post('/range-calc', validate(rangeCalcSchema), async (req, res) => {
 router.get('/pools/:chain/:address/ohlcv', async (req, res) => {
   try {
     const { chain, address } = req.params;
+    const normalizedAddress = address?.toLowerCase();
     if (!chain || !address) {
       return res.status(400).json({ success: false, error: 'chain and address are required', timestamp: new Date() });
     }
@@ -816,12 +830,13 @@ router.get('/pools/:chain/:address/ohlcv', async (req, res) => {
       return res.status(400).json({ success: false, error: 'timeframe must be day, hour or minute', timestamp: new Date() });
     }
 
-    const limit = Math.min(parseInt(req.query.limit as string) || 168, 1000);
+    const limitOhlcvParsed = parseInt(req.query.limit as string, 10);
+    const limit = Math.min(!Number.isNaN(limitOhlcvParsed) && limitOhlcvParsed > 0 ? limitOhlcvParsed : 168, 1000);
     const token = (req.query.token as string) === 'quote' ? 'quote' : 'base';
 
     const result = await priceHistoryService.getOhlcv(
       chain,
-      address,
+      normalizedAddress,
       timeframe as 'day' | 'hour' | 'minute',
       limit,
       token
