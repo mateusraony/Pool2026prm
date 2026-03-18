@@ -1228,8 +1228,8 @@ function IntegrationsSection() {
                     </p>
                   )}
                   <div className="flex gap-3 mt-0.5">
-                    <span className="text-[10px] text-green-400">✓ {integration.successCount}</span>
-                    <span className="text-[10px] text-red-400">✗ {integration.errorCount}</span>
+                    <span className="text-[10px] text-green-400">✓ {integration.successCount ?? 0}</span>
+                    <span className="text-[10px] text-red-400">✗ {integration.errorCount ?? 0}</span>
                     {integration.lastTriggeredAt && (
                       <span className="text-[10px] text-muted-foreground">
                         Último: {new Date(integration.lastTriggeredAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}

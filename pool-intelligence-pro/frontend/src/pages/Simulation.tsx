@@ -302,7 +302,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
                 <input
                   type="number"
                   value={capital}
-                  onChange={(e) => setCapital(Number(e.target.value) || 0)}
+                  onChange={(e) => { const n = parseFloat(e.target.value); if (!isNaN(n) && n >= 0) setCapital(n); else if (e.target.value === '' || e.target.value === '0') setCapital(0); }}
                   className="input text-2xl font-bold flex-1"
                   min={0}
                 />

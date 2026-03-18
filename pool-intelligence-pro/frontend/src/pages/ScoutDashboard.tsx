@@ -411,7 +411,7 @@ export default function ScoutDashboard() {
                     <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
                       <div
                         className="h-full rounded-full bg-primary transition-all"
-                        style={{ width: `${Math.min(100, (percent / config.maxPerNetwork) * 100)}%` }}
+                        style={{ width: `${config.maxPerNetwork > 0 ? Math.min(100, (percent / config.maxPerNetwork) * 100) : 0}%` }}
                       />
                     </div>
                   </div>
