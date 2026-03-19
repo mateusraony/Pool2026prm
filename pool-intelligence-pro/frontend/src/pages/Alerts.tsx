@@ -168,11 +168,11 @@ export default function AlertsPage() {
             <div className="card-body space-y-4">
               <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
                 <span>Cooldown entre alertas</span>
-                <span className="text-primary-400 font-medium">60 min</span>
+                <span className="text-primary-400 font-medium">{settings?.alertConfig?.cooldownMinutes ?? 60} min</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
                 <span>Max alertas por hora</span>
-                <span className="text-primary-400 font-medium">10</span>
+                <span className="text-primary-400 font-medium">{settings?.alertConfig?.maxAlertsPerHour ?? 30}</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
                 <span>Modo atual</span>

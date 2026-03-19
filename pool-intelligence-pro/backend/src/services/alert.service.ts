@@ -37,6 +37,10 @@ export class AlertService {
     this.alertConfig = { ...this.alertConfig, ...config };
   }
 
+  getAlertConfig(): AlertConfig {
+    return { ...this.alertConfig };
+  }
+
   // Add or update alert rule
   addRule(id: string, rule: Omit<AlertRule, 'triggerCount'>): void {
     this.rules.set(id, { ...rule, triggerCount: 0 });

@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronUp, ChevronDown, ChevronsUpDown, Star, StarOff,
@@ -308,6 +308,7 @@ function Top3Cards({ pools, onClick }: { pools: UnifiedPool[]; onClick: (p: Unif
 
 export default function PoolsPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [sortKey, setSortKey] = useState<SortKey>('healthScore');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [search, setSearch] = useState('');
@@ -364,10 +365,11 @@ export default function PoolsPage() {
           protocol: pool.protocol || ''
         });
       }
+      await queryClient.invalidateQueries({ queryKey: ['favorites'] });
     } catch (e) {
       console.error('Toggle favorite error:', e);
     }
-  }, [favSet]);
+  }, [favSet, queryClient]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc');

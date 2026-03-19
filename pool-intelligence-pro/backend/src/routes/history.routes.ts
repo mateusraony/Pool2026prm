@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { getPrisma } from './prisma.js';
 import { logService } from '../services/log.service.js';
 import { z } from 'zod';
 import { validate } from './validation.js';
 
-const prisma = new PrismaClient();
+const prisma = getPrisma();
 const router = Router();
 
 // Schema for creating history entries

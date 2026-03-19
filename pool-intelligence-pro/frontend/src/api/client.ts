@@ -354,7 +354,8 @@ export async function fetchUnifiedPools(params?: {
 export async function fetchTokens(): Promise<string[]> {
   try {
     const { data } = await api.get('/tokens');
-    return Array.isArray(data) ? data : [];
+    const tokens = data?.data;
+    return Array.isArray(tokens) ? tokens : [];
   } catch (e) {
     console.error('fetchTokens error:', e);
     return [];
@@ -715,6 +716,7 @@ export async function fetchSettings(): Promise<{
   notifications: NotificationSettings;
   telegram: { enabled: boolean; chatId: string | null; hasChatId?: boolean; hasBot?: boolean };
   riskConfig?: any;
+  alertConfig?: { cooldownMinutes: number; maxAlertsPerHour: number; dedupeWindowMinutes: number };
 }> {
   const { data } = await api.get('/settings');
   return data.data;

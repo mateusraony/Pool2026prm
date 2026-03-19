@@ -3,6 +3,7 @@ import { logService } from '../services/log.service.js';
 import { notificationSettingsService } from '../services/notification-settings.service.js';
 import { persistService } from '../services/persist.service.js';
 import { telegramBot } from '../bot/telegram.js';
+import { alertService } from '../services/alert.service.js';
 import { getLatestRecommendations } from '../jobs/index.js';
 import { config } from '../config/index.js';
 import {
@@ -33,6 +34,11 @@ router.get('/settings', async (req, res) => {
         hasBot: telegramBot.hasBot(),
       },
       riskConfig: persistService.getRiskConfig() || null,
+      alertConfig: {
+        cooldownMinutes: alertService.getAlertConfig().cooldownMinutes,
+        maxAlertsPerHour: alertService.getAlertConfig().maxAlertsPerHour,
+        dedupeWindowMinutes: alertService.getAlertConfig().dedupeWindowMinutes,
+      },
       persistence: {
         ready: persistService.ready,
         hasTelegramInDb: !!persistService.getTelegram(),
