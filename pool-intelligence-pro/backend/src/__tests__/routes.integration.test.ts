@@ -315,9 +315,10 @@ describe('GET /api/tokens', () => {
   it('returns token list for autocomplete', async () => {
     const res = await request(app).get('/api/tokens');
     expect(res.status).toBe(200);
-    expect(Array.isArray(res.body)).toBe(true);
-    expect(res.body).toContain('WETH');
-    expect(res.body).toContain('USDC');
+    expect(res.body.success).toBe(true);
+    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body.data).toContain('WETH');
+    expect(res.body.data).toContain('USDC');
   });
 });
 

@@ -46,6 +46,10 @@ router.post('/alerts', validate(alertSchema), async (req, res) => {
 router.delete('/alerts/:id', validateIdParam, async (req, res) => {
   try {
     const { id } = req.params;
+    const existed = alertService.hasRule(id);
+    if (!existed) {
+      return res.status(404).json({ success: false, error: 'Alert rule not found', timestamp: new Date() });
+    }
     alertService.removeRule(id);
 
     res.json({

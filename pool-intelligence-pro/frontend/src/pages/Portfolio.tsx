@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -21,6 +22,7 @@ const PROTOCOL_COLORS = ['#06b6d4', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', 
 const TOKEN_COLORS = ['#3b82f6', '#22c55e', '#f97316', '#a855f7', '#ec4899', '#14b8a6', '#eab308', '#64748b'];
 
 export default function Portfolio() {
+  const navigate = useNavigate();
   const { data: analytics, isLoading } = useQuery({
     queryKey: ['portfolio-analytics'],
     queryFn: fetchPortfolioAnalytics,
@@ -46,9 +48,15 @@ export default function Portfolio() {
         <div className="glass-card p-12 text-center">
           <PieChart className="h-12 w-12 mx-auto text-muted-foreground/40 mb-4" />
           <h3 className="font-medium mb-2">Sem posicoes ativas</h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground mb-4">
             Adicione posicoes na pagina Pools Ativas para ver analytics do portfolio.
           </p>
+          <button
+            onClick={() => navigate('/active')}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            Ir para Pools Ativas
+          </button>
         </div>
       </MainLayout>
     );

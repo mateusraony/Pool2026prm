@@ -100,7 +100,7 @@ function RecommendationCard({ rec, index }: { rec: Recommendation; index: number
               Condicoes de Entrada
             </h4>
             <ul className="text-sm space-y-1 text-dark-300">
-              {rec.entryConditions.map((c, i) => <li key={i}>• {c}</li>)}
+              {rec.entryConditions.map((c, i) => <li key={`entry-${i}`}>• {c}</li>)}
             </ul>
           </div>
 
@@ -110,7 +110,7 @@ function RecommendationCard({ rec, index }: { rec: Recommendation; index: number
               Condicoes de Saida
             </h4>
             <ul className="text-sm space-y-1 text-dark-300">
-              {rec.exitConditions.map((c, i) => <li key={i}>• {c}</li>)}
+              {rec.exitConditions.map((c, i) => <li key={`exit-${i}`}>• {c}</li>)}
             </ul>
           </div>
 
@@ -120,7 +120,7 @@ function RecommendationCard({ rec, index }: { rec: Recommendation; index: number
               Riscos Principais
             </h4>
             <ul className="text-sm space-y-1 text-dark-300">
-              {rec.mainRisks.map((r, i) => <li key={i}>• {r}</li>)}
+              {rec.mainRisks.map((r, i) => <li key={`risk-${i}`}>• {r}</li>)}
             </ul>
           </div>
         </div>
@@ -235,7 +235,7 @@ export default function RecommendationsPage() {
       ) : filteredRecs.length > 0 ? (
         <div className="space-y-6">
           {filteredRecs.map((rec, index) => (
-            <RecommendationCard key={(rec.pool.poolAddress || rec.pool.externalId) + '-' + index} rec={rec} index={index} />
+            <RecommendationCard key={rec.pool.poolAddress || rec.pool.externalId || String(index)} rec={rec} index={index} />
           ))}
         </div>
       ) : (

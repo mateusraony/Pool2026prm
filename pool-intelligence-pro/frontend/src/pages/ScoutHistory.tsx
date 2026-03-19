@@ -78,7 +78,7 @@ export default function ScoutHistory() {
                   key={entry.id}
                   entry={entry}
                   index={index}
-                  onDelete={() => deleteMutation.mutate(entry.id)}
+                  onDelete={() => { if (window.confirm('Remover este registro permanentemente?')) deleteMutation.mutate(entry.id); }}
                 />
               ))}
             </div>
@@ -122,7 +122,7 @@ function HistoryCard({ entry, index, onDelete }: {
 }) {
   const config = typeConfig[entry.type] || typeConfig.ENTRY;
   const Icon = config.icon;
-  const date = new Date(entry.createdAt);
+  const date = entry.createdAt && !isNaN(new Date(entry.createdAt).getTime()) ? new Date(entry.createdAt) : null;
 
   return (
     <div
@@ -162,7 +162,7 @@ function HistoryCard({ entry, index, onDelete }: {
 
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">
-              {date.toLocaleDateString('pt-BR')} {date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              {date ? `${date.toLocaleDateString('pt-BR')} ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : '—'}
             </span>
             <Button variant="ghost" size="sm" onClick={onDelete} className="h-6 w-6 p-0">
               <Trash2 className="h-3 w-3 text-muted-foreground" />

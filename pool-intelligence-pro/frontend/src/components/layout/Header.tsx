@@ -94,13 +94,7 @@ export default function Header() {
           )}
         </div>
 
-        {/* Chain selector */}
-        <select className="hidden sm:block bg-secondary/60 border border-border/40 rounded-lg px-2.5 py-1.5 text-xs font-medium hover:bg-secondary transition-colors cursor-pointer">
-          <option value="ethereum">ETH</option>
-          <option value="arbitrum">ARB</option>
-          <option value="base">Base</option>
-          <option value="polygon">Poly</option>
-        </select>
+        {/* Chain selector — filtro global por chain disponível em /scout-settings */}
       </div>
     </header>
   );

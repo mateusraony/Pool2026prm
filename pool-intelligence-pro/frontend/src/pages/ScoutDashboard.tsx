@@ -143,7 +143,7 @@ export default function ScoutDashboard() {
         ilActual,
         status: posStatus,
         lastAction: pos.lastCheckedAt || pos.createdAt || new Date().toISOString(),
-        rangeSelected: pos.mode.toLowerCase() as 'defensive' | 'optimized' | 'aggressive',
+        rangeSelected: (pos.mode ?? 'normal').toLowerCase() as 'defensive' | 'optimized' | 'aggressive',
       };
     });
   }, [positions, pools]);
@@ -310,6 +310,8 @@ export default function ScoutDashboard() {
                   key={pool.id}
                   pool={pool}
                   onRebalance={() => navigate(`/pools/${pool.chain}/${pool.poolAddress}`)}
+                  onAdjust={() => navigate(`/simulation/${pool.chain}/${pool.poolAddress}`)}
+                  onExit={() => navigate(`/pools/${pool.chain}/${pool.poolAddress}`)}
                 />
               ))}
             </div>
@@ -347,7 +349,7 @@ export default function ScoutDashboard() {
                 </div>
               ) : (
                 recentAlerts.map((alert, i) => (
-                  <div key={i} className="flex items-start gap-3 rounded-lg bg-warning/10 p-3">
+                  <div key={`${alert.type}_${i}`} className="flex items-start gap-3 rounded-lg bg-warning/10 p-3">
                     <AlertTriangle className="h-4 w-4 text-warning mt-0.5" />
                     <div className="flex-1">
                       <p className="text-sm font-medium">{alert.type}</p>

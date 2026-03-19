@@ -75,10 +75,10 @@ export default function ScoutFavorites() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => navigate(`/pools/${fav.chain}/${fav.poolAddress}`)}>
+                  <Button variant="ghost" size="sm" onClick={() => fav.poolAddress ? navigate(`/pools/${fav.chain}/${fav.poolAddress}`) : undefined} disabled={!fav.poolAddress}>
                     <Eye className="h-4 w-4" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => removeMutation.mutate(fav.poolId)}
+                  <Button variant="ghost" size="sm" onClick={() => { if (window.confirm('Remover dos favoritos?')) removeMutation.mutate(fav.poolId); }}
                     disabled={removeMutation.isPending}>
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
