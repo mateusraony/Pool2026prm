@@ -143,7 +143,7 @@ export default function ScoutDashboard() {
         ilActual,
         status: posStatus,
         lastAction: pos.lastCheckedAt || pos.createdAt || new Date().toISOString(),
-        rangeSelected: pos.mode.toLowerCase() as 'defensive' | 'optimized' | 'aggressive',
+        rangeSelected: (pos.mode ?? 'normal').toLowerCase() as 'defensive' | 'optimized' | 'aggressive',
       };
     });
   }, [positions, pools]);

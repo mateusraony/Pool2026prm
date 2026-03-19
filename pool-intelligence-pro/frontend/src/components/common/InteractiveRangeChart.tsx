@@ -50,7 +50,7 @@ export function InteractiveRangeChart({
       const price = chartBounds.min + (i * step);
       const distanceFromCurrent = Math.abs(price - currentPrice);
       const normalizedDistance = distanceFromCurrent / (rangeWidth / 2);
-      const height = Math.max(5, 100 - (normalizedDistance * 70) + (Math.random() * 15));
+      const height = Math.max(5, 100 - (normalizedDistance * 70) + (Math.abs(Math.sin(price * 12345)) * 15));
       
       const isInRange = price >= localMin && price <= localMax;
       const isCurrent = Math.abs(price - currentPrice) < step / 2;
