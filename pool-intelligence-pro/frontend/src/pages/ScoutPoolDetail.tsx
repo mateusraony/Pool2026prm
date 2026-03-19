@@ -8,6 +8,7 @@ import { PerformanceCharts } from '@/components/charts/PerformanceCharts';
 import { CandlestickChart, type Timeframe } from '@/components/charts/CandlestickChart';
 import { PoolNotes } from '@/components/common/PoolNotes';
 import { HodlVsLp } from '@/components/common/HodlVsLp';
+import { AIInsightsCard } from '@/components/AIInsightsCard';
 import { TokenCorrelation } from '@/components/common/TokenCorrelation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -337,6 +338,13 @@ export default function ScoutPoolDetail() {
       {chain && address && (
         <div className="mb-6">
           <TokenCorrelation chain={chain} address={address} />
+        </div>
+      )}
+
+      {/* AI Insights */}
+      {chain && address && (
+        <div className="mb-6">
+          <AIInsightsCard chain={chain} address={address} />
         </div>
       )}
 
