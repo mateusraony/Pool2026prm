@@ -179,16 +179,15 @@
 
 ---
 
-## Fase 6 — Inteligência Premium
+## Fase 6 — Inteligência Premium ✅
 
 **Objetivo:** transformar o projeto em plataforma de nível realmente alto.
-(Só entra depois das fases 1-5 estarem sólidas)
 
-- 6.1 Liquidez real por tick/faixa — ⬜ Não iniciado
-- 6.2 Benchmark de ranges — ⬜ Não iniciado
-- 6.3 Diário de decisão e replay — ⬜ Não iniciado
-- 6.4 Ajuste automático de pesos — ⬜ Não iniciado
-- 6.5 Smoke tests pós-deploy — ⬜ Não iniciado
+- 6.1 Liquidez real por tick/faixa — ✅ `calcTickLiquidity()` via distribuição log-normal (CDF Abramowitz & Stegun), retorna `fractionInRange`, `capitalEfficiency`, `estimatedLiquidityInRange`
+- 6.2 Benchmark de ranges — ✅ `calcRangeBenchmark()` compara CL vs HODL vs V2 vs range ideal ±10%; `POST /api/range-benchmark`
+- 6.3 Diário de decisão e replay — ✅ `decision-log.service.ts` com buffer circular 200 entradas + auto-captura via eventBus; `GET/POST /api/decision-log`
+- 6.4 Ajuste automático de pesos — ✅ `weight-optimizer.service.ts` baseado em regime de mercado; `GET/POST /api/score-weights`
+- 6.5 Smoke tests pós-deploy — ✅ `smoke.test.ts` com 23 testes (calc, risk, market-regime, score, time services)
 
 ---
 
@@ -199,3 +198,6 @@
 | 1 | 2026-03-19 | Bloco 1 + Bloco 2 (Fase 1 completa) | `6b3b9f1` + `862e1bb` |
 | 2 | 2026-03-19 | Fase 2 — dataConfidence em todo o stack | `3ac1964` + `8020a27` |
 | 3 | 2026-03-19 | Fase 3 — IL real, LVR concentrado, tx costs | `0dcf912` |
+| 4 | 2026-03-19 | Fase 4 — RiskLayer, market regime, no-operate | `5c88edb` + `511b7f0` |
+| 5 | 2026-03-19 | Fase 5 — Event bus, timezone profissional | `ea73a6f` |
+| 6 | 2026-03-19 | Fase 6 — Inteligência Premium (tick, benchmark, decision log, weights, smoke tests) | `14f8743` |
