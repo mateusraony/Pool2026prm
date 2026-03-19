@@ -143,6 +143,7 @@ export const monteCarloSchema = z.object({
 export const backtestSchema = z.object({
   ...analyticsPoolBase,
   periodDays: z.number().int().min(7).max(365).default(30),
+  transactionCostPct: z.number().min(0).max(0.05).optional(), // 0%–5%, default 0.1% aplicado na função
 });
 
 export const lvrSchema = z.object({

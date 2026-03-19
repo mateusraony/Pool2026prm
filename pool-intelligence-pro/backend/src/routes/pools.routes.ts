@@ -470,7 +470,7 @@ router.post('/monte-carlo', validate(monteCarloSchema), async (req, res) => {
 // POST /api/backtest — backtest a range strategy
 router.post('/backtest', validate(backtestSchema), async (req, res) => {
   try {
-    const { chain, address, capital = 10000, periodDays = 30, mode = 'NORMAL' } = req.body;
+    const { chain, address, capital = 10000, periodDays = 30, mode = 'NORMAL', transactionCostPct } = req.body;
 
     const radarResults = getLatestRadarResults();
     const fromRadar = radarResults.find(r =>
@@ -514,6 +514,7 @@ router.post('/backtest', validate(backtestSchema), async (req, res) => {
       mode,
       periodDays: Math.min(periodDays, 365),
       priceHistory,
+      transactionCostPct,
     });
 
     res.json({
@@ -677,6 +678,30 @@ router.get('/portfolio-analytics', async (req, res) => {
       await Promise.allSettled(fetches);
     } catch { /* OHLCV unavailable — will use snapshot method */ }
 
+    const calcILForPosition = (
+      currentPrice: number,
+      entryPrice: number,
+      capital: number,
+      rangeLower: number,
+      rangeUpper: number,
+    ): number => {
+      if (!currentPrice || !entryPrice || entryPrice === 0) return 0;
+      const priceRatio = currentPrice / entryPrice;
+      const sqrtR = Math.sqrt(priceRatio);
+      const ilFraction = (2 * sqrtR) / (1 + priceRatio) - 1; // always ≤ 0
+      let ilActual = Math.abs(ilFraction * capital);
+      // Out-of-range: IL is capped at boundary value (position fully in one token)
+      const isOutOfRange = currentPrice < rangeLower || currentPrice > rangeUpper;
+      if (isOutOfRange && rangeLower > 0 && rangeUpper > 0) {
+        const boundaryPrice = currentPrice > rangeUpper ? rangeUpper : rangeLower;
+        const bRatio = boundaryPrice / entryPrice;
+        const bSqrt = Math.sqrt(bRatio);
+        const bIL = Math.abs(((2 * bSqrt) / (1 + bRatio) - 1) * capital);
+        ilActual = Math.max(ilActual, bIL);
+      }
+      return ilActual;
+    };
+
     const positions: PortfolioPosition[] = activePositions.map(rp => {
       const fromRadar = radarResults.find(r =>
         r.pool.chain === rp.chain &&
@@ -696,7 +721,11 @@ router.get('/portfolio-analytics', async (req, res) => {
         feesAccrued: (fromRadar?.pool.fees24h || memPool?.fees24hUSD || 0) *
           (rp.capital / (fromRadar?.pool.tvl || memPool?.tvlUSD || 1)) * 0.75 *
           (Date.now() - new Date(rp.createdAt).getTime()) / 86400000,
-        ilActual: 0,
+        ilActual: (() => {
+          const currentPrice = memPool?.price ?? fromRadar?.pool.price;
+          if (!currentPrice || !rp.entryPrice || !rp.rangeLower || !rp.rangeUpper) return 0;
+          return calcILForPosition(currentPrice, rp.entryPrice, rp.capital, rp.rangeLower, rp.rangeUpper);
+        })(),
         protocol: memPool?.protocol || fromRadar?.pool.protocol || '',
         token0Symbol: rp.token0Symbol,
         token1Symbol: rp.token1Symbol,

@@ -711,6 +711,12 @@ export interface BacktestResult {
   timeInRange: number;      // % of time price was in range
   rebalances: number;       // times price exited and re-entered range
   dailyReturns: { day: number; cumPnl: number; fees: number; il: number }[];
+  transactionCosts: {
+    entryCost: number;       // custo de entrada (metade do entryExitCost)
+    exitCost: number;        // custo de saída (metade do entryExitCost)
+    rebalancingCosts: number; // soma dos custos de rebalanceamento
+    total: number;           // custo total de transação
+  };
 }
 
 /**
@@ -728,6 +734,7 @@ export function calcBacktest(params: {
   mode: 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE';
   periodDays: number;
   priceHistory?: number[];
+  transactionCostPct?: number;  // custo por transação como % do capital (padrão: 0.1% = 0.001)
 }): BacktestResult {
   const { capital, entryPrice, rangeLower, rangeUpper, volAnn, fees24h, tvl, mode, periodDays } = params;
 
@@ -735,6 +742,11 @@ export function calcBacktest(params: {
   const k_active = kMap[mode] ?? 0.75;
   const userShare = tvl > 0 ? capital / tvl : 0;
   const dailyFees = fees24h * userShare * k_active;
+
+  // Custos de transação
+  const txCostPct = params.transactionCostPct ?? 0.001; // 0.1% default (swap fee + slippage)
+  const entryExitCost = capital * txCostPct * 2; // entrada + saída
+  const rebalanceCost = capital * txCostPct; // cada rebalanceamento
 
   // Generate or use price history
   let prices: number[];
@@ -782,7 +794,8 @@ export function calcBacktest(params: {
     }
     totalIL = Math.abs(ilFrac * capital);
 
-    const cumPnl = totalFees - totalIL;
+    const cumulativeRebalanceCost = rebalances * rebalanceCost;
+    const cumPnl = totalFees - totalIL - entryExitCost - cumulativeRebalanceCost;
     if (cumPnl > maxPnl) maxPnl = cumPnl;
     // Peak-to-trough drawdown: measure from peak portfolio value
     const peakValue = capital + maxPnl;
@@ -797,7 +810,8 @@ export function calcBacktest(params: {
     });
   }
 
-  const netPnl = totalFees - totalIL;
+  const totalTxCost = entryExitCost + rebalances * rebalanceCost;
+  const netPnl = totalFees - totalIL - totalTxCost;
 
   return {
     periodDays: prices.length,
@@ -809,6 +823,12 @@ export function calcBacktest(params: {
     timeInRange: prices.length > 0 ? Math.round((daysInRange / prices.length) * 10000) / 100 : 0,
     rebalances,
     dailyReturns,
+    transactionCosts: {
+      entryCost: Math.round((entryExitCost / 2) * 100) / 100,
+      exitCost: Math.round((entryExitCost / 2) * 100) / 100,
+      rebalancingCosts: Math.round((rebalances * rebalanceCost) * 100) / 100,
+      total: Math.round(totalTxCost * 100) / 100,
+    },
   };
 }
 
@@ -817,12 +837,13 @@ export function calcBacktest(params: {
 // ============================================================
 
 export interface LVRResult {
-  lvrDaily: number;           // daily LVR in USD
-  lvrAnnualized: number;      // annualized LVR in USD
-  lvrPercent: number;          // LVR as % of capital
-  feeToLvrRatio: number;      // fees / LVR — >1 means profitable after LVR
-  netAfterLvr: number;        // fees - LVR per day
+  lvrDaily: number;               // daily LVR in USD (concentration-adjusted)
+  lvrAnnualized: number;          // annualized LVR in USD
+  lvrPercent: number;             // LVR as % of capital
+  feeToLvrRatio: number;          // fees / LVR — >1 means profitable after LVR
+  netAfterLvr: number;            // fees - LVR per day
   verdict: 'profitable' | 'marginal' | 'unprofitable';
+  concentrationMultiplier: number; // range-width adjustment factor [0.5, 4]
 }
 
 /**
@@ -837,8 +858,10 @@ export function calcLVR(params: {
   fees24h: number;
   tvl: number;
   mode: 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE';
+  rangeLower?: number;  // optional: lower bound of position range
+  rangeUpper?: number;  // optional: upper bound of position range
 }): LVRResult {
-  const { capital, volAnn, fees24h, tvl, mode } = params;
+  const { capital, volAnn, fees24h, tvl, mode, rangeLower, rangeUpper } = params;
 
   const kMap: Record<string, number> = { DEFENSIVE: 0.55, NORMAL: 0.75, AGGRESSIVE: 0.95 };
   const k_active = kMap[mode] ?? 0.75;
@@ -846,8 +869,20 @@ export function calcLVR(params: {
   const dailyVol = volAnn / Math.sqrt(365);
   const dailyVolSq = dailyVol * dailyVol;
 
-  // LVR daily ≈ capital * σ²_daily / 2
-  const lvrDaily = capital * dailyVolSq / 2;
+  // LVR base ≈ capital * σ²_daily / 2
+  const lvrDailyBase = capital * dailyVolSq / 2;
+
+  // Ajuste por concentração de range: range estreito = maior LVR por capital
+  // Fórmula: 1 / rangeWidthFraction, clamped [0.5, 4]
+  // Ex: range 5% → mult = min(4, 1/0.05) = 4 (muito concentrado)
+  // Ex: range 50% → mult = min(4, 1/0.5) = 2
+  // Ex: range 100%→ mult = min(4, 1/1.0) = 1 (posição ampla, V2-like)
+  const rangeWidthFraction = rangeUpper != null && rangeUpper > 0 && rangeLower != null && rangeLower > 0
+    ? Math.abs(rangeUpper - rangeLower) / ((rangeUpper + rangeLower) / 2)
+    : 0.5; // fallback: assume 50% range
+  const concentrationMultiplier = Math.min(4, Math.max(0.5, 1 / Math.max(rangeWidthFraction, 0.1)));
+  const lvrDaily = lvrDailyBase * concentrationMultiplier;
+
   const lvrAnnualized = lvrDaily * 365;
   const lvrPercent = capital > 0 ? (lvrAnnualized / capital) * 100 : 0;
 
@@ -869,6 +904,7 @@ export function calcLVR(params: {
     feeToLvrRatio: Math.round(feeToLvrRatio * 100) / 100,
     netAfterLvr: Math.round(netAfterLvr * 100) / 100,
     verdict,
+    concentrationMultiplier: Math.round(concentrationMultiplier * 1000) / 1000,
   };
 }
 
