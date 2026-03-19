@@ -5,6 +5,7 @@ import { alertService } from '../services/alert.service.js';
 import { metricsService } from '../services/metrics.service.js';
 import { logService } from '../services/log.service.js';
 import { getMemoryStoreStats } from '../jobs/index.js';
+import { telegramBot } from '../bot/telegram.js';
 
 import poolsRouter from './pools.routes.js';
 import settingsRouter from './settings.routes.js';
@@ -123,6 +124,25 @@ router.delete('/macro/events/:id', (req, res) => {
   } catch (error) {
     logService.error('SYSTEM', 'DELETE /macro/events failed', { error });
     res.status(500).json({ success: false, error: 'Failed to remove event', timestamp: new Date() });
+  }
+});
+
+// ============================================
+// WEB VITALS METRICS ENDPOINT
+// ============================================
+
+// ============================================
+// TELEGRAM WEBHOOK ENDPOINT
+// ============================================
+
+// POST /api/telegram/webhook — recebe updates do Telegram (via webhook mode)
+router.post('/telegram/webhook', async (req, res) => {
+  try {
+    await telegramBot.processWebhookUpdate(req.body as Record<string, unknown>);
+    res.json({ ok: true });
+  } catch (error) {
+    logService.error('SYSTEM', 'Telegram webhook endpoint error', { error });
+    res.status(500).json({ ok: false });
   }
 });
 

@@ -108,6 +108,8 @@ async function initPersistence() {
     const { telegramBot } = await import('./bot/telegram.js');
     telegramBot.loadFromDb();
     console.log('[BOOT] Telegram config loaded from DB');
+    await telegramBot.setupCommands();
+    console.log('[BOOT] Telegram bot commands registered');
 
     const { notificationSettingsService } = await import('./services/notification-settings.service.js');
     notificationSettingsService.loadFromDb();
