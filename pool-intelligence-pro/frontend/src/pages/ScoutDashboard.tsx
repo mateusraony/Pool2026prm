@@ -7,7 +7,7 @@ import { ActivePoolCard } from '@/components/common/ActivePoolCard';
 import { PullToRefresh } from '@/components/common/PullToRefresh';
 import { LiveIndicator } from '@/components/common/LiveIndicator';
 import { useRiskConfig } from '@/hooks/useRiskConfig';
-import { fetchUnifiedPools, fetchRangePositions, fetchAlerts, fetchHealth, fetchRecommendations, API_BASE_URL } from '@/api/client';
+import { fetchUnifiedPools, fetchRangePositions, fetchAlerts, fetchHealth, fetchRecommendations, fetchMarketConditions, API_BASE_URL } from '@/api/client';
 import type { RangePosition, Recommendation } from '@/api/client';
 import { unifiedPoolToViewPool } from '@/data/adapters';
 import type { Pool, ActivePool } from '@/types/pool';
@@ -69,6 +69,13 @@ export default function ScoutDashboard() {
     staleTime: 2 * 60 * 1000,
   });
   const topRecommendation: Recommendation | null = recommendations?.[0] || null;
+
+  const { data: marketConditions } = useQuery({
+    queryKey: ['market-conditions'],
+    queryFn: fetchMarketConditions,
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+  });
 
   const pools = useMemo(() => {
     if (!poolsData?.pools) return [];
@@ -197,6 +204,19 @@ export default function ScoutDashboard() {
       title="Dashboard"
       subtitle="Visao geral do seu portfolio de liquidez"
     >
+      {/* Market Conditions Banner — regime desfavoravel para LP */}
+      {marketConditions?.noOperateGlobal && (
+        <div className="bg-yellow-900/50 border border-yellow-600 text-yellow-200 rounded-lg px-4 py-3 mb-4 flex items-center gap-2">
+          <span className="text-yellow-400">&#9888;</span>
+          <div>
+            <span className="font-semibold">Condições desfavoráveis para LP</span>
+            {marketConditions.noOperateReason && (
+              <span className="text-yellow-300 ml-2 text-sm">— {marketConditions.noOperateReason}</span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Error Banner */}
       {error && (
         <div className="mb-6 rounded-xl p-4 bg-destructive/8 border border-destructive/25 ring-1 ring-destructive/10">
