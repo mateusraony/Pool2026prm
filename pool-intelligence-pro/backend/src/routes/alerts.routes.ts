@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
 import { logService } from '../services/log.service.js';
 import { alertService } from '../services/alert.service.js';
 import { validate, validateIdParam, alertSchema } from './validation.js';
@@ -26,7 +27,7 @@ router.get('/alerts', async (req, res) => {
 router.post('/alerts', validate(alertSchema), async (req, res) => {
   try {
     const { poolId, type, threshold } = req.body;
-    const id = Date.now().toString();
+    const id = randomUUID();
     alertService.addRule(id, { type, poolId, value: threshold });
 
     res.json({

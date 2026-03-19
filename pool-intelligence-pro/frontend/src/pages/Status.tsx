@@ -484,7 +484,7 @@ export default function StatusPage() {
                   </span>
                   <span className="text-dark-400">[{log.component}]</span>
                   <span className="flex-1 truncate">{log.message}</span>
-                  <span className="text-xs text-dark-400">{format(new Date(log.timestamp), 'HH:mm:ss')}</span>
+                  <span className="text-xs text-dark-400">{(() => { const d = new Date(log.timestamp); return isNaN(d.getTime()) ? log.timestamp : format(d, 'HH:mm:ss'); })()}</span>
                 </div>
               ))}
               {(!logs || logs.length === 0) && (

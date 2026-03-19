@@ -136,7 +136,7 @@ export function PoolCard({
         <div className="flex items-center gap-2">
           <span className="font-mono text-sm">{capitalSuggested.percent}%</span>
           <span className="text-muted-foreground/50">=</span>
-          <span className="font-mono text-sm font-medium text-gold">${capitalSuggested.usdt}</span>
+          <span className="font-mono text-sm font-medium text-gold">{formatCurrency(capitalSuggested.usdt)}</span>
         </div>
       </div>
 

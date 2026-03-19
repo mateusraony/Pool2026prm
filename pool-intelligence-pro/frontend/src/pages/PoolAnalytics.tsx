@@ -19,6 +19,16 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 
+const fmtRatio = (v: number | null | undefined) => {
+  if (v == null || !isFinite(v) || isNaN(v)) return '∞';
+  return v.toFixed(2);
+};
+
+const barPct = (ratio: number) => {
+  if (!isFinite(ratio) || isNaN(ratio) || ratio <= 0) return 100;
+  return Math.min(100, (ratio / (ratio + 1)) * 100);
+};
+
 const MODE_OPTIONS = [
   { value: 'DEFENSIVE', label: 'Defensivo' },
   { value: 'NORMAL', label: 'Otimizado' },
@@ -373,7 +383,7 @@ export default function PoolAnalytics() {
                   <div className="rounded-lg bg-secondary/30 p-3 text-center">
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Fee/LVR Ratio</p>
                     <p className={cn('font-mono text-lg font-bold', lvr.feeToLvrRatio > 1.5 ? 'text-success' : lvr.feeToLvrRatio > 0.8 ? 'text-warning' : 'text-destructive')}>
-                      {lvr.feeToLvrRatio}x
+                      {fmtRatio(lvr.feeToLvrRatio)}x
                     </p>
                   </div>
                 </div>
@@ -386,11 +396,11 @@ export default function PoolAnalytics() {
                   </div>
                   <div className="flex gap-1 h-6 rounded-lg overflow-hidden">
                     <div className="bg-success/60 rounded-l-lg flex items-center justify-center text-[10px] text-white font-mono"
-                      style={{ width: `${Math.min(100, (lvr.feeToLvrRatio / (lvr.feeToLvrRatio + 1)) * 100)}%` }}>
+                      style={{ width: `${barPct(lvr.feeToLvrRatio)}%` }}>
                       Fees
                     </div>
                     <div className="bg-destructive/60 rounded-r-lg flex items-center justify-center text-[10px] text-white font-mono"
-                      style={{ width: `${Math.min(100, (1 / (lvr.feeToLvrRatio + 1)) * 100)}%` }}>
+                      style={{ width: `${100 - barPct(lvr.feeToLvrRatio)}%` }}>
                       LVR
                     </div>
                   </div>

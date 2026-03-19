@@ -326,6 +326,8 @@ export default function PoolsPage() {
       poolType: poolTypeFilter || undefined,
       minTVL: minTVL ? parseFloat(minTVL) : undefined,
       minHealth: minHealth ? parseFloat(minHealth) : undefined,
+      // limit: 200 é intencional — pools já são filtradas/ordenadas server-side;
+      // a tabela exibe todas com client-side sort/search sem paginação adicional
       limit: 200,
     }),
     staleTime: 60000,
@@ -452,7 +454,7 @@ export default function PoolsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => refetch()} disabled={isFetching} className="p-2 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors disabled:opacity-50">
+          <button onClick={() => refetch({ cancelRefetch: false })} disabled={isFetching} className="p-2 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors disabled:opacity-50">
             <RefreshCw className={clsx('w-4 h-4', isFetching && 'animate-spin')} />
           </button>
           <button

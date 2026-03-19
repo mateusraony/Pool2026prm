@@ -5,7 +5,7 @@ import {
 } from '../jobs/index.js';
 import {
   validate, validatePoolIdParam, validateIdParam,
-  watchlistSchema, favoriteSchema, noteSchema,
+  watchlistSchema, favoriteSchema, noteSchema, noteQuerySchema,
 } from './validation.js';
 import { getPrisma } from './prisma.js';
 
@@ -93,8 +93,12 @@ router.delete('/favorites/:poolId', validatePoolIdParam, async (req, res) => {
 
 router.get('/notes', async (req, res) => {
   try {
-    const { poolId } = req.query;
-    const where = poolId ? { poolId: poolId as string } : {};
+    const parsed = noteQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid query params', details: parsed.error.flatten() });
+    }
+    const { poolId } = parsed.data;
+    const where = poolId ? { poolId } : {};
     const notes = await getPrisma().note.findMany({ where, orderBy: { createdAt: 'desc' } });
     res.json({ success: true, data: notes });
   } catch (error) {
@@ -131,7 +135,7 @@ router.delete('/notes/:id', validateIdParam, async (req, res) => {
 router.get('/logs', async (req, res) => {
   const { level, component, limit } = req.query;
   const logs = logService.getRecentLogs(
-    parseInt(limit as string) || 100,
+    (() => { const p = parseInt(limit as string, 10); return (!Number.isNaN(p) && p > 0) ? Math.min(p, 1000) : 100; })(),
     level as any,
     component as any
   );

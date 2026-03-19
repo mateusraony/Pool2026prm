@@ -248,12 +248,12 @@ export default function Portfolio() {
               {p.riskAdjustedApr.toFixed(1)}%
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Penalidade vol: -{((1 - p.riskAdjustedApr / (p.weightedApr || 1)) * 100).toFixed(0)}%
+              Penalidade vol: -{(p.weightedApr > 0 ? (1 - p.riskAdjustedApr / p.weightedApr) * 100 : 0).toFixed(0)}%
             </p>
           </div>
         </div>
         <div className="mt-4 flex gap-2 h-3 rounded-full overflow-hidden">
-          <div className="bg-primary/60 rounded-l-full" style={{ width: `${(p.riskAdjustedApr / (p.weightedApr || 1)) * 100}%` }} />
+          <div className="bg-primary/60 rounded-l-full" style={{ width: `${p.weightedApr > 0 ? Math.min(100, (p.riskAdjustedApr / p.weightedApr) * 100) : 0}%` }} />
           <div className="bg-destructive/30 rounded-r-full flex-1" />
         </div>
         <div className="flex justify-between text-[10px] text-muted-foreground mt-1">

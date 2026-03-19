@@ -11,6 +11,26 @@ import { logService } from '../services/log.service.js';
 
 const router = Router();
 
+/**
+ * Middleware de autenticação simples para endpoints de admin.
+ * Verifica o header X-Admin-Key contra ADMIN_SECRET env var.
+ * Se ADMIN_SECRET não estiver definido, permite acesso (desenvolvimento).
+ */
+function requireAdminKey(req: import('express').Request, res: import('express').Response, next: import('express').NextFunction): void {
+  const secret = process.env.ADMIN_SECRET;
+  if (!secret) {
+    // Em desenvolvimento sem ADMIN_SECRET configurado, permite acesso
+    next();
+    return;
+  }
+  const provided = req.headers['x-admin-key'];
+  if (provided !== secret) {
+    res.status(401).json({ success: false, error: 'Unauthorized: invalid admin key', timestamp: new Date() });
+    return;
+  }
+  next();
+}
+
 const PERSIST_KEY = 'integrations';
 
 // Helper: persist current state
@@ -52,7 +72,7 @@ router.get('/integrations', (_req, res) => {
 // ============================================================
 // POST /api/integrations — criar nova integração
 // ============================================================
-router.post('/integrations', async (req, res) => {
+router.post('/integrations', requireAdminKey, async (req, res) => {
   try {
     const parsed = IntegrationSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -86,7 +106,7 @@ router.post('/integrations', async (req, res) => {
 // ============================================================
 // PUT /api/integrations/:id — atualizar integração existente
 // ============================================================
-router.put('/integrations/:id', async (req, res) => {
+router.put('/integrations/:id', requireAdminKey, async (req, res) => {
   try {
     const { id } = req.params;
     if (!id) {
@@ -125,7 +145,7 @@ router.put('/integrations/:id', async (req, res) => {
 // ============================================================
 // DELETE /api/integrations/:id — remover integração
 // ============================================================
-router.delete('/integrations/:id', async (req, res) => {
+router.delete('/integrations/:id', requireAdminKey, async (req, res) => {
   try {
     const { id } = req.params;
     if (!id) {
@@ -150,7 +170,7 @@ router.delete('/integrations/:id', async (req, res) => {
 // ============================================================
 // POST /api/integrations/:id/test — testar conectividade
 // ============================================================
-router.post('/integrations/:id/test', async (req, res) => {
+router.post('/integrations/:id/test', requireAdminKey, async (req, res) => {
   try {
     const { id } = req.params;
     if (!id) {
@@ -176,7 +196,7 @@ router.post('/integrations/:id/test', async (req, res) => {
 // ============================================================
 // POST /api/integrations/test-url — testar URL avulsa (antes de salvar)
 // ============================================================
-router.post('/integrations/test-url', async (req, res) => {
+router.post('/integrations/test-url', requireAdminKey, async (req, res) => {
   try {
     const { url, type } = req.body as { url?: string; type?: string };
     if (!url || !type) {

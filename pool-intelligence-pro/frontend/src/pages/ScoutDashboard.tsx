@@ -91,11 +91,23 @@ export default function ScoutDashboard() {
         priceMin: pos.rangeLower,
         priceMax: pos.rangeUpper,
         currentPrice: pos.entryPrice,
-        ranges: {
-          defensive: { min: pos.rangeLower, max: pos.rangeUpper },
-          optimized: { min: pos.rangeLower, max: pos.rangeUpper },
-          aggressive: { min: pos.rangeLower, max: pos.rangeUpper },
-        },
+        ranges: (() => {
+          const center = (pos.rangeLower + pos.rangeUpper) / 2;
+          const halfWidth = (pos.rangeUpper - pos.rangeLower) / 2;
+          const mode = pos.mode ?? 'NORMAL';
+          // Factor para cada modo: DEFENSIVE=mais largo, AGGRESSIVE=mais estreito
+          const factors: Record<string, { def: number; opt: number; agg: number }> = {
+            DEFENSIVE: { def: 1.0, opt: 0.70, agg: 0.45 },
+            NORMAL:    { def: 1.40, opt: 1.0, agg: 0.65 },
+            AGGRESSIVE:{ def: 2.20, opt: 1.55, agg: 1.0 },
+          };
+          const f = factors[mode] ?? factors.NORMAL;
+          return {
+            defensive:  { min: +(center - halfWidth * f.def).toFixed(6), max: +(center + halfWidth * f.def).toFixed(6) },
+            optimized:  { min: +(center - halfWidth * f.opt).toFixed(6), max: +(center + halfWidth * f.opt).toFixed(6) },
+            aggressive: { min: +(center - halfWidth * f.agg).toFixed(6), max: +(center + halfWidth * f.agg).toFixed(6) },
+          };
+        })(),
         metrics: { feesEstimated: 0, ilEstimated: 0, netReturn: 0, gasEstimated: 0, timeInRange: 0 },
         explanation: '',
         poolAddress: pos.poolAddress,
@@ -411,7 +423,7 @@ export default function ScoutDashboard() {
                     <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
                       <div
                         className="h-full rounded-full bg-primary transition-all"
-                        style={{ width: `${Math.min(100, (percent / config.maxPerNetwork) * 100)}%` }}
+                        style={{ width: `${config.maxPerNetwork > 0 ? Math.min(100, (percent / config.maxPerNetwork) * 100) : 0}%` }}
                       />
                     </div>
                   </div>

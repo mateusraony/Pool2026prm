@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -22,11 +23,15 @@ const typeConfig: Record<string, { icon: typeof ArrowDownCircle; label: string; 
   FEE_COLLECT: { icon: DollarSign, label: 'Coleta de Fees', color: 'text-primary', border: 'border-primary' },
 };
 
+const PAGE_SIZE = 50;
+
 export default function ScoutHistory() {
   const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
 
   const { data, isLoading } = useQuery({
     queryKey: ['history'],
+    // Busca até 200 registros e pagina client-side (PAGE_SIZE=50)
     queryFn: () => fetchHistory({ limit: 200 }),
     staleTime: 30_000,
   });
@@ -41,6 +46,8 @@ export default function ScoutHistory() {
   });
 
   const history = data?.data || [];
+  const totalPages = Math.ceil(history.length / PAGE_SIZE);
+  const pagedHistory = history.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <MainLayout
@@ -60,21 +67,49 @@ export default function ScoutHistory() {
           </p>
         </div>
       ) : (
-        <div className="relative">
-          {/* Vertical timeline line */}
-          <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-border" />
+        <>
+          <div className="relative">
+            {/* Vertical timeline line */}
+            <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-border" />
 
-          <div className="space-y-6">
-            {history.map((entry, index) => (
-              <HistoryCard
-                key={entry.id}
-                entry={entry}
-                index={index}
-                onDelete={() => deleteMutation.mutate(entry.id)}
-              />
-            ))}
+            <div className="space-y-6">
+              {pagedHistory.map((entry, index) => (
+                <HistoryCard
+                  key={entry.id}
+                  entry={entry}
+                  index={index}
+                  onDelete={() => deleteMutation.mutate(entry.id)}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <span className="text-sm text-muted-foreground">
+                Pagina {page} de {totalPages} · {history.length} itens
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page === 1}
+                  onClick={() => setPage(p => p - 1)}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page === totalPages}
+                  onClick={() => setPage(p => p + 1)}
+                >
+                  Proximo
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </MainLayout>
   );

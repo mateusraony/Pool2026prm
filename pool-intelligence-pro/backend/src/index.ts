@@ -108,6 +108,8 @@ async function initPersistence() {
     const { telegramBot } = await import('./bot/telegram.js');
     telegramBot.loadFromDb();
     console.log('[BOOT] Telegram config loaded from DB');
+    await telegramBot.setupCommands();
+    console.log('[BOOT] Telegram bot commands registered');
 
     const { notificationSettingsService } = await import('./services/notification-settings.service.js');
     notificationSettingsService.loadFromDb();
@@ -120,6 +122,21 @@ async function initPersistence() {
     const { loadIntegrations } = await import('./routes/integrations.routes.js');
     await loadIntegrations();
     console.log('[BOOT] Webhook integrations loaded from DB');
+
+    // Carregar regras de alerta persistidas
+    const { alertService } = await import('./services/alert.service.js');
+    await alertService.loadFromDb();
+    console.log('[BOOT] Alert rules loaded from DB');
+
+    // Inicializar Push Notifications (VAPID)
+    const { pushService } = await import('./services/push.service.js');
+    await pushService.init();
+    console.log('[BOOT] Push notification service initialized');
+
+    // Inicializar Wallet Tracker
+    const { walletService } = await import('./services/wallet.service.js');
+    await walletService.init();
+    console.log('[BOOT] Wallet tracker service initialized');
 
     // Auto-detect appUrl from RENDER_EXTERNAL_URL if not set by user
     const currentAppUrl = notificationSettingsService.getAppUrl();

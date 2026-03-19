@@ -2,15 +2,72 @@
 
 ## Status Atual
 **Branch:** `claude/review-audit-checkpoint-ZFYUM`
-**Data:** 2026-03-18 UTC
-**Fase:** ETAPAS 1–15 concluídas ✅
+**Data:** 2026-03-19 UTC
+**Fase:** ETAPAS 1–16 concluídas ✅ + Auditoria Profunda + Correções P0/P1/P2/P3 ✅
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-18 — ETAPA 15 concluída, planejar ETAPA 16"`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-19 — Todos os bugs da auditoria corrigidos. Próximo: ETAPA 17+"`
 
 ---
 
 ## O QUE FOI FEITO
+
+### Correções P2/P3 (Fase 2) ✅ (2026-03-19)
+
+**4 agentes paralelos corrigiram 8 bugs P2/P3:**
+
+**Commits:**
+- `ec18823` — fix: remover tipos RSI/MACD sem implementação, SSRF validation e retry backoff em webhooks
+- `80e3112` — fix: Zod validation em GET /notes, N+1 em /ranges com Map lookup, auth em /api/integrations
+- `1c9cba9` — feat: adicionar comandos Telegram /start /status /pools /alerts com webhook handler
+- `0acdef1` — feat: adicionar paginação client-side no ScoutHistory (PAGE_SIZE=50, remove limit hardcoded)
+
+**Bugs P2 corrigidos:**
+- `types/index.ts`: RSI_ABOVE/BELOW e MACD_CROSS_UP/DOWN removidos do AlertType (sem implementação)
+- `webhook.service.ts`: SSRF validation bloqueia localhost, IPs privados e URLs não-HTTPS
+- `webhook.service.ts`: Retry com exponential backoff (3 tentativas: 1s→2s→4s); 4xx não retried
+- `data.routes.ts` + `validation.ts`: Zod schema `noteQuerySchema` para GET /notes query param poolId
+- `ranges.routes.ts`: N+1 resolvido com Map pre-built (O(n) ao invés de O(n*m))
+- `integrations.routes.ts`: middleware `requireAdminKey` em POST/PUT/DELETE (header X-Admin-Key)
+- `telegram.ts`: métodos `setupCommands()`, `handleCommand()`, `processWebhookUpdate()` adicionados
+- `ScoutHistory.tsx`: paginação client-side PAGE_SIZE=50 (botões Anterior/Próximo)
+
+**TypeScript:** 0 erros em backend + frontend após todas as mudanças.
+
+---
+
+### Auditoria Profunda + Correções P0/P1 ✅ (2026-03-19)
+
+**Auditoria:** 6 agentes paralelos analisaram ~100 arquivos, identificando 65 bugs (12 críticos, 35 médios).
+
+**Commits:**
+- `9e23523` — fix backend: validação alertSchema, persistência DB via AppConfig, thresholds configuráveis
+- `29eba48` — fix frontend: Radar MainLayout, ranges distintos, capital mínimo, chartData, NaN handling, forceRender
+
+**Bugs críticos corrigidos (P0):**
+- AlertService: regras agora persistem em DB (AppConfig) — antes perdiam em restart
+- alertSchema: type usa z.enum (12 tipos válidos) — antes aceitava qualquer string
+- alerts.routes: ID com randomUUID() — antes colisão em concorrência
+- VOLUME_DROP/LIQUIDITY_FLIGHT/VOLATILITY_SPIKE: usam rule.value configurado pelo usuário
+- ScoutDashboard: ranges defensive/optimized/aggressive são distintos (antes triplicados)
+- ScoutRecommended: capital sugerido mínimo 1% (antes zerava para rank >= 10)
+- Radar.tsx: envolvido em MainLayout (era a única página sem layout)
+
+**Bugs P1 corrigidos:**
+- PoolDetail: .reverse() removido em chartData (eixo X estava invertido); min={0} no capital
+- PoolCompare: getBestClass() com NaN/Infinity handling correto
+- ScoutPoolDetail: forceRender removido (re-render 60x/min eliminado)
+- Pools.tsx: refetch manual passa cancelRefetch:false
+
+**Bugs P2/P3 pendentes (próxima sessão):**
+- Implementar ou remover RSI_ABOVE/BELOW, MACD_CROSS_* (declarados mas sem lógica)
+- Webhook retry (exponential backoff)
+- Zod validation em /api/notes GET (query param poolId)
+- N+1 em /api/ranges (indexar por poolId)
+- Paginação ScoutHistory (limit: 200 hard-coded)
+- Comandos Telegram (/start, /pools, /alerts)
+- Autenticação em /api/integrations
+- Validation SSRF em webhook URLs
 
 ### ETAPA 16 — WebSocket por Pool (Rooms) ✅ (2026-03-18)
 

@@ -38,8 +38,8 @@ export const watchlistSchema = z.object({
 
 export const alertSchema = z.object({
   poolId: z.string().optional(),
-  type: z.string().min(1),
-  threshold: z.number(),
+  type: z.enum(['PRICE_ABOVE', 'PRICE_BELOW', 'RSI_ABOVE', 'RSI_BELOW', 'MACD_CROSS_UP', 'MACD_CROSS_DOWN', 'VOLUME_DROP', 'LIQUIDITY_FLIGHT', 'VOLATILITY_SPIKE', 'OUT_OF_RANGE', 'NEAR_RANGE_EXIT', 'NEW_RECOMMENDATION']),
+  threshold: z.number().finite().min(0),
 });
 
 export const rangePositionSchema = z.object({
@@ -54,6 +54,9 @@ export const rangePositionSchema = z.object({
   capital: z.number().optional().default(1000),
   mode: z.enum(['DEFENSIVE', 'NORMAL', 'AGGRESSIVE']).optional().default('NORMAL'),
   alertThreshold: z.number().optional().default(5),
+}).refine(data => data.rangeUpper > data.rangeLower, {
+  message: 'rangeUpper must be greater than rangeLower',
+  path: ['rangeUpper'],
 });
 
 export const rangeCalcSchema = z.object({
@@ -151,6 +154,10 @@ export const autoCompoundSchema = z.object({
   periodDays: z.number().int().min(7).max(365).default(90),
   compoundFrequency: z.enum(['daily', 'weekly', 'biweekly', 'monthly']).default('weekly'),
   gasPerCompound: z.number().min(0).max(1000).default(5),
+});
+
+export const noteQuerySchema = z.object({
+  poolId: z.string().max(200).optional(),
 });
 
 // ============================================

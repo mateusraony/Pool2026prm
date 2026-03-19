@@ -117,7 +117,7 @@ export default function ScoutActivePools() {
                 </div>
                 <div className="rounded-lg bg-secondary/50 p-2 text-center">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Preco Atual</p>
-                  <p className="font-mono text-sm">{(pos.currentPrice ?? pos.entryPrice).toFixed(4)}</p>
+                  <p className="font-mono text-sm">{(pos.currentPrice ?? pos.entryPrice) != null ? (pos.currentPrice ?? pos.entryPrice).toFixed(4) : '—'}</p>
                 </div>
                 <div className="rounded-lg bg-secondary/50 p-2 text-center">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Preco Entrada</p>

@@ -131,8 +131,10 @@ class RangeMonitorService {
       this.dbLoaded = true;
       logService.info('RANGE', `Loaded ${records.length} range positions from DB`);
     } catch (err) {
-      logService.warn('RANGE', 'Could not load positions from DB, using memory only', { error: String(err) });
-      this.dbLoaded = true; // Don't retry endlessly
+      logService.error('RANGE', 'CRITICAL: Could not load range positions from DB — active alerts may not fire', {
+        error: String(err),
+      });
+      this.dbLoaded = true; // continua sem crash
     }
   }
 
@@ -149,7 +151,12 @@ class RangeMonitorService {
 
     // Persist to DB asynchronously (non-blocking)
     this.persistPosition(fullPosition).catch(err => {
-      logService.warn('RANGE', 'Failed to persist position to DB', { id, error: String(err) });
+      logService.error('RANGE', 'CRITICAL: Failed to persist new range position to DB — position may be lost on restart', {
+        id,
+        poolAddress: position.poolAddress,
+        chain: position.chain,
+        error: String(err),
+      });
     });
 
     logService.info('ALERT', 'Range position created', {
@@ -213,7 +220,18 @@ class RangeMonitorService {
     return false;
   }
 
+  /** Remove entradas de lastAlertTimes com mais de 24h */
+  private cleanupAlertTimes(): void {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    for (const [id, date] of this.lastAlertTimes.entries()) {
+      if (date.getTime() < cutoff) {
+        this.lastAlertTimes.delete(id);
+      }
+    }
+  }
+
   async checkAllPositions(): Promise<void> {
+    this.cleanupAlertTimes();
     const activePositions = this.getPositions();
     if (activePositions.length === 0) return;
 
@@ -248,6 +266,11 @@ class RangeMonitorService {
   ): Promise<void> {
     const { rangeLower, rangeUpper, alertThreshold, token0Symbol, token1Symbol } = position;
 
+    if (!currentPrice || currentPrice <= 0) {
+      logService.warn('RANGE', 'Cannot calculate distance — price is zero', { positionId: position.id });
+      return;
+    }
+
     const distanceToLower = ((currentPrice - rangeLower) / currentPrice) * 100;
     const distanceToUpper = ((rangeUpper - currentPrice) / currentPrice) * 100;
     const nearLowerEdge = distanceToLower <= alertThreshold && distanceToLower > 0;
@@ -257,11 +280,18 @@ class RangeMonitorService {
     position.lastCheckedAt = new Date();
 
     // Skip if Telegram is not configured
-    if (!telegramBot.isEnabled()) return;
+    if (!telegramBot.isEnabled()) {
+      logService.info('RANGE', 'Alert skipped — Telegram not configured', { positionId: position.id });
+      return;
+    }
 
     // Cooldown check
     const lastAlert = this.lastAlertTimes.get(position.id);
     if (lastAlert && Date.now() - lastAlert.getTime() < this.alertCooldown) {
+      logService.info('RANGE', 'Alert in cooldown', {
+        positionId: position.id,
+        cooldownRemainingMs: this.alertCooldown - (Date.now() - lastAlert.getTime()),
+      });
       return;
     }
 

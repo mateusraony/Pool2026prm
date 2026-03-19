@@ -260,6 +260,134 @@ class TelegramBotService {
     if (num >= 1000) return (num / 1000).toFixed(2) + 'K';
     return num.toFixed(2);
   }
+
+  /**
+   * Define os comandos do bot no menu do Telegram.
+   * Chamado no boot para registrar os comandos disponíveis.
+   */
+  async setupCommands(): Promise<void> {
+    if (!this.bot) return;
+    try {
+      await this.bot.setMyCommands([
+        { command: 'start', description: 'Bem-vindo ao Pool Intelligence Pro' },
+        { command: 'status', description: 'Status do sistema e pools monitoradas' },
+        { command: 'pools', description: 'Lista as top pools por score' },
+        { command: 'alerts', description: 'Resumo dos alertas ativos' },
+      ]);
+      logService.info('SYSTEM', 'Telegram bot commands registered');
+    } catch (error) {
+      logService.warn('SYSTEM', 'Failed to register Telegram bot commands', { error });
+    }
+  }
+
+  /**
+   * Processa uma mensagem de comando recebida via webhook ou polling.
+   * Retorna true se o comando foi reconhecido e tratado.
+   */
+  async handleCommand(text: string, chatId: string): Promise<boolean> {
+    if (!this.bot) return false;
+
+    const command = text.split(' ')[0].toLowerCase().replace(/^\//, '');
+
+    try {
+      if (command === 'start') {
+        await this.bot.sendMessage(chatId,
+          '👋 <b>Bem-vindo ao Pool Intelligence Pro!</b>\n\n' +
+          'Monitoro pools de liquidez DeFi em múltiplas chains.\n\n' +
+          '📋 <b>Comandos disponíveis:</b>\n' +
+          '/status — Status do sistema\n' +
+          '/pools — Top pools por score\n' +
+          '/alerts — Resumo de alertas\n\n' +
+          '💡 Configure seu chat ID nas Configurações do app para receber alertas automáticos.',
+          { parse_mode: 'HTML' }
+        );
+        return true;
+      }
+
+      if (command === 'status') {
+        const uptime = process.uptime();
+        const uptimeStr = uptime < 3600
+          ? `${Math.floor(uptime / 60)}m`
+          : `${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m`;
+        const mem = process.memoryUsage();
+        const heapMB = Math.round(mem.heapUsed / 1024 / 1024);
+
+        await this.bot.sendMessage(chatId,
+          '🟢 <b>Sistema Operacional</b>\n\n' +
+          `⏱ Uptime: <code>${uptimeStr}</code>\n` +
+          `💾 Memória: <code>${heapMB} MB</code>\n` +
+          `🌐 Ambiente: <code>${process.env.NODE_ENV ?? 'development'}</code>`,
+          { parse_mode: 'HTML' }
+        );
+        return true;
+      }
+
+      if (command === 'pools') {
+        // Import inline para evitar circular deps
+        const { getLatestRadarResults } = await import('../jobs/index.js');
+        const results = getLatestRadarResults();
+        if (results.length === 0) {
+          await this.bot.sendMessage(chatId, '⏳ Nenhuma pool disponível ainda. Aguarde o próximo ciclo do radar.');
+          return true;
+        }
+
+        const top5 = results
+          .filter(r => r.score?.total != null)
+          .sort((a, b) => (b.score?.total ?? 0) - (a.score?.total ?? 0))
+          .slice(0, 5);
+
+        const lines = top5.map((r, i) => {
+          const pair = `${r.pool.token0?.symbol ?? '?'}/${r.pool.token1?.symbol ?? '?'}`;
+          const score = r.score?.total?.toFixed(1) ?? '?';
+          const apr = r.score?.breakdown?.return?.aprEstimate?.toFixed(1) ?? '?';
+          return `${i + 1}. <b>${pair}</b> — Score: <code>${score}</code> | APR: <code>${apr}%</code> | ${r.pool.chain}`;
+        });
+
+        await this.bot.sendMessage(chatId,
+          `🏆 <b>Top 5 Pools</b>\n\n${lines.join('\n')}`,
+          { parse_mode: 'HTML' }
+        );
+        return true;
+      }
+
+      if (command === 'alerts') {
+        await this.bot.sendMessage(chatId,
+          '🔔 <b>Alertas</b>\n\n' +
+          'Configure alertas de pool no app e você receberá notificações aqui automaticamente.\n\n' +
+          '📱 Acesse o app → Alertas para configurar.',
+          { parse_mode: 'HTML' }
+        );
+        return true;
+      }
+
+    } catch (error) {
+      logService.error('SYSTEM', 'Telegram command handler error', { command, error });
+    }
+
+    return false;
+  }
+
+  /**
+   * Processa um update recebido via Telegram Webhook.
+   * Chamado pelo endpoint POST /api/telegram/webhook
+   */
+  async processWebhookUpdate(update: Record<string, unknown>): Promise<void> {
+    if (!this.bot) return;
+    try {
+      const message = update.message as Record<string, unknown> | undefined;
+      if (!message) return;
+
+      const text = message.text as string | undefined;
+      const chat = message.chat as Record<string, unknown> | undefined;
+      const chatId = String(chat?.id ?? '');
+
+      if (text && chatId && text.startsWith('/')) {
+        await this.handleCommand(text, chatId);
+      }
+    } catch (error) {
+      logService.error('SYSTEM', 'Telegram webhook update error', { error });
+    }
+  }
 }
 
 export const telegramBot = new TelegramBotService();

@@ -137,7 +137,8 @@ function OhlcvTooltip({ active, payload, label }: { active?: boolean; payload?: 
     ? `$${(v / 1e3).toFixed(1)}K`
     : `$${v.toFixed(0)}`;
 
-  const change = ((d.close - d.open) / d.open) * 100;
+  const changePercent = d.open > 0 ? ((d.close - d.open) / d.open) * 100 : 0;
+  const change = changePercent;
   const isUp = d.close >= d.open;
 
   return (
@@ -175,7 +176,7 @@ function PriceStats({ candles }: { candles: OhlcvCandle[] }) {
   const first = candles[0];
   const high = Math.max(...candles.map(c => c.high));
   const low = Math.min(...candles.map(c => c.low));
-  const change = ((last.close - first.open) / first.open) * 100;
+  const change = first.open > 0 ? ((last.close - first.open) / first.open) * 100 : 0;
   const isUp = change >= 0;
 
   const fmt = (v: number) => v >= 1000

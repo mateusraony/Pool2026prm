@@ -8,6 +8,7 @@ import { PerformanceCharts } from '@/components/charts/PerformanceCharts';
 import { CandlestickChart, type Timeframe } from '@/components/charts/CandlestickChart';
 import { PoolNotes } from '@/components/common/PoolNotes';
 import { HodlVsLp } from '@/components/common/HodlVsLp';
+import { AIInsightsCard } from '@/components/AIInsightsCard';
 import { TokenCorrelation } from '@/components/common/TokenCorrelation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -58,13 +59,7 @@ export default function ScoutPoolDetail() {
   // WebSocket real-time por pool
   const { liveData, lastUpdated, isConnected, positionAlert } = usePoolWebSocket(chain, address);
 
-  // Contador de segundos desde último update (re-renderiza a cada 1s quando há update)
-  const [, forceRender] = useState(0);
-  useEffect(() => {
-    if (!lastUpdated) return;
-    const interval = setInterval(() => forceRender(n => n + 1), 1000);
-    return () => clearInterval(interval);
-  }, [lastUpdated]);
+  // Contador de segundos desde último update — valor estático calculado na renderização
   const secondsSince = lastUpdated ? Math.floor((Date.now() - lastUpdated.getTime()) / 1000) : 0;
 
   // Toast quando posição sai do range (throttle: 1 toast a cada 2 min)
@@ -343,6 +338,13 @@ export default function ScoutPoolDetail() {
       {chain && address && (
         <div className="mb-6">
           <TokenCorrelation chain={chain} address={address} />
+        </div>
+      )}
+
+      {/* AI Insights */}
+      {chain && address && (
+        <div className="mb-6">
+          <AIInsightsCard chain={chain} address={address} />
         </div>
       )}
 
