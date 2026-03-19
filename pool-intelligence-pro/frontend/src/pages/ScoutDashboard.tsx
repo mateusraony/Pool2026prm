@@ -7,8 +7,8 @@ import { ActivePoolCard } from '@/components/common/ActivePoolCard';
 import { PullToRefresh } from '@/components/common/PullToRefresh';
 import { LiveIndicator } from '@/components/common/LiveIndicator';
 import { useRiskConfig } from '@/hooks/useRiskConfig';
-import { fetchUnifiedPools, fetchRangePositions, fetchAlerts, fetchHealth, API_BASE_URL } from '@/api/client';
-import type { RangePosition } from '@/api/client';
+import { fetchUnifiedPools, fetchRangePositions, fetchAlerts, fetchHealth, fetchRecommendations, API_BASE_URL } from '@/api/client';
+import type { RangePosition, Recommendation } from '@/api/client';
 import { unifiedPoolToViewPool } from '@/data/adapters';
 import type { Pool, ActivePool } from '@/types/pool';
 import { formatCurrency } from '@/lib/utils';
@@ -62,6 +62,13 @@ export default function ScoutDashboard() {
     queryFn: fetchHealth,
     refetchInterval: 30000,
   });
+
+  const { data: recommendations } = useQuery({
+    queryKey: ['recommendations', 'top'],
+    queryFn: () => fetchRecommendations(undefined, 1),
+    staleTime: 2 * 60 * 1000,
+  });
+  const topRecommendation: Recommendation | null = recommendations?.[0] || null;
 
   const pools = useMemo(() => {
     if (!poolsData?.pools) return [];
@@ -321,18 +328,35 @@ export default function ScoutDashboard() {
         {/* Sidebar */}
         <div className="space-y-4">
           {/* Top Recommendation */}
-          {topPool && (
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-semibold">Melhor Oportunidade</h2>
+          {(topRecommendation?.pool || topPool) && (() => {
+            const displayPool = topRecommendation
+              ? (() => {
+                  const rec = topRecommendation.pool;
+                  // Map Recommendation.pool (Pool from client.ts) to the view Pool shape
+                  return pools.find(
+                    (p) => p.poolAddress === rec.poolAddress && p.chain === rec.chain
+                  ) || topPool;
+                })()
+              : topPool;
+            if (!displayPool) return null;
+            return (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-lg font-semibold">Melhor Oportunidade</h2>
+                </div>
+                {topRecommendation && (
+                  <span className="block text-xs text-muted-foreground mb-2">
+                    Recomendacao IA · Score {topRecommendation.score?.total ?? '—'}
+                  </span>
+                )}
+                <PoolCard
+                  pool={displayPool}
+                  onViewDetails={() => navigate(`/pools/${displayPool.chain}/${displayPool.poolAddress}`)}
+                  onMonitor={() => navigate(`/pools/${displayPool.chain}/${displayPool.poolAddress}`)}
+                />
               </div>
-              <PoolCard
-                pool={topPool}
-                onViewDetails={() => navigate(`/pools/${topPool.chain}/${topPool.poolAddress}`)}
-                onMonitor={() => navigate(`/pools/${topPool.chain}/${topPool.poolAddress}`)}
-              />
-            </div>
-          )}
+            );
+          })()}
 
           {/* Real Alerts from API */}
           <div className="glass-card p-4">

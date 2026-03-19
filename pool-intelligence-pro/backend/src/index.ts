@@ -7,6 +7,7 @@ import rateLimit from 'express-rate-limit';
 import path from 'path';
 import fs from 'fs';
 import { config } from './config/index.js';
+import { getPrisma } from './routes/prisma.js';
 import { logService } from './services/log.service.js';
 import { metricsService } from './services/metrics.service.js';
 import { wsService } from './services/websocket.service.js';
@@ -38,7 +39,7 @@ if (config.nodeEnv === 'production') {
   app.use(cors({
     origin: allowedOrigins.length > 0 ? allowedOrigins : true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Admin-Key'],
   }));
 } else {
   app.use(cors());
@@ -286,13 +287,12 @@ function gracefulShutdown(signal: string) {
     console.log('[SHUTDOWN] HTTP server closed');
 
     // Close Prisma connections
-    import('@prisma/client').then(({ PrismaClient }) => {
-      const prisma = new PrismaClient();
-      prisma.$disconnect().then(() => {
+    getPrisma().$disconnect()
+      .then(() => {
         console.log('[SHUTDOWN] Prisma disconnected');
         process.exit(0);
-      }).catch(() => process.exit(0));
-    }).catch(() => process.exit(0));
+      })
+      .catch(() => process.exit(0));
   });
 
   // Force exit after 10s if graceful shutdown stalls

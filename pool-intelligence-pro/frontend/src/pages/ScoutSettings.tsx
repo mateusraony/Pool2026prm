@@ -1076,13 +1076,14 @@ const INTEGRATION_TYPES = [
 ];
 
 const ALERT_EVENTS = [
+  { value: 'PRICE_ABOVE', label: 'Preço Acima' },
+  { value: 'PRICE_BELOW', label: 'Preço Abaixo' },
+  { value: 'VOLUME_DROP', label: 'Queda de Volume' },
+  { value: 'LIQUIDITY_FLIGHT', label: 'Fuga de Liquidez' },
+  { value: 'VOLATILITY_SPIKE', label: 'Spike de Volatilidade' },
   { value: 'OUT_OF_RANGE', label: 'Fora do Range' },
   { value: 'NEAR_RANGE_EXIT', label: 'Próximo do Limite' },
   { value: 'NEW_RECOMMENDATION', label: 'Nova Recomendação' },
-  { value: 'LIQUIDITY_FLIGHT', label: 'Fuga de Liquidez' },
-  { value: 'VOLATILITY_SPIKE', label: 'Spike de Volatilidade' },
-  { value: 'PRICE_ABOVE', label: 'Preço Acima' },
-  { value: 'PRICE_BELOW', label: 'Preço Abaixo' },
 ];
 
 function IntegrationsSection() {

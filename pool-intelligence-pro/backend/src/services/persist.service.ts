@@ -7,7 +7,8 @@
  * All getters read from cache (sync). All setters write to cache + DB (async).
  */
 
-import { PrismaClient } from '@prisma/client';
+import { getPrisma } from '../routes/prisma.js';
+import type { PrismaClient } from '@prisma/client';
 import { logService } from './log.service.js';
 
 export interface PersistedData {
@@ -43,7 +44,7 @@ export interface PersistedData {
 }
 
 class PersistService {
-  private prisma: PrismaClient | null = null;
+  private prisma: ReturnType<typeof getPrisma> | null = null;
   private cache: Partial<PersistedData> & Record<string, unknown> = {};
   private _ready = false;
 
@@ -55,7 +56,7 @@ class PersistService {
     if (this._ready) return;
 
     try {
-      this.prisma = new PrismaClient();
+      this.prisma = getPrisma();
       await this.prisma.$connect();
       logService.info('SYSTEM', 'Database connected for config persistence');
 

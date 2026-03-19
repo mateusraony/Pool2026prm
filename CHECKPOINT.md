@@ -3,14 +3,58 @@
 ## Status Atual
 **Branch:** `claude/review-audit-checkpoint-ZFYUM`
 **Data:** 2026-03-19 UTC
-**Fase:** ETAPAS 1–16 concluídas ✅ + Auditoria Profunda + Correções P0/P1/P2/P3 ✅
+**Fase:** ETAPAS 1–17 concluídas ✅ + Auditoria + Correções P0/P1/P2/P3 ✅ + **ROADMAP Fase 1 (Blocos 1+2) ✅**
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-19 — Todos os bugs da auditoria corrigidos. Próximo: ETAPA 17+"`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-19 — Fase 1 do ROADMAP concluída (Blocos 1+2). Próximo: Fase 2 — Dados Confiáveis (Bloco 3 do ROADMAP_CORRECAO_POOL2026PRM.md)"`
 
 ---
 
 ## O QUE FOI FEITO
+
+### ROADMAP Fase 1 — Verdade e Alinhamento ✅ (2026-03-19)
+
+Criado `ROADMAP_CORRECAO_POOL2026PRM.md` na raiz — documento mestre com 6 fases e ~20 itens rastreados.
+Princípio: *primeiro corrigir a verdade do sistema, depois o que o usuário vê, depois a matemática, depois inteligência avançada.*
+
+**Commits:**
+- `6b3b9f1` — fix: Bloco 1 — alinhar contratos e promessas do sistema
+- `862e1bb` — fix: Bloco 2 — corrigir bugs reais e inconsistências operacionais
+
+#### Bloco 1 — Alinhamento de contratos
+- `validation.ts`: alertSchema alinhado aos 8 tipos canônicos (removidos RSI/MACD que não tinham implementação)
+- `Alerts.tsx`: adicionados 4 tipos faltantes na UI (VOLATILITY_SPIKE, OUT_OF_RANGE, NEAR_RANGE_EXIT, NEW_RECOMMENDATION)
+- `ScoutSettings.tsx`: VOLUME_DROP adicionado; lista reordenada para ordem canônica
+- `ScoutDashboard.tsx`: card "Melhor Oportunidade" agora busca de `fetchRecommendations()` com badge "Recomendação IA · Score X" (antes era `pools[0]` — topo de health, não recomendação IA)
+- `Pools.tsx`: texto "dados reais" → "dados observados e estimados"
+
+#### Bloco 2 — Bugs operacionais
+- `index.ts`: CORS agora aceita `X-Admin-Key` no `allowedHeaders`
+- `index.ts`: `gracefulShutdown` usa `getPrisma()` singleton (antes criava `new PrismaClient()` no shutdown — não desconectava a instância real)
+- `persist.service.ts` + `history.routes.ts`: eliminados `new PrismaClient()` isolados; ambos usam `getPrisma()` do singleton
+- `alert.service.ts`: getter público `getAlertConfig()` expõe configuração de cooldown/maxPerHour/dedupe
+- `settings.routes.ts`: GET `/api/settings` agora inclui campo `alertConfig`
+- `client.ts`: `fetchTokens()` corrigido para extrair `data.data` (antes retornava `[]` sempre — usava `Array.isArray(envelope)`)
+- `client.ts`: tipo de `fetchSettings` expandido com `alertConfig`
+- `Pools.tsx`: `handleToggleFav` invalida `['favorites']` query após toggle (antes o estado ficava defasado)
+- `ScoutPoolDetail.tsx`: contador "ao vivo" usa `setInterval(1s)` + `useState(now)` (antes congelava entre re-renders)
+- `Alerts.tsx`: cooldown e max-por-hora leem de `settings.alertConfig` com fallback (antes eram hardcoded "60 min" e "10")
+
+---
+
+### ETAPA 17 — AI Insights, Push Notifications, Multi-Wallet ✅ (2026-03-19)
+
+**Commits:**
+- `2478332` — feat: ETAPA 17 — AI Insights, Push Notifications PWA, Multi-wallet tracking
+- `81854ee` — feat: multi-wallet tracking — The Graph positions, CRUD wallets, WalletTracker page
+- `ff77aa6` — feat: wiring ETAPA 17 — rotas ai-insights/push/wallet, WalletTracker na sidebar e App.tsx
+
+**AI Insights:** análise de pool via Claude API + fallback rule-based
+**Push Notifications:** VAPID, subscriptions, service worker push handler
+**Multi-Wallet:** The Graph positions, CRUD wallets, WalletTracker page
+**Playwright E2E:** configurado no GitHub Actions CI
+
+---
 
 ### Correções P2/P3 (Fase 2) ✅ (2026-03-19)
 
@@ -558,8 +602,27 @@
 
 ---
 
-## PRÓXIMOS PASSOS → ETAPA 17+
-- Playwright E2E no GitHub Actions (start-server-and-test package)
-- Multi-wallet tracking (importar posições via endereço wallet on-chain)
-- Notificações push (PWA Push API + service worker) para alertas críticos
-- AI Insights: análise sumária de pool via Claude API (pool summary, recomendação em linguagem natural)
+## PRÓXIMOS PASSOS → ROADMAP Fase 2 (Bloco 3)
+
+> Ver `ROADMAP_CORRECAO_POOL2026PRM.md` para a lista completa e status de cada item.
+
+### Fase 2 — Dados Confiáveis (próxima sessão)
+**Objetivo:** o usuário saber exatamente o que é confiável e o que é aproximação.
+
+- **3.1** — Criar padrão `sourceType: 'observed' | 'estimated' | 'simulated'` no payload do backend
+  - Adicionar `sourceType` e `confidence` em `UnifiedPool` (campos-chave: fees1h, volume1h, liquidez)
+  - Exibir badges no frontend (ex: "Est." para estimado, "Obs." para observado)
+- **3.2** — Remover fallback artificial de preço baseado em TVL no `defillama.adapter.ts`
+  - Se não houver preço real: retornar `null`, marcar confiança baixa, bloquear cálculos dependentes
+- **3.3** — Liquidez sintética (distribuição Gaussiana) precisa ser visualmente explícita
+  - Badge "Estimativa" + tooltip explicativo no `RangeChart`
+  - Separar de liquidez real futura (bloco 6)
+- **3.4** — Volume/fees intraday derivados de 24h identificados
+  - Adicionar `volume1hMeta: 'observed' | 'estimated'` e `fees1hMeta` no backend
+  - Mostrar origem no frontend e usar no cálculo de confiança do score
+
+### Fase 3 em diante (sessões futuras)
+- **Fase 3:** Reescrever matemática CL real (módulo `cl-math.service.ts`), Monte Carlo, Backtest, correlação, custos reais
+- **Fase 4:** Portfolio analytics com base real, Risk Engine contratual, regime de mercado, modo "não operar"
+- **Fase 5:** Event Bus unificado, Telegram/Slack/Discord/Webhook sob mesma lógica, timezone profissional
+- **Fase 6:** Liquidez real por tick, benchmark de ranges, diário de decisão, autoajuste de pesos, smoke tests
