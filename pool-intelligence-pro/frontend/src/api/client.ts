@@ -1010,4 +1010,34 @@ export async function fetchOhlcv(
 // RAW AXIOS CLIENT — ETAPA 17
 // Exported for hooks that need direct axios access (e.g. push notifications)
 // ============================================================
+// ============================================================
+// MARKET CONDITIONS — Fase 4
+// ============================================================
+
+export type MarketRegime =
+  | 'RANGING'
+  | 'TRENDING_UP'
+  | 'TRENDING_DOWN'
+  | 'HIGH_VOLATILITY'
+  | 'LOW_LIQUIDITY'
+  | 'UNKNOWN';
+
+export interface MarketConditions {
+  globalRegime: MarketRegime;
+  noOperateGlobal: boolean;
+  noOperateReason?: string;
+  poolCount: number;
+  highRiskCount: number;
+  updatedAt: string;
+}
+
+export async function fetchMarketConditions(): Promise<MarketConditions | null> {
+  try {
+    const { data } = await api.get<{ success: boolean; data: MarketConditions }>('/market-conditions');
+    return data.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export { api as apiClient };

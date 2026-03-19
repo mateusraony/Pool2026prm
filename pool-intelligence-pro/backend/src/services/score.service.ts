@@ -2,6 +2,7 @@ import { Pool, PoolWithMetrics, Score, ScoreBreakdown, Mode } from '../types/ind
 import { config } from '../config/index.js';
 import { logService } from './log.service.js';
 import { memoryStore } from './memory-store.service.js';
+import { riskService } from './risk.service.js';
 
 interface ScoreWeights {
   health: number;
@@ -59,9 +60,9 @@ export class ScoreService {
       // Determine recommended mode
       const recommendedMode = this.determineMode(pool, metrics, total);
       
-      // Check for suspect conditions
-      const { isSuspect, suspectReason } = this.checkSuspect(pool, metrics, breakdown);
-      
+      // Avaliar risco via RiskService (Fase 4)
+      const riskAssessment = riskService.assessPool(pool);
+
       return {
         total: Math.round(total * 10) / 10,
         health: Math.round(healthScore * 10) / 10,
@@ -69,8 +70,8 @@ export class ScoreService {
         risk: Math.round(riskPenalty * 10) / 10,
         breakdown,
         recommendedMode,
-        isSuspect,
-        suspectReason,
+        isSuspect: riskAssessment.level === 'HIGH' || riskAssessment.level === 'CRITICAL',
+        suspectReason: riskAssessment.factors.length > 0 ? riskAssessment.summary : undefined,
       };
     } catch (error) {
       logService.error('SCORE', 'Failed to calculate score', { pool: pool.externalId, error });

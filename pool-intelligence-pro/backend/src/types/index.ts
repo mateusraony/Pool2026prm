@@ -182,6 +182,11 @@ export interface Recommendation {
   mode: Mode;
   dataTimestamp: Date;
   validUntil: Date;
+  // Fase 4 additions
+  riskAssessment?: RiskAssessment;
+  regimeAnalysis?: RegimeAnalysis;
+  noOperate?: boolean;
+  noOperateReason?: string;
 }
 
 // ============================================
@@ -313,3 +318,51 @@ export interface SystemHealth {
 
 export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'CRITICAL';
 export type LogComponent = 'RADAR' | 'WATCHLIST' | 'SCORE' | 'RECOMMENDATION' | 'ALERT' | 'PROVIDER' | 'SYSTEM' | 'METRICS' | 'HISTORY' | 'RANGE' | 'POOLS';
+
+// ============================================
+// RISK ASSESSMENT TYPES (Fase 4 — 5.1)
+// ============================================
+
+export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+export interface RiskFactor {
+  code: string;
+  severity: RiskLevel;
+  message: string;
+}
+
+export interface RiskAssessment {
+  level: RiskLevel;
+  score: number;       // 0-100 (100 = most risky)
+  factors: RiskFactor[];
+  shouldOperate: boolean;
+  summary: string;
+}
+
+// ============================================
+// MARKET REGIME TYPES (Fase 4 — 5.2 / 5.3)
+// ============================================
+
+export type MarketRegime =
+  | 'RANGING'
+  | 'TRENDING_UP'
+  | 'TRENDING_DOWN'
+  | 'HIGH_VOLATILITY'
+  | 'LOW_LIQUIDITY'
+  | 'UNKNOWN';
+
+export interface RegimeAnalysis {
+  regime: MarketRegime;
+  lpFriendly: boolean;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  reason: string;
+}
+
+export interface MarketConditions {
+  globalRegime: MarketRegime;
+  noOperateGlobal: boolean;
+  noOperateReason?: string;
+  poolCount: number;
+  highRiskCount: number;
+  updatedAt: Date;
+}

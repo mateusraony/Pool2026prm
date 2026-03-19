@@ -1,6 +1,7 @@
 import { Pool, Score, Recommendation, Mode } from '../types/index.js';
 import { config } from '../config/index.js';
 import { logService } from './log.service.js';
+import { marketRegimeService } from './market-regime.service.js';
 
 interface RecommendationInput {
   pool: Pool;
@@ -72,7 +73,14 @@ export class RecommendationService {
     
     // Set validity (24 hours for recommendations)
     const validUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    
+
+    // Classificar regime da pool
+    const regimeAnalysis = marketRegimeService.classifyPool(pool);
+    const noOperate = !regimeAnalysis.lpFriendly && score.total < 50;
+    const noOperateReason = noOperate
+      ? `Regime ${regimeAnalysis.regime}: ${regimeAnalysis.reason}`
+      : undefined;
+
     return {
       rank,
       pool,
@@ -88,6 +96,9 @@ export class RecommendationService {
       mode,
       dataTimestamp: new Date(),
       validUntil,
+      regimeAnalysis,
+      noOperate,
+      noOperateReason,
     };
   }
 

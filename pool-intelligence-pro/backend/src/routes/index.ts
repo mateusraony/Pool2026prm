@@ -19,6 +19,9 @@ import aiInsightsRouter from './ai-insights.routes.js';
 import pushRouter from './push.routes.js';
 import walletRouter from './wallet.routes.js';
 import { macroCalendarService } from '../services/macro-calendar.service.js';
+import { marketRegimeService } from '../services/market-regime.service.js';
+import { memoryStore } from '../services/memory-store.service.js';
+import type { Pool } from '../types/index.js';
 
 const router = Router();
 
@@ -137,6 +140,23 @@ router.delete('/macro/events/:id', (req, res) => {
   } catch (error) {
     logService.error('SYSTEM', 'DELETE /macro/events failed', { error });
     res.status(500).json({ success: false, error: 'Failed to remove event', timestamp: new Date() });
+  }
+});
+
+// ============================================
+// MARKET REGIME ROUTES
+// ============================================
+
+// GET /api/market-conditions — condições globais de mercado para LP
+router.get('/market-conditions', (_req, res) => {
+  try {
+    const unifiedPools = memoryStore.getAllPools();
+    // UnifiedPool é estruturalmente compatível com Pool nos campos usados pelo MarketRegimeService
+    const conditions = marketRegimeService.getGlobalConditions(unifiedPools as unknown as Pool[]);
+    res.json({ success: true, data: conditions, timestamp: new Date() });
+  } catch (error) {
+    logService.error('SYSTEM', 'GET /market-conditions failed', { error });
+    res.status(500).json({ success: false, error: 'Failed to get market conditions', timestamp: new Date() });
   }
 });
 

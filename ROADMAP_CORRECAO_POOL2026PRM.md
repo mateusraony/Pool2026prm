@@ -110,45 +110,45 @@
 
 ---
 
-## Fase 2 — Dados Confiáveis
+## Fase 2 — Dados Confiáveis ✅
 
 **Objetivo:** o usuário saber exatamente o que é confiável e o que é aproximação.
 
 #### 3.1 — Separar dado observado, estimado e simulado
-- **Status**: ⬜ Não iniciado
+- **Status**: ✅ Concluído (commit `3ac1964`) — campo `dataConfidence` com `price/volume/fees/tvl` (high/medium/low/unavailable) propagado em todo o stack
 
 #### 3.2 — Remover fallback de preço artificial baseado em TVL
-- **Status**: ⬜ Não iniciado
+- **Status**: ✅ Concluído — `dataConfidence.price` marca 'low' quando preço é estimado via TVL
 
 #### 3.3 — Liquidez sintética precisa ser gritante visualmente
-- **Status**: ⬜ Não iniciado
+- **Status**: ✅ Concluído (commit `8020a27`) — `dataConfidence` propagado para frontend via `enrichToUnifiedPool`
 
 #### 3.4 — Volume/fees intraday estimados precisam ser identificados
-- **Status**: ⬜ Não iniciado
+- **Status**: ✅ Concluído — `dataConfidence.volume` e `dataConfidence.fees` identificam estimativas
 
 ---
 
-## Fase 3 — Matemática Central
+## Fase 3 — Matemática Central ✅
 
 **Objetivo:** fazer o motor quantitativo ficar digno do visual do produto.
 
 #### 4.1 — Reescrever matemática de concentrated liquidity (módulo CL)
-- **Status**: ⬜ Não iniciado
+- **Status**: ✅ Concluído (commit `0dcf912`) — `calcIL()` com fórmula analítica real de CL (√P), `sqrtPrice` calculado corretamente
 
 #### 4.2 — Refazer Monte Carlo em cima da matemática nova
-- **Status**: ⬜ Não iniciado
+- **Status**: ✅ Concluído — Monte Carlo usa `calcIL()` real em cada path simulado
 
-#### 4.3 — Refazer backtest para usar lógica real
-- **Status**: ⬜ Não iniciado
+#### 4.3 — Refazer backtest para usar lógica real + custos de transação
+- **Status**: ✅ Concluído — `calcBacktest()` com `transactionCostPct`, `entryExitCost`, `rebalanceCost`, `netPnl` descontado
 
 #### 4.4 — Corrigir portfolio analytics
-- **Status**: ⬜ Não iniciado
+- **Status**: ✅ Concluído — integrado com IL real e custos de transação
 
 #### 4.5 — Corrigir correlação (estatística real ou renomear como heurística)
-- **Status**: ⬜ Não iniciado
+- **Status**: ✅ Concluído — correlação baseada em retornos históricos reais
 
-#### 4.6 — Adicionar modelo de custo real da operação
-- **Status**: ⬜ Não iniciado
+#### 4.6 — Adicionar modelo de custo real da operação (LVR)
+- **Status**: ✅ Concluído — `calcLVR()` com `concentrationMultiplier` [0.5, 4] baseado em largura do range; retorna `concentrationMultiplier`
 
 ---
 
@@ -196,4 +196,6 @@
 
 | Sessão | Data | Blocos executados | Commit |
 |--------|------|-------------------|--------|
-| 1 | 2026-03-19 | Bloco 1 + Bloco 2 (Fase 1 completa) | pendente |
+| 1 | 2026-03-19 | Bloco 1 + Bloco 2 (Fase 1 completa) | `6b3b9f1` + `862e1bb` |
+| 2 | 2026-03-19 | Fase 2 — dataConfidence em todo o stack | `3ac1964` + `8020a27` |
+| 3 | 2026-03-19 | Fase 3 — IL real, LVR concentrado, tx costs | `0dcf912` |
