@@ -78,6 +78,11 @@ export function unifiedPoolToViewPool(
     poolAddress: p.poolAddress,
     chain: p.chain,
     protocol: p.protocol,
+    dataConfidence: p.dataConfidence ? {
+      price: p.dataConfidence.price,
+      volume: p.dataConfidence.volume,
+      fees: p.dataConfidence.fees,
+    } : undefined,
   };
 }
 

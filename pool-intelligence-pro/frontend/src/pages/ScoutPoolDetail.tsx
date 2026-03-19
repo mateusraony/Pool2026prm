@@ -34,6 +34,19 @@ import { networkColors, dexLogos } from '@/data/constants';
 import { usePoolWebSocket } from '@/hooks/usePoolWebSocket';
 import type { Pool } from '@/types/pool';
 
+/** Badge de confiança para dados estimados ou suplementados */
+function ConfBadge({ conf }: { conf?: 'high' | 'medium' | 'low' }) {
+  if (!conf || conf === 'high') return null;
+  return (
+    <span
+      className={`ml-1 text-[9px] px-1 rounded font-mono ${conf === 'medium' ? 'bg-yellow-500/10 text-yellow-400' : 'bg-muted text-muted-foreground'}`}
+      title={conf === 'medium' ? 'Dado estimado ou suplementado' : 'Dado de baixa confiança — estimativa'}
+    >
+      {conf === 'medium' ? 'est.' : 'aprox.'}
+    </span>
+  );
+}
+
 /** Flash visual por 2s quando um valor muda — indica update live */
 function useValueFlash(value: unknown): boolean {
   const [flashing, setFlashing] = useState(false);
@@ -286,12 +299,15 @@ export default function ScoutPoolDetail() {
           icon={<DollarSign className="h-5 w-5" />}
           className={cn(tvlFlash && 'ring-1 ring-green-500/40 transition-all duration-300')}
         />
-        <StatCard
-          label="Volume 24h"
-          value={`$${((liveData?.volume24hUSD ?? pool.volume24h) / 1e6).toFixed(1)}M`}
-          icon={<BarChart3 className="h-5 w-5" />}
-          className={cn(volFlash && 'ring-1 ring-green-500/40 transition-all duration-300')}
-        />
+        <div className="relative">
+          <StatCard
+            label="Volume 24h"
+            value={`$${((liveData?.volume24hUSD ?? pool.volume24h) / 1e6).toFixed(1)}M`}
+            icon={<BarChart3 className="h-5 w-5" />}
+            className={cn(volFlash && 'ring-1 ring-green-500/40 transition-all duration-300')}
+          />
+          <div className="absolute top-2 right-2"><ConfBadge conf={pool.dataConfidence?.volume?.confidence} /></div>
+        </div>
         <StatCard label="APR" value={`${pool.apr.toFixed(1)}%`} icon={<TrendingUp className="h-5 w-5" />} variant="success" />
         <StatCard label="Risco" value={riskLabels[pool.risk]} icon={<Shield className="h-5 w-5" />}
           variant={pool.risk === 'low' ? 'success' : pool.risk === 'medium' ? 'warning' : 'danger'} />
@@ -319,7 +335,7 @@ export default function ScoutPoolDetail() {
         <h3 className="font-semibold mb-4">Projecoes</h3>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="text-center p-3 rounded-lg bg-secondary/50">
-            <p className="stat-label">Fees/dia</p>
+            <p className="stat-label">Fees/dia<ConfBadge conf={pool.dataConfidence?.fees?.confidence} /></p>
             <p className="font-mono text-lg text-success">+{(pool.metrics.feesEstimated * 100).toFixed(3)}%</p>
           </div>
           <div className="text-center p-3 rounded-lg bg-secondary/50">

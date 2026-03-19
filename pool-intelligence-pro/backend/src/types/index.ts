@@ -26,6 +26,12 @@ export interface Pool {
   tickSpacing?: number;
   bluechip?: boolean;
   volatilityAnn?: number; // Annualized volatility for live calculations
+  // Data confidence metadata (populated by adapters)
+  dataConfidence?: {
+    price?: { method: 'observed' | 'estimated_stable' | 'estimated_tvl' | 'unavailable'; confidence: 'high' | 'medium' | 'low' };
+    volume?: { method: 'observed' | 'supplement_gecko' | 'estimated_apy'; confidence: 'high' | 'medium' | 'low' };
+    fees?: { method: 'observed' | 'derived_volume' | 'estimated_apy'; confidence: 'high' | 'medium' | 'low' };
+  };
 }
 
 export interface Token {
@@ -90,6 +96,9 @@ export interface UnifiedPool {
   dataConfidence?: {
     volatility: { method: 'log_returns' | 'proxy'; dataPoints: number; confidence: 'high' | 'medium' | 'low' };
     apr: { method: 'real_fees' | 'adapter_apy' | 'unavailable'; confidence: 'high' | 'medium' | 'low' };
+    price: { method: 'observed' | 'estimated_stable' | 'estimated_tvl' | 'unavailable'; confidence: 'high' | 'medium' | 'low' };
+    volume: { method: 'observed' | 'supplement_gecko' | 'estimated_apy'; confidence: 'high' | 'medium' | 'low' };
+    fees: { method: 'observed' | 'derived_volume' | 'estimated_apy'; confidence: 'high' | 'medium' | 'low' };
   };
 
   // Raw fields for compatibility
