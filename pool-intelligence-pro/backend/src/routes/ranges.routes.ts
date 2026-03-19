@@ -14,12 +14,14 @@ router.get('/ranges', async (req, res) => {
     const stats = rangeMonitorService.getStats();
     const radarResults = getLatestRadarResults();
 
+    // Build lookup maps for O(1) access — evita N+1
+    const radarByExternalId = new Map(radarResults.map(r => [r.pool.externalId, r]));
+    const radarByChainAddress = new Map(radarResults.map(r => [`${r.pool.chain}:${r.pool.poolAddress}`, r]));
+
     // Enrich positions with real P&L calculations
     const enrichedPositions = positions.map(pos => {
-      const poolData = radarResults.find(
-        r => r.pool.externalId === pos.poolId ||
-             (r.pool.chain === pos.chain && r.pool.poolAddress === pos.poolAddress)
-      );
+      const poolData = radarByExternalId.get(pos.poolId)
+        ?? radarByChainAddress.get(`${pos.chain}:${pos.poolAddress}`);
 
       let pnlData: PositionPnL | null = null;
       if (poolData) {

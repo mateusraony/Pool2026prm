@@ -156,6 +156,10 @@ export const autoCompoundSchema = z.object({
   gasPerCompound: z.number().min(0).max(1000).default(5),
 });
 
+export const noteQuerySchema = z.object({
+  poolId: z.string().max(200).optional(),
+});
+
 // ============================================
 // MIDDLEWARE
 // ============================================
