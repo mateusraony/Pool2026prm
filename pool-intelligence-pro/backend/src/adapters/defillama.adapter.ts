@@ -165,6 +165,12 @@ export class DefiLlamaAdapter extends BaseAdapter {
             if (!match.fees24h && match.feeTier) {
               match.fees24h = vol24h * match.feeTier;
             }
+            // Update dataConfidence to reflect GeckoTerminal supplement
+            match.dataConfidence = {
+              ...match.dataConfidence,
+              volume: { method: 'supplement_gecko', confidence: 'medium' },
+              fees: { method: 'derived_volume', confidence: 'medium' },
+            };
             enriched++;
           }
         }
@@ -191,6 +197,12 @@ export class DefiLlamaAdapter extends BaseAdapter {
         if (!pool.fees24h) {
           pool.fees24h = Math.round(fees24hEstimate * 100) / 100;
         }
+        // Update dataConfidence to reflect APY-based estimation
+        pool.dataConfidence = {
+          ...pool.dataConfidence,
+          volume: { method: 'estimated_apy', confidence: 'low' },
+          fees: { method: 'estimated_apy', confidence: 'low' },
+        };
         enriched++;
       }
     }
@@ -226,19 +238,29 @@ export class DefiLlamaAdapter extends BaseAdapter {
     const token1Price = priceMap.get(token1Addr.toLowerCase()) || 0;
 
     // Pool price: prefer token0 price from API; if both available, use token0/token1 ratio
-    let price: number;
+    let price: number | undefined;
+    let priceConfidence: { method: 'observed' | 'estimated_stable' | 'estimated_tvl' | 'unavailable'; confidence: 'high' | 'medium' | 'low' };
     if (token0Price > 0 && token1Price > 0) {
       price = token0Price / token1Price; // relative price token0 in terms of token1
+      priceConfidence = { method: 'observed', confidence: 'high' };
     } else if (token0Price > 0) {
       price = token0Price;
+      priceConfidence = { method: 'observed', confidence: 'medium' };
     } else if (token1Price > 0) {
       price = token1Price;
+      priceConfidence = { method: 'observed', confidence: 'medium' };
     } else {
-      // Fallback: stablecoin pairs → 1, otherwise use TVL-based estimate
+      // Fallback: stablecoin pairs → 1, otherwise leave price undefined
       const isStablePair = ['USDC', 'USDT', 'DAI', 'BUSD', 'FRAX'].some(
         s => token0Symbol.includes(s) || token1Symbol.includes(s)
       );
-      price = isStablePair ? 1 : Math.max(1, data.tvlUsd / 100000);
+      if (isStablePair) {
+        price = 1;
+        priceConfidence = { method: 'estimated_stable', confidence: 'medium' };
+      } else {
+        price = undefined;
+        priceConfidence = { method: 'unavailable', confidence: 'low' };
+      }
     }
 
     // Detect feeTier from project name (e.g. "uniswap-v3" → likely CL pool)
@@ -257,6 +279,17 @@ export class DefiLlamaAdapter extends BaseAdapter {
     if (volume24h > 0 && feeTier) {
       fees24h = volume24h * feeTier;
     }
+
+    // dataConfidence for volume/fees from DefiLlama direct data
+    const volumeConfidence: { method: 'observed' | 'supplement_gecko' | 'estimated_apy'; confidence: 'high' | 'medium' | 'low' } =
+      volume24h > 0
+        ? { method: 'observed', confidence: 'high' }
+        : { method: 'estimated_apy', confidence: 'low' }; // will be overwritten by supplementVolumeData if enriched
+
+    const feesConfidence: { method: 'observed' | 'derived_volume' | 'estimated_apy'; confidence: 'high' | 'medium' | 'low' } =
+      volume24h > 0
+        ? { method: 'derived_volume', confidence: 'medium' }
+        : { method: 'estimated_apy', confidence: 'low' };
 
     return {
       externalId: data.pool,
@@ -282,6 +315,11 @@ export class DefiLlamaAdapter extends BaseAdapter {
       volume7d,
       fees24h,
       apr,
+      dataConfidence: {
+        price: priceConfidence,
+        volume: volumeConfidence,
+        fees: feesConfidence,
+      },
     };
   }
   

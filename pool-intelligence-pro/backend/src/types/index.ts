@@ -26,6 +26,12 @@ export interface Pool {
   tickSpacing?: number;
   bluechip?: boolean;
   volatilityAnn?: number; // Annualized volatility for live calculations
+  // Data confidence metadata (populated by adapters)
+  dataConfidence?: {
+    price?: { method: 'observed' | 'estimated_stable' | 'estimated_tvl' | 'unavailable'; confidence: 'high' | 'medium' | 'low' };
+    volume?: { method: 'observed' | 'supplement_gecko' | 'estimated_apy'; confidence: 'high' | 'medium' | 'low' };
+    fees?: { method: 'observed' | 'derived_volume' | 'estimated_apy'; confidence: 'high' | 'medium' | 'low' };
+  };
 }
 
 export interface Token {
@@ -90,6 +96,9 @@ export interface UnifiedPool {
   dataConfidence?: {
     volatility: { method: 'log_returns' | 'proxy'; dataPoints: number; confidence: 'high' | 'medium' | 'low' };
     apr: { method: 'real_fees' | 'adapter_apy' | 'unavailable'; confidence: 'high' | 'medium' | 'low' };
+    price: { method: 'observed' | 'estimated_stable' | 'estimated_tvl' | 'unavailable'; confidence: 'high' | 'medium' | 'low' };
+    volume: { method: 'observed' | 'supplement_gecko' | 'estimated_apy'; confidence: 'high' | 'medium' | 'low' };
+    fees: { method: 'observed' | 'derived_volume' | 'estimated_apy'; confidence: 'high' | 'medium' | 'low' };
   };
 
   // Raw fields for compatibility
@@ -173,6 +182,11 @@ export interface Recommendation {
   mode: Mode;
   dataTimestamp: Date;
   validUntil: Date;
+  // Fase 4 additions
+  riskAssessment?: RiskAssessment;
+  regimeAnalysis?: RegimeAnalysis;
+  noOperate?: boolean;
+  noOperateReason?: string;
 }
 
 // ============================================
@@ -304,3 +318,51 @@ export interface SystemHealth {
 
 export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'CRITICAL';
 export type LogComponent = 'RADAR' | 'WATCHLIST' | 'SCORE' | 'RECOMMENDATION' | 'ALERT' | 'PROVIDER' | 'SYSTEM' | 'METRICS' | 'HISTORY' | 'RANGE' | 'POOLS';
+
+// ============================================
+// RISK ASSESSMENT TYPES (Fase 4 — 5.1)
+// ============================================
+
+export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+export interface RiskFactor {
+  code: string;
+  severity: RiskLevel;
+  message: string;
+}
+
+export interface RiskAssessment {
+  level: RiskLevel;
+  score: number;       // 0-100 (100 = most risky)
+  factors: RiskFactor[];
+  shouldOperate: boolean;
+  summary: string;
+}
+
+// ============================================
+// MARKET REGIME TYPES (Fase 4 — 5.2 / 5.3)
+// ============================================
+
+export type MarketRegime =
+  | 'RANGING'
+  | 'TRENDING_UP'
+  | 'TRENDING_DOWN'
+  | 'HIGH_VOLATILITY'
+  | 'LOW_LIQUIDITY'
+  | 'UNKNOWN';
+
+export interface RegimeAnalysis {
+  regime: MarketRegime;
+  lpFriendly: boolean;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  reason: string;
+}
+
+export interface MarketConditions {
+  globalRegime: MarketRegime;
+  noOperateGlobal: boolean;
+  noOperateReason?: string;
+  poolCount: number;
+  highRiskCount: number;
+  updatedAt: Date;
+}

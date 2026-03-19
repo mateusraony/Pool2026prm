@@ -9,11 +9,13 @@ import { telegramBot } from '../bot/telegram.js';
 import { getAllProvidersHealth } from '../adapters/index.js';
 import { logService } from '../services/log.service.js';
 import { config } from '../config/index.js';
-import { Pool, Score, Recommendation } from '../types/index.js';
+import { Pool, Score, Recommendation, UnifiedPool, AlertEvent } from '../types/index.js';
 import { memoryStore } from '../services/memory-store.service.js';
 import { poolIntelligenceService } from '../services/pool-intelligence.service.js';
 import { metricsService } from '../services/metrics.service.js';
 import { wsService } from '../services/websocket.service.js';
+import { eventBus } from '../services/event-bus.service.js';
+import { isTimeMatch, todayStringTz } from '../services/time.service.js';
 
 // ============================================
 // JOB STATE MANAGER — encapsula todo estado mutável
@@ -97,13 +99,8 @@ async function radarJobRunner() {
     );
     memoryStore.setPools(unifiedPools);
 
-    // Broadcast real-time update to WebSocket clients
-    wsService.broadcastPoolsUpdated(unifiedPools.length);
-
-    // Broadcast per-pool updates para clientes inscritos em rooms individuais
-    for (const pool of unifiedPools) {
-      wsService.broadcastPoolUpdate(pool);
-    }
+    // Broadcast real-time update via event bus
+    await eventBus.emit('POOLS_UPDATED', { count: unifiedPools.length, pools: unifiedPools });
 
     // Record TVL snapshots for liquidity drop detection
     for (const p of unifiedPools) {
@@ -135,17 +132,10 @@ async function watchlistJobRunner() {
   try {
     const result = await runWatchlistJob(watchlist);
 
-    // Check alerts
+    // Check alerts and emit each via event bus
     const alerts = alertService.checkAlerts(result.pools);
-
-    // Send alerts to Telegram only if enabled and notification type is on
-    if (telegramBot.isEnabled() && alerts.length > 0) {
-      const settings = notificationSettingsService.getSettings();
-      for (const alert of alerts) {
-        if (settings.notifications.priceAlerts) {
-          await telegramBot.sendAlert(alert);
-        }
-      }
+    for (const alert of alerts) {
+      await eventBus.emit('ALERT_FIRED', alert);
     }
   } catch (error) {
     success = false;
@@ -174,18 +164,12 @@ async function recommendationJobRunner() {
     // Persiste recomendações no MemoryStore para leitura imediata pelas rotas
     memoryStore.setRecommendations(recommendations);
 
-    // Send top recommendation ONLY if it's a NEW recommendation (different pool)
-    if (
-      recommendations.length > 0 &&
-      telegramBot.isEnabled() &&
-      notificationSettingsService.isEnabled('newRecommendation')
-    ) {
-      const topPoolId = recommendations[0].pool.externalId;
-      if (topPoolId !== jobState.getLastSentRecommendationId()) {
-        jobState.setLastSentRecommendationId(topPoolId);
-        await telegramBot.sendRecommendation(recommendations[0]);
-        logService.info('SYSTEM', 'New top recommendation sent via Telegram', { poolId: topPoolId });
-      }
+    // Emit top recommendation via event bus (listener aplica deduplicação)
+    if (recommendations.length > 0) {
+      await eventBus.emit('RECOMMENDATION_UPDATED', {
+        recommendation: recommendations[0],
+        poolId: recommendations[0].pool.externalId,
+      });
     }
 
     logService.info('SYSTEM', 'Generated ' + recommendations.length + ' recommendations');
@@ -203,10 +187,6 @@ async function healthJobRunner() {
   try {
     const health = await getAllProvidersHealth();
     const unhealthy = health.filter(h => !h.isHealthy);
-    const now = Date.now();
-    const canAlert = telegramBot.isEnabled() &&
-      notificationSettingsService.isEnabled('systemAlerts') &&
-      now - jobState.getLastHealthAlertTime() > jobState.HEALTH_ALERT_COOLDOWN;
 
     // Provider health check — só WARN para provedores mandatórios
     if (unhealthy.length > 0) {
@@ -222,31 +202,31 @@ async function healthJobRunner() {
         });
       }
 
-      if (unhealthy.length >= health.length / 2 && canAlert) {
-        jobState.setLastHealthAlertTime(now);
-        await telegramBot.sendHealthAlert('DEGRADED',
-          'Provedores com problema: ' + unhealthy.map(h => h.name).join(', ')
-        );
+      if (unhealthy.length >= health.length / 2) {
+        await eventBus.emit('HEALTH_DEGRADED', {
+          status: 'DEGRADED',
+          message: 'Provedores com problema: ' + unhealthy.map(h => h.name).join(', '),
+        });
       }
     }
 
     // Error rate spike detection (>10% errors in last 5 minutes)
     const errorRate = metricsService.getErrorRate(5);
-    if (errorRate > 0.10 && canAlert) {
-      jobState.setLastHealthAlertTime(now);
-      await telegramBot.sendHealthAlert('DEGRADED',
-        'Taxa de erro alta: ' + (errorRate * 100).toFixed(1) + '% nos ultimos 5 minutos'
-      );
+    if (errorRate > 0.10) {
+      await eventBus.emit('HEALTH_DEGRADED', {
+        status: 'DEGRADED',
+        message: 'Taxa de erro alta: ' + (errorRate * 100).toFixed(1) + '% nos ultimos 5 minutos',
+      });
       logService.warn('METRICS', 'Error rate spike detected', { errorRate: (errorRate * 100).toFixed(1) + '%' });
     }
 
     // Memory threshold alert (>400MB RSS on free tier)
     const mem = metricsService.getMemoryUsage();
-    if (mem.rssMB > 400 && canAlert) {
-      jobState.setLastHealthAlertTime(now);
-      await telegramBot.sendHealthAlert('DEGRADED',
-        'Uso de memoria alto: ' + mem.rssMB + 'MB RSS (heap: ' + mem.heapUsedMB + 'MB)'
-      );
+    if (mem.rssMB > 400) {
+      await eventBus.emit('HEALTH_DEGRADED', {
+        status: 'DEGRADED',
+        message: 'Uso de memoria alto: ' + mem.rssMB + 'MB RSS (heap: ' + mem.heapUsedMB + 'MB)',
+      });
       logService.warn('METRICS', 'High memory usage', { rssMB: mem.rssMB, heapUsedMB: mem.heapUsedMB });
     }
   } catch (error) {
@@ -283,18 +263,15 @@ async function dailyReportJobRunner() {
     if (!telegramBot.isEnabled()) return;
     if (rangeMonitorService.getStats().activePositions === 0) return;
 
-    const now = new Date();
-    const isReportTime =
-      now.getHours() === settings.dailyReportHour &&
-      now.getMinutes() === settings.dailyReportMinute;
-
+    const tz = config.reportTimezone;
+    const isReportTime = isTimeMatch(settings.dailyReportHour, settings.dailyReportMinute, tz);
     if (!isReportTime) return;
 
-    const todayStr = now.toISOString().slice(0, 10);
+    const todayStr = todayStringTz(tz);
     if (jobState.getLastDailyReportDate() === todayStr) return;
 
     jobState.setLastDailyReportDate(todayStr);
-    await rangeMonitorService.sendPortfolioReport();
+    await eventBus.emit('DAILY_REPORT', {});
   } catch (error) {
     success = false;
     logService.error('SYSTEM', 'Daily report job failed', { error });
@@ -308,6 +285,61 @@ async function dailyReportJobRunner() {
 // ============================================
 export function initializeJobs() {
   logService.info('SYSTEM', 'Initializing scheduled jobs');
+
+  // ============================================
+  // REGISTRAR LISTENERS DO EVENT BUS
+  // ============================================
+
+  // POOLS_UPDATED: propaga contagem e atualizações por pool via WebSocket
+  eventBus.on('POOLS_UPDATED', async (event) => {
+    const { count, pools } = event.payload as { count: number; pools: UnifiedPool[] };
+    wsService.broadcastPoolsUpdated(count);
+    for (const pool of pools) {
+      wsService.broadcastPoolUpdate(pool);
+    }
+  });
+
+  // ALERT_FIRED: encaminha alerta para Telegram se habilitado
+  eventBus.on('ALERT_FIRED', async (event) => {
+    const alertEvent = event.payload as AlertEvent;
+    const settings = notificationSettingsService.getSettings();
+    if (telegramBot.isEnabled() && settings.notifications.priceAlerts) {
+      await telegramBot.sendAlert(alertEvent);
+    }
+  });
+
+  // RECOMMENDATION_UPDATED: envia nova recomendação top via Telegram (com deduplicação)
+  eventBus.on('RECOMMENDATION_UPDATED', async (event) => {
+    const { recommendation, poolId } = event.payload as { recommendation: Recommendation; poolId: string };
+    if (
+      telegramBot.isEnabled() &&
+      notificationSettingsService.isEnabled('newRecommendation') &&
+      poolId !== jobState.getLastSentRecommendationId()
+    ) {
+      jobState.setLastSentRecommendationId(poolId);
+      await telegramBot.sendRecommendation(recommendation);
+      logService.info('SYSTEM', 'New top recommendation sent via Telegram', { poolId });
+    }
+  });
+
+  // HEALTH_DEGRADED: envia alerta de saúde via Telegram (com cooldown)
+  eventBus.on('HEALTH_DEGRADED', async (event) => {
+    const { status, message } = event.payload as { status: string; message: string };
+    const now = Date.now();
+    const canAlert =
+      telegramBot.isEnabled() &&
+      notificationSettingsService.isEnabled('systemAlerts') &&
+      now - jobState.getLastHealthAlertTime() > jobState.HEALTH_ALERT_COOLDOWN;
+    if (canAlert) {
+      jobState.setLastHealthAlertTime(now);
+      await telegramBot.sendHealthAlert(status, message);
+    }
+  });
+
+  // DAILY_REPORT: dispara relatório de portfólio via range monitor
+  eventBus.on('DAILY_REPORT', async () => {
+    await rangeMonitorService.sendPortfolioReport();
+  });
 
   cron.schedule('*/15 * * * *', radarJobRunner);       // Radar: every 15 min
   cron.schedule('* * * * *', watchlistJobRunner);       // Watchlist: every min

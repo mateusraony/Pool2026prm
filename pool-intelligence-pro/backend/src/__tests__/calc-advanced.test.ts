@@ -100,8 +100,9 @@ describe('calcBacktest', () => {
     expect(result.dailyReturns.length).toBe(30);
   });
 
-  it('netPnl = totalFees - totalIL', () => {
-    const result = calcBacktest(baseParams);
+  it('netPnl = totalFees - totalIL (sem tx costs)', () => {
+    // transactionCostPct: 0 isola a fórmula core sem descontar custos de transação
+    const result = calcBacktest({ ...baseParams, transactionCostPct: 0 });
     expect(result.netPnl).toBeCloseTo(result.totalFees - result.totalIL, 0);
   });
 

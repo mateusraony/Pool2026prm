@@ -711,6 +711,12 @@ export interface BacktestResult {
   timeInRange: number;      // % of time price was in range
   rebalances: number;       // times price exited and re-entered range
   dailyReturns: { day: number; cumPnl: number; fees: number; il: number }[];
+  transactionCosts: {
+    entryCost: number;       // custo de entrada (metade do entryExitCost)
+    exitCost: number;        // custo de saída (metade do entryExitCost)
+    rebalancingCosts: number; // soma dos custos de rebalanceamento
+    total: number;           // custo total de transação
+  };
 }
 
 /**
@@ -728,6 +734,7 @@ export function calcBacktest(params: {
   mode: 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE';
   periodDays: number;
   priceHistory?: number[];
+  transactionCostPct?: number;  // custo por transação como % do capital (padrão: 0.1% = 0.001)
 }): BacktestResult {
   const { capital, entryPrice, rangeLower, rangeUpper, volAnn, fees24h, tvl, mode, periodDays } = params;
 
@@ -735,6 +742,11 @@ export function calcBacktest(params: {
   const k_active = kMap[mode] ?? 0.75;
   const userShare = tvl > 0 ? capital / tvl : 0;
   const dailyFees = fees24h * userShare * k_active;
+
+  // Custos de transação
+  const txCostPct = params.transactionCostPct ?? 0.001; // 0.1% default (swap fee + slippage)
+  const entryExitCost = capital * txCostPct * 2; // entrada + saída
+  const rebalanceCost = capital * txCostPct; // cada rebalanceamento
 
   // Generate or use price history
   let prices: number[];
@@ -782,7 +794,8 @@ export function calcBacktest(params: {
     }
     totalIL = Math.abs(ilFrac * capital);
 
-    const cumPnl = totalFees - totalIL;
+    const cumulativeRebalanceCost = rebalances * rebalanceCost;
+    const cumPnl = totalFees - totalIL - entryExitCost - cumulativeRebalanceCost;
     if (cumPnl > maxPnl) maxPnl = cumPnl;
     // Peak-to-trough drawdown: measure from peak portfolio value
     const peakValue = capital + maxPnl;
@@ -797,7 +810,8 @@ export function calcBacktest(params: {
     });
   }
 
-  const netPnl = totalFees - totalIL;
+  const totalTxCost = entryExitCost + rebalances * rebalanceCost;
+  const netPnl = totalFees - totalIL - totalTxCost;
 
   return {
     periodDays: prices.length,
@@ -809,6 +823,12 @@ export function calcBacktest(params: {
     timeInRange: prices.length > 0 ? Math.round((daysInRange / prices.length) * 10000) / 100 : 0,
     rebalances,
     dailyReturns,
+    transactionCosts: {
+      entryCost: Math.round((entryExitCost / 2) * 100) / 100,
+      exitCost: Math.round((entryExitCost / 2) * 100) / 100,
+      rebalancingCosts: Math.round((rebalances * rebalanceCost) * 100) / 100,
+      total: Math.round(totalTxCost * 100) / 100,
+    },
   };
 }
 
@@ -817,12 +837,13 @@ export function calcBacktest(params: {
 // ============================================================
 
 export interface LVRResult {
-  lvrDaily: number;           // daily LVR in USD
-  lvrAnnualized: number;      // annualized LVR in USD
-  lvrPercent: number;          // LVR as % of capital
-  feeToLvrRatio: number;      // fees / LVR — >1 means profitable after LVR
-  netAfterLvr: number;        // fees - LVR per day
+  lvrDaily: number;               // daily LVR in USD (concentration-adjusted)
+  lvrAnnualized: number;          // annualized LVR in USD
+  lvrPercent: number;             // LVR as % of capital
+  feeToLvrRatio: number;          // fees / LVR — >1 means profitable after LVR
+  netAfterLvr: number;            // fees - LVR per day
   verdict: 'profitable' | 'marginal' | 'unprofitable';
+  concentrationMultiplier: number; // range-width adjustment factor [0.5, 4]
 }
 
 /**
@@ -837,8 +858,10 @@ export function calcLVR(params: {
   fees24h: number;
   tvl: number;
   mode: 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE';
+  rangeLower?: number;  // optional: lower bound of position range
+  rangeUpper?: number;  // optional: upper bound of position range
 }): LVRResult {
-  const { capital, volAnn, fees24h, tvl, mode } = params;
+  const { capital, volAnn, fees24h, tvl, mode, rangeLower, rangeUpper } = params;
 
   const kMap: Record<string, number> = { DEFENSIVE: 0.55, NORMAL: 0.75, AGGRESSIVE: 0.95 };
   const k_active = kMap[mode] ?? 0.75;
@@ -846,8 +869,20 @@ export function calcLVR(params: {
   const dailyVol = volAnn / Math.sqrt(365);
   const dailyVolSq = dailyVol * dailyVol;
 
-  // LVR daily ≈ capital * σ²_daily / 2
-  const lvrDaily = capital * dailyVolSq / 2;
+  // LVR base ≈ capital * σ²_daily / 2
+  const lvrDailyBase = capital * dailyVolSq / 2;
+
+  // Ajuste por concentração de range: range estreito = maior LVR por capital
+  // Fórmula: 1 / rangeWidthFraction, clamped [0.5, 4]
+  // Ex: range 5% → mult = min(4, 1/0.05) = 4 (muito concentrado)
+  // Ex: range 50% → mult = min(4, 1/0.5) = 2
+  // Ex: range 100%→ mult = min(4, 1/1.0) = 1 (posição ampla, V2-like)
+  const rangeWidthFraction = rangeUpper != null && rangeUpper > 0 && rangeLower != null && rangeLower > 0
+    ? Math.abs(rangeUpper - rangeLower) / ((rangeUpper + rangeLower) / 2)
+    : 0.5; // fallback: assume 50% range
+  const concentrationMultiplier = Math.min(4, Math.max(0.5, 1 / Math.max(rangeWidthFraction, 0.1)));
+  const lvrDaily = lvrDailyBase * concentrationMultiplier;
+
   const lvrAnnualized = lvrDaily * 365;
   const lvrPercent = capital > 0 ? (lvrAnnualized / capital) * 100 : 0;
 
@@ -869,6 +904,7 @@ export function calcLVR(params: {
     feeToLvrRatio: Math.round(feeToLvrRatio * 100) / 100,
     netAfterLvr: Math.round(netAfterLvr * 100) / 100,
     verdict,
+    concentrationMultiplier: Math.round(concentrationMultiplier * 1000) / 1000,
   };
 }
 
@@ -1384,6 +1420,257 @@ export function calcTokenCorrelation(params: {
   };
 }
 
+// ============================================
+// CALC IL — helper usado por calcRangeBenchmark (Fase 6)
+// ============================================
+
+export interface ILParams {
+  entryPrice: number;
+  currentPrice: number;
+  rangeLower: number;
+  rangeUpper: number;
+  poolType: PoolType;
+}
+
+export interface ILResult {
+  ilPercent: number;   // negativo = perda (e.g. -3.5 = -3.5%)
+  ilUsd: number;       // sempre positivo (magnitude da perda)
+  outOfRange: boolean;
+}
+
+/**
+ * Calcula Impermanent Loss analítico para posição CL (Uniswap V3) ou V2.
+ * Retorna ilPercent como valor negativo (perda) ou zero (sem IL).
+ */
+export function calcIL(params: ILParams): ILResult {
+  const { entryPrice, currentPrice, rangeLower, rangeUpper, poolType } = params;
+
+  if (entryPrice <= 0 || currentPrice <= 0) {
+    return { ilPercent: 0, ilUsd: 0, outOfRange: false };
+  }
+
+  const priceRatio = currentPrice / entryPrice;
+  const outOfRange = currentPrice < rangeLower || currentPrice > rangeUpper;
+
+  // Fórmula padrão Uniswap V3 IL: 2√k/(1+k) - 1, onde k = P_end/P_start
+  const sqrtRatio = Math.sqrt(priceRatio);
+  let ilFraction = (2 * sqrtRatio) / (1 + priceRatio) - 1; // ≤ 0
+
+  if (outOfRange && poolType === 'CL') {
+    // Fora do range: IL é calculado no preço da borda do range
+    const boundaryPrice = currentPrice > rangeUpper ? rangeUpper : rangeLower;
+    const bRatio = boundaryPrice / entryPrice;
+    const bSqrt = Math.sqrt(bRatio);
+    ilFraction = (2 * bSqrt) / (1 + bRatio) - 1;
+  }
+
+  const ilPercent = Math.round(ilFraction * 10000) / 100; // em %
+
+  return {
+    ilPercent,           // negativo = perda
+    ilUsd: 0,            // sem capital aqui — caller calcula se necessário
+    outOfRange,
+  };
+}
+
+// ============================================
+// TICK LIQUIDITY DISTRIBUTION (Fase 6 — 6.1)
+// ============================================
+
+export interface TickLiquidityParams {
+  tvl: number;           // total pool TVL in USD
+  price: number;         // current price (token1/token0)
+  volatilityAnn: number; // annualized volatility (decimal, e.g. 0.8 = 80%)
+  rangeLower: number;    // lower bound of user's range
+  rangeUpper: number;    // upper bound of user's range
+}
+
+export interface TickLiquidityResult {
+  fractionInRange: number;           // 0-1: fraction of total liquidity in [rangeLower, rangeUpper]
+  capitalEfficiency: number;         // multiplier vs full-range (e.g. 5.0 = 5x more efficient)
+  estimatedLiquidityInRange: number; // estimated USD liquidity within the range
+  method: 'log_normal';
+  warning?: string;
+}
+
+/**
+ * Estimativa de liquidez dentro de um range usando distribuição log-normal.
+ *
+ * Modelo: assume que a liquidez segue uma distribuição log-normal centrada
+ * no preço atual, com σ derivado da volatilidade anualizada (via horizonte diário).
+ * A fração no range = integral da log-normal de rangeLower a rangeUpper.
+ *
+ * Capital efficiency = 1 / fractionInRange (range mais estreito = uso mais eficiente)
+ */
+export function calcTickLiquidity(params: TickLiquidityParams): TickLiquidityResult {
+  const { tvl, price, volatilityAnn, rangeLower, rangeUpper } = params;
+
+  // Validações básicas
+  if (rangeLower <= 0 || rangeUpper <= rangeLower || price <= 0) {
+    return {
+      fractionInRange: 1,
+      capitalEfficiency: 1,
+      estimatedLiquidityInRange: tvl,
+      method: 'log_normal',
+      warning: 'Invalid range or price — returning full-range estimate',
+    };
+  }
+
+  // σ diária da volatilidade anualizada (252 dias de trading)
+  const sigmaDaily = volatilityAnn / Math.sqrt(252);
+  // σ para o horizonte relevante (7 dias — horizonte típico de LP)
+  const sigma = sigmaDaily * Math.sqrt(7);
+
+  // Transformar rangeLower e rangeUpper em termos de log-retorno normalizado
+  const logPrice = Math.log(price);
+  const zLower = (Math.log(rangeLower) - logPrice) / sigma;
+  const zUpper = (Math.log(rangeUpper) - logPrice) / sigma;
+
+  // Integral da normal padrão de zLower a zUpper
+  const fraction = normalCDF(zUpper) - normalCDF(zLower);
+
+  // Clamp para evitar frações impossíveis
+  const fractionInRange = Math.max(0.01, Math.min(1, fraction));
+  const capitalEfficiency = Math.min(50, 1 / fractionInRange); // cap 50x
+
+  return {
+    fractionInRange: Math.round(fractionInRange * 10000) / 10000,
+    capitalEfficiency: Math.round(capitalEfficiency * 100) / 100,
+    estimatedLiquidityInRange: Math.round(tvl * fractionInRange),
+    method: 'log_normal',
+  };
+}
+
+// ============================================
+// RANGE BENCHMARK (Fase 6 — 6.2)
+// ============================================
+
+export interface RangeBenchmarkParams {
+  startPrice: number;        // price at position entry
+  endPrice: number;          // price at position exit / now
+  rangeLower: number;        // user's range lower bound
+  rangeUpper: number;        // user's range upper bound
+  feesEarnedUsd: number;     // total fees collected in period
+  capitalUsd: number;        // capital deployed
+  periodDays: number;        // duration (days)
+  feeTier: number;           // e.g. 0.003 = 0.3%
+  volatilityAnn: number;     // annualized volatility
+}
+
+export interface RangeBenchmarkResult {
+  periodDays: number;
+  startPrice: number;
+  endPrice: number;
+  priceChangePct: number;
+
+  // Returns (pct over period, not annualized)
+  rangeReturnPct: number;       // actual CL LP return (fees + IL)
+  hodlReturnPct: number;        // hold 50/50 tokens
+  v2LpReturnPct: number;        // full-range (V2-equivalent) LP
+  idealNarrowReturnPct: number; // ±10% around startPrice (narrow CL)
+
+  // Comparisons
+  vsHodl: number;               // rangeReturnPct - hodlReturnPct
+  vsV2: number;                 // rangeReturnPct - v2LpReturnPct
+
+  verdict: 'OUTPERFORMING' | 'UNDERPERFORMING' | 'NEUTRAL';
+  explanation: string;
+}
+
+/**
+ * Benchmarks CL LP position against HODL, full-range V2, and ideal narrow range.
+ *
+ * Todos os retornos são percentuais SOBRE O PERÍODO (não anualizados).
+ */
+export function calcRangeBenchmark(params: RangeBenchmarkParams): RangeBenchmarkResult {
+  const {
+    startPrice, endPrice, rangeLower, rangeUpper,
+    feesEarnedUsd, capitalUsd, periodDays, feeTier, volatilityAnn,
+  } = params;
+
+  const priceChangePct = (endPrice - startPrice) / startPrice * 100;
+
+  // --- 1. Actual CL LP return ---
+  // IL usando a fórmula analítica para CL
+  const ilResult = calcIL({
+    entryPrice: startPrice,
+    currentPrice: endPrice,
+    rangeLower,
+    rangeUpper,
+    poolType: 'CL',
+  });
+  const feesReturnPct = capitalUsd > 0 ? feesEarnedUsd / capitalUsd * 100 : 0;
+  const rangeReturnPct = feesReturnPct + ilResult.ilPercent; // ilPercent is negative for IL
+
+  // --- 2. HODL return (hold 50/50 at entry) ---
+  // If you had held 50% token0 + 50% token1 from start
+  const token0ValueRatio = 0.5 * (endPrice / startPrice);
+  const token1ValueRatio = 0.5 * 1;  // token1 (stable-ish denominator)
+  const hodlReturnPct = (token0ValueRatio + token1ValueRatio - 1) * 100;
+
+  // --- 3. V2 LP (full range, 0 to ∞) ---
+  // IL for full-range LP: standard formula k = sqrt(P_end/P_start)
+  const k = Math.sqrt(endPrice / startPrice);
+  const v2ILPct = (2 * k / (1 + k) - 1) * 100;
+  // Fees for V2 (lower capital efficiency — assume 1x vs CL concentration factor)
+  const tickResult = calcTickLiquidity({
+    tvl: capitalUsd, price: startPrice, volatilityAnn,
+    rangeLower, rangeUpper,
+  });
+  // V2 earns fees proportional to its fraction vs CL capital efficiency
+  const v2FeesReturnPct = feesReturnPct / tickResult.capitalEfficiency;
+  const v2LpReturnPct = v2FeesReturnPct + v2ILPct;
+
+  // --- 4. Ideal narrow range (±10% around startPrice) ---
+  const idealLower = startPrice * 0.90;
+  const idealUpper = startPrice * 1.10;
+  const idealIL = calcIL({
+    entryPrice: startPrice, currentPrice: endPrice,
+    rangeLower: idealLower, rangeUpper: idealUpper,
+    poolType: 'CL',
+  });
+  const idealTickResult = calcTickLiquidity({
+    tvl: capitalUsd, price: startPrice, volatilityAnn,
+    rangeLower: idealLower, rangeUpper: idealUpper,
+  });
+  const idealFeesReturnPct = feesReturnPct * idealTickResult.capitalEfficiency / tickResult.capitalEfficiency;
+  const idealNarrowReturnPct = idealFeesReturnPct + idealIL.ilPercent;
+
+  // --- Verdict ---
+  const vsHodl = rangeReturnPct - hodlReturnPct;
+  const vsV2 = rangeReturnPct - v2LpReturnPct;
+
+  let verdict: RangeBenchmarkResult['verdict'];
+  let explanation: string;
+
+  if (vsHodl > 1 && vsV2 > 0.5) {
+    verdict = 'OUTPERFORMING';
+    explanation = `Range LP superou HODL em ${vsHodl.toFixed(2)}% e LP full-range em ${vsV2.toFixed(2)}% no período.`;
+  } else if (vsHodl < -2 || vsV2 < -2) {
+    verdict = 'UNDERPERFORMING';
+    explanation = `Range LP ficou abaixo de HODL em ${Math.abs(vsHodl).toFixed(2)}% e abaixo do LP full-range em ${Math.abs(vsV2).toFixed(2)}%.`;
+  } else {
+    verdict = 'NEUTRAL';
+    explanation = `Desempenho neutro: diferença de ${vsHodl.toFixed(2)}% vs HODL e ${vsV2.toFixed(2)}% vs V2.`;
+  }
+
+  // feeTier is received but not used in this calculation (available for future extensions)
+  void feeTier;
+
+  return {
+    periodDays,
+    startPrice, endPrice, priceChangePct: Math.round(priceChangePct * 100) / 100,
+    rangeReturnPct: Math.round(rangeReturnPct * 100) / 100,
+    hodlReturnPct: Math.round(hodlReturnPct * 100) / 100,
+    v2LpReturnPct: Math.round(v2LpReturnPct * 100) / 100,
+    idealNarrowReturnPct: Math.round(idealNarrowReturnPct * 100) / 100,
+    vsHodl: Math.round(vsHodl * 100) / 100,
+    vsV2: Math.round(vsV2 * 100) / 100,
+    verdict,
+    explanation,
+  };
+}
+
 const calcService = {
   calcAprFee,
   calcVolatilityAnn,
@@ -1402,6 +1689,9 @@ const calcService = {
   calcPortfolioAnalytics,
   calcAutoCompound,
   calcTokenCorrelation,
+  calcIL,
+  calcTickLiquidity,
+  calcRangeBenchmark,
 };
 
 export { calcService };

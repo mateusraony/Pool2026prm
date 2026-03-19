@@ -14,6 +14,7 @@ import { poolIntelligenceService } from '../services/pool-intelligence.service.j
 import {
   calcRangeRecommendation, calcUserFees, calcILRisk, calcMonteCarlo, calcBacktest, calcLVR,
   calcPortfolioAnalytics, calcAutoCompound, calcTokenCorrelation,
+  calcTickLiquidity, calcRangeBenchmark,
   type PortfolioPosition,
 } from '../services/calc.service.js';
 import { Pool, UnifiedPool } from '../types/index.js';
@@ -470,7 +471,7 @@ router.post('/monte-carlo', validate(monteCarloSchema), async (req, res) => {
 // POST /api/backtest — backtest a range strategy
 router.post('/backtest', validate(backtestSchema), async (req, res) => {
   try {
-    const { chain, address, capital = 10000, periodDays = 30, mode = 'NORMAL' } = req.body;
+    const { chain, address, capital = 10000, periodDays = 30, mode = 'NORMAL', transactionCostPct } = req.body;
 
     const radarResults = getLatestRadarResults();
     const fromRadar = radarResults.find(r =>
@@ -514,6 +515,7 @@ router.post('/backtest', validate(backtestSchema), async (req, res) => {
       mode,
       periodDays: Math.min(periodDays, 365),
       priceHistory,
+      transactionCostPct,
     });
 
     res.json({
@@ -677,6 +679,30 @@ router.get('/portfolio-analytics', async (req, res) => {
       await Promise.allSettled(fetches);
     } catch { /* OHLCV unavailable — will use snapshot method */ }
 
+    const calcILForPosition = (
+      currentPrice: number,
+      entryPrice: number,
+      capital: number,
+      rangeLower: number,
+      rangeUpper: number,
+    ): number => {
+      if (!currentPrice || !entryPrice || entryPrice === 0) return 0;
+      const priceRatio = currentPrice / entryPrice;
+      const sqrtR = Math.sqrt(priceRatio);
+      const ilFraction = (2 * sqrtR) / (1 + priceRatio) - 1; // always ≤ 0
+      let ilActual = Math.abs(ilFraction * capital);
+      // Out-of-range: IL is capped at boundary value (position fully in one token)
+      const isOutOfRange = currentPrice < rangeLower || currentPrice > rangeUpper;
+      if (isOutOfRange && rangeLower > 0 && rangeUpper > 0) {
+        const boundaryPrice = currentPrice > rangeUpper ? rangeUpper : rangeLower;
+        const bRatio = boundaryPrice / entryPrice;
+        const bSqrt = Math.sqrt(bRatio);
+        const bIL = Math.abs(((2 * bSqrt) / (1 + bRatio) - 1) * capital);
+        ilActual = Math.max(ilActual, bIL);
+      }
+      return ilActual;
+    };
+
     const positions: PortfolioPosition[] = activePositions.map(rp => {
       const fromRadar = radarResults.find(r =>
         r.pool.chain === rp.chain &&
@@ -696,7 +722,11 @@ router.get('/portfolio-analytics', async (req, res) => {
         feesAccrued: (fromRadar?.pool.fees24h || memPool?.fees24hUSD || 0) *
           (rp.capital / (fromRadar?.pool.tvl || memPool?.tvlUSD || 1)) * 0.75 *
           (Date.now() - new Date(rp.createdAt).getTime()) / 86400000,
-        ilActual: 0,
+        ilActual: (() => {
+          const currentPrice = memPool?.price ?? fromRadar?.pool.price;
+          if (!currentPrice || !rp.entryPrice || !rp.rangeLower || !rp.rangeUpper) return 0;
+          return calcILForPosition(currentPrice, rp.entryPrice, rp.capital, rp.rangeLower, rp.rangeUpper);
+        })(),
         protocol: memPool?.protocol || fromRadar?.pool.protocol || '',
         token0Symbol: rp.token0Symbol,
         token1Symbol: rp.token1Symbol,
@@ -850,6 +880,34 @@ router.get('/pools/:chain/:address/ohlcv', async (req, res) => {
   } catch (error) {
     logService.error('SYSTEM', 'GET /pools/ohlcv failed', { error });
     res.status(500).json({ success: false, error: 'Failed to fetch price history', timestamp: new Date() });
+  }
+});
+
+// POST /api/range-benchmark — Fase 6: benchmark de range vs HODL e V2
+router.post('/range-benchmark', (req, res) => {
+  try {
+    const {
+      startPrice, endPrice, rangeLower, rangeUpper,
+      feesEarnedUsd, capitalUsd, periodDays, feeTier, volatilityAnn,
+    } = req.body as Record<string, number>;
+
+    if (!startPrice || !endPrice || !rangeLower || !rangeUpper || !capitalUsd) {
+      res.status(400).json({ success: false, error: 'Missing required fields: startPrice, endPrice, rangeLower, rangeUpper, capitalUsd' });
+      return;
+    }
+
+    const result = calcRangeBenchmark({
+      startPrice, endPrice, rangeLower, rangeUpper,
+      feesEarnedUsd: feesEarnedUsd ?? 0,
+      capitalUsd,
+      periodDays: periodDays ?? 7,
+      feeTier: feeTier ?? 0.003,
+      volatilityAnn: volatilityAnn ?? 0.8,
+    });
+
+    res.json({ success: true, data: result, timestamp: new Date() });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Benchmark calculation failed' });
   }
 });
 

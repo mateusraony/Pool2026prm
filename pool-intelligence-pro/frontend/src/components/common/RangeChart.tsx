@@ -101,8 +101,15 @@ export function RangeChart({
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <h3 className="font-semibold">Distribuicao de Liquidez & Range</h3>
-          {liquidityData && (
+          {liquidityData ? (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-mono">LIVE</span>
+          ) : (
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono cursor-help"
+              title="Distribuição estimada — dados de liquidez por tick não disponíveis para este pool"
+            >
+              Est.
+            </span>
           )}
         </div>
         <div className="flex items-center gap-2 text-sm">

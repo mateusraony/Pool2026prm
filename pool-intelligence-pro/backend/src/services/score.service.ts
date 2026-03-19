@@ -2,6 +2,7 @@ import { Pool, PoolWithMetrics, Score, ScoreBreakdown, Mode } from '../types/ind
 import { config } from '../config/index.js';
 import { logService } from './log.service.js';
 import { memoryStore } from './memory-store.service.js';
+import { riskService } from './risk.service.js';
 
 interface ScoreWeights {
   health: number;
@@ -59,9 +60,13 @@ export class ScoreService {
       // Determine recommended mode
       const recommendedMode = this.determineMode(pool, metrics, total);
       
-      // Check for suspect conditions
-      const { isSuspect, suspectReason } = this.checkSuspect(pool, metrics, breakdown);
-      
+      // Avaliar risco via RiskService (Fase 4) + flags de domínio locais
+      const riskAssessment = riskService.assessPool(pool);
+      const suspectFlags = this.checkSuspect(pool, metrics, breakdown);
+      const isSuspect = riskAssessment.level === 'HIGH' || riskAssessment.level === 'CRITICAL' || suspectFlags.isSuspect;
+      // Preferir razão de domínio quando disponível; fallback para summary do risk service
+      const suspectReason = suspectFlags.suspectReason ?? (riskAssessment.factors.length > 0 ? riskAssessment.summary : undefined);
+
       return {
         total: Math.round(total * 10) / 10,
         health: Math.round(healthScore * 10) / 10,

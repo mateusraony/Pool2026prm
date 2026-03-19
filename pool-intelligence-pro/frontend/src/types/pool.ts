@@ -45,6 +45,12 @@ export interface Pool {
   poolAddress?: string;
   chain?: string;
   protocol?: string;
+  // Confiança dos dados — propagado do UnifiedPool
+  dataConfidence?: {
+    price?: { method: 'observed' | 'estimated_stable' | 'estimated_tvl' | 'unavailable'; confidence: 'high' | 'medium' | 'low' };
+    volume?: { method: 'observed' | 'supplement_gecko' | 'estimated_apy'; confidence: 'high' | 'medium' | 'low' };
+    fees?: { method: 'observed' | 'derived_volume' | 'estimated_apy'; confidence: 'high' | 'medium' | 'low' };
+  };
 }
 
 export interface ActivePool extends Pool {
