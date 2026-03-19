@@ -326,6 +326,8 @@ export default function PoolsPage() {
       poolType: poolTypeFilter || undefined,
       minTVL: minTVL ? parseFloat(minTVL) : undefined,
       minHealth: minHealth ? parseFloat(minHealth) : undefined,
+      // limit: 200 é intencional — pools já são filtradas/ordenadas server-side;
+      // a tabela exibe todas com client-side sort/search sem paginação adicional
       limit: 200,
     }),
     staleTime: 60000,
