@@ -1,7 +1,8 @@
 import { AlertType, AlertEvent, Pool } from '../types/index.js';
 import { logService } from './log.service.js';
 import { config } from '../config/index.js';
-import { webhookService } from './webhook.service.js';
+import { webhookService } from './webhook.service.js'; // mantido para uso futuro via event bus listener
+import { eventBus } from './event-bus.service.js';
 import { getPrisma } from '../routes/prisma.js';
 import { Prisma } from '@prisma/client';
 
@@ -119,11 +120,11 @@ export class AlertService {
     // Cleanup old alerts
     this.cleanupRecentAlerts();
 
-    // Dispatch to external webhooks (fire and forget)
+    // Emitir eventos via bus (fire and forget — webhooks e outros listeners são acionados pelo bus)
     if (events.length > 0) {
       for (const event of events) {
-        webhookService.dispatch(event).catch(err => {
-          logService.warn('SYSTEM', 'Webhook dispatch error', { error: err?.message });
+        eventBus.emit('ALERT_FIRED', event).catch(err => {
+          logService.warn('ALERT', 'Event bus emit failed', { err });
         });
       }
     }

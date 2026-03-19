@@ -1,6 +1,7 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { config } from '../config/index.js';
 import { logService } from '../services/log.service.js';
+import { formatDateTz } from '../services/time.service.js';
 import { persistService } from '../services/persist.service.js';
 import { AlertEvent, Recommendation } from '../types/index.js';
 
@@ -140,7 +141,7 @@ class TelegramBotService {
       emoji + ' <b>ALERTA: ' + event.type.replace(/_/g, ' ') + '</b>\n\n' +
       '<b>Pool:</b> ' + this.escapeHtml(poolName) + '\n' +
       '<b>Mensagem:</b> ' + this.escapeHtml(event.message) + '\n' +
-      '<b>Horario:</b> ' + event.timestamp.toISOString() + '\n\n' +
+      '<b>Horario:</b> ' + formatDateTz(event.timestamp, config.reportTimezone) + '\n\n' +
       '<i>Pool Intelligence Pro</i>';
 
     return this.sendMessage(message);
@@ -171,7 +172,7 @@ class TelegramBotService {
       rec.mainRisks.map(r => '• ' + r).join('\n') + '\n\n' +
       '<b>📝 Analise:</b>\n' +
       this.escapeHtml(rec.commentary.substring(0, 300)) + '...\n\n' +
-      '<i>Valido ate: ' + rec.validUntil.toISOString() + '</i>';
+      '<i>Valido ate: ' + formatDateTz(rec.validUntil, config.reportTimezone) + '</i>';
 
     return this.sendMessage(message);
   }
@@ -209,7 +210,7 @@ class TelegramBotService {
     const message =
       emoji + ' <b>STATUS DO SISTEMA: ' + status + '</b>\n\n' +
       details + '\n\n' +
-      '<i>' + new Date().toISOString() + '</i>';
+      '<i>' + formatDateTz(new Date(), config.reportTimezone) + '</i>';
 
     return this.sendMessage(message);
   }

@@ -67,6 +67,9 @@ export const config = {
     minPoolAgeDays: parseInt(process.env.MIN_POOL_AGE_DAYS || '7'),
     maxDivergencePercent: parseFloat(process.env.MAX_DIVERGENCE_PERCENT || '10'),
   },
+
+  // Timezone (Fase 5 — agendamento profissional)
+  reportTimezone: process.env.REPORT_TIMEZONE || 'America/Sao_Paulo',
 };
 
 export type Config = typeof config;
