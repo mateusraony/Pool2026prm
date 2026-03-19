@@ -28,3 +28,51 @@ self.addEventListener('fetch', (event) => {
     );
   }
 });
+
+// ============================================================
+// PUSH NOTIFICATIONS — ETAPA 17
+// ============================================================
+
+// Handle push events from server
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  let payload = { title: 'Pool Intelligence Pro', body: 'Nova notificação', icon: '/icon-192.svg', url: '/' };
+  try {
+    payload = { ...payload, ...event.data.json() };
+  } catch {
+    payload.body = event.data.text();
+  }
+
+  const options = {
+    body: payload.body,
+    icon: payload.icon || '/icon-192.svg',
+    badge: '/icon-192.svg',
+    tag: payload.tag || 'pool-intel-alert',
+    data: { url: payload.url || '/' },
+    requireInteraction: false,
+    silent: false,
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, options)
+  );
+});
+
+// Handle notification click — navigate to relevant page
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || '/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.focus();
+          client.navigate(url);
+          return;
+        }
+      }
+      return clients.openWindow(url);
+    })
+  );
+});
