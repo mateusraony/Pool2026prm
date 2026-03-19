@@ -30,30 +30,54 @@ class PushService {
   private initialized = false;
 
   /**
-   * Inicializa VAPID keys. Chamado no boot.
-   * Se VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY estiverem no env, usa eles.
-   * Caso contrário, gera automaticamente (apenas desenvolvimento).
+   * Inicializa VAPID keys. Prioridade:
+   * 1. Variáveis de ambiente (VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY) — recomendado para produção
+   * 2. Chaves salvas no DB via persistService (geradas uma vez e reutilizadas)
+   * 3. Gera um par novo, salva no DB para boots futuros (primeiro boot sem env vars)
    */
   async init(): Promise<void> {
     if (this.initialized) return;
 
-    const publicKey = process.env.VAPID_PUBLIC_KEY;
-    const privateKey = process.env.VAPID_PRIVATE_KEY;
     const contactEmail = process.env.VAPID_EMAIL || 'mailto:admin@poolintelligence.pro';
 
+    let publicKey = process.env.VAPID_PUBLIC_KEY;
+    let privateKey = process.env.VAPID_PRIVATE_KEY;
+    let source = 'env';
+
     if (publicKey && privateKey) {
-      webpush.setVapidDetails(contactEmail, publicKey, privateKey);
-      logService.info('SYSTEM', 'Push service initialized with env VAPID keys');
+      // Fonte 1: variáveis de ambiente
+      source = 'env';
     } else {
-      // Gera keys temporárias para desenvolvimento
-      const keys = webpush.generateVAPIDKeys();
-      webpush.setVapidDetails(contactEmail, keys.publicKey, keys.privateKey);
-      logService.warn('SYSTEM', 'Push service using auto-generated VAPID keys (set VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY for production)', {
-        publicKey: keys.publicKey,
+      // Fonte 2: chaves salvas no DB
+      const saved = persistService.get('vapid-keys') as { publicKey: string; privateKey: string } | undefined;
+      if (saved?.publicKey && saved?.privateKey) {
+        publicKey = saved.publicKey;
+        privateKey = saved.privateKey;
+        source = 'db';
+      } else {
+        // Fonte 3: gerar uma vez e salvar no DB
+        const keys = webpush.generateVAPIDKeys();
+        publicKey = keys.publicKey;
+        privateKey = keys.privateKey;
+        source = 'generated';
+        // Salvar para reutilização em boots futuros
+        persistService.set('vapid-keys', { publicKey, privateKey });
+      }
+      // Expor no env para que getPublicKey() e outros módulos vejam
+      process.env.VAPID_PUBLIC_KEY = publicKey;
+      process.env.VAPID_PRIVATE_KEY = privateKey;
+    }
+
+    webpush.setVapidDetails(contactEmail, publicKey!, privateKey!);
+
+    if (source === 'env') {
+      logService.info('SYSTEM', 'Push service initialized with env VAPID keys');
+    } else if (source === 'db') {
+      logService.info('SYSTEM', 'Push service initialized with persisted VAPID keys (from DB)');
+    } else {
+      logService.info('SYSTEM', 'Push service: generated stable VAPID keys and saved to DB (set VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY to pin them)', {
+        publicKey,
       });
-      // Store generated keys for this session
-      process.env.VAPID_PUBLIC_KEY = keys.publicKey;
-      process.env.VAPID_PRIVATE_KEY = keys.privateKey;
     }
 
     this.initialized = true;
