@@ -38,7 +38,7 @@ export const watchlistSchema = z.object({
 
 export const alertSchema = z.object({
   poolId: z.string().optional(),
-  type: z.enum(['PRICE_ABOVE', 'PRICE_BELOW', 'RSI_ABOVE', 'RSI_BELOW', 'MACD_CROSS_UP', 'MACD_CROSS_DOWN', 'VOLUME_DROP', 'LIQUIDITY_FLIGHT', 'VOLATILITY_SPIKE', 'OUT_OF_RANGE', 'NEAR_RANGE_EXIT', 'NEW_RECOMMENDATION']),
+  type: z.enum(['PRICE_ABOVE', 'PRICE_BELOW', 'VOLUME_DROP', 'LIQUIDITY_FLIGHT', 'VOLATILITY_SPIKE', 'OUT_OF_RANGE', 'NEAR_RANGE_EXIT', 'NEW_RECOMMENDATION']),
   threshold: z.number().finite().min(0).max(1_000_000),
 });
 

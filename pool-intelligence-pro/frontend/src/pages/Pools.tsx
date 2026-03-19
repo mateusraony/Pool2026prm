@@ -449,7 +449,7 @@ export default function PoolsPage() {
             🏊 Pool Intelligence
           </h1>
           <p className="text-dark-400 text-sm mt-1">
-            {data?.total ?? 0} pools analisadas · score institucional · dados reais
+            {data?.total ?? 0} pools analisadas · score institucional · dados observados e estimados
             {data?.syncing && <span className="ml-2 text-blue-400 text-xs">Sincronizando TheGraph...</span>}
           </p>
         </div>
