@@ -182,10 +182,6 @@ export interface Recommendation {
 export type AlertType =
   | 'PRICE_ABOVE'
   | 'PRICE_BELOW'
-  | 'RSI_ABOVE'
-  | 'RSI_BELOW'
-  | 'MACD_CROSS_UP'
-  | 'MACD_CROSS_DOWN'
   | 'VOLUME_DROP'
   | 'LIQUIDITY_FLIGHT'
   | 'VOLATILITY_SPIKE'

@@ -35,10 +35,6 @@ const ALERT_COLORS: Record<string, number> = {
   PRICE_ABOVE:      0x10B981, // green
   PRICE_BELOW:      0xEF4444, // red
   NEW_RECOMMENDATION: 0x3B82F6, // blue
-  RSI_ABOVE:        0xF59E0B,
-  RSI_BELOW:        0xF59E0B,
-  MACD_CROSS_UP:    0x10B981,
-  MACD_CROSS_DOWN:  0xEF4444,
   VOLUME_DROP:      0xF97316,
 };
 
@@ -145,6 +141,51 @@ function formatGenericPayload(event: AlertEvent): object {
 }
 
 // ============================================================
+// SSRF VALIDATION
+// ============================================================
+
+/**
+ * Valida URL contra SSRF: apenas HTTPS, sem IPs privados/localhost.
+ */
+function validateWebhookUrl(rawUrl: string): { ok: boolean; error?: string } {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return { ok: false, error: 'URL inválida' };
+  }
+
+  if (parsed.protocol !== 'https:') {
+    return { ok: false, error: 'Apenas URLs HTTPS são permitidas' };
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  // Bloquear localhost e variações
+  if (hostname === 'localhost' || hostname === '0.0.0.0' || hostname.endsWith('.local')) {
+    return { ok: false, error: 'URLs para localhost não são permitidas' };
+  }
+
+  // Bloquear IPs privados (RFC 1918 + loopback + link-local)
+  const privatePatterns = [
+    /^127\./,
+    /^10\./,
+    /^192\.168\./,
+    /^172\.(1[6-9]|2\d|3[01])\./,
+    /^169\.254\./,
+    /^\[::1\]/,
+    /^\[fc/,
+    /^\[fd/,
+  ];
+  for (const pattern of privatePatterns) {
+    if (pattern.test(hostname)) {
+      return { ok: false, error: 'URLs para IPs privados não são permitidas' };
+    }
+  }
+
+  return { ok: true };
+}
+
+// ============================================================
 // WEBHOOK SERVICE
 // ============================================================
 
@@ -188,6 +229,10 @@ class WebhookService {
    * Test webhook connectivity (sends a test payload).
    */
   async test(integration: Integration): Promise<{ ok: boolean; statusCode?: number; error?: string }> {
+    const urlCheck = validateWebhookUrl(integration.url);
+    if (!urlCheck.ok) {
+      return { ok: false, error: urlCheck.error };
+    }
     const testEvent: AlertEvent = {
       type: 'NEW_RECOMMENDATION',
       message: '🧪 Teste de integração — Pool Intelligence Pro está conectado!',
@@ -205,23 +250,49 @@ class WebhookService {
   }
 
   private async sendToIntegration(integration: Integration, event: AlertEvent): Promise<void> {
-    try {
-      const payload = this.buildPayload(integration.type, event);
-      const res = await this.postWithTimeout(integration.url, payload);
-      integration.lastTriggeredAt = new Date().toISOString();
-      if (res.ok) {
-        integration.successCount++;
-        logService.info('SYSTEM', `Webhook ${integration.type} sent`, { name: integration.name, status: res.status });
-      } else {
-        integration.errorCount++;
-        integration.lastError = `HTTP ${res.status}`;
-        logService.warn('SYSTEM', `Webhook ${integration.type} failed`, { name: integration.name, status: res.status });
-      }
-    } catch (e) {
+    const urlCheck = validateWebhookUrl(integration.url);
+    if (!urlCheck.ok) {
       integration.errorCount++;
-      integration.lastError = e instanceof Error ? e.message : String(e);
-      logService.error('SYSTEM', `Webhook ${integration.type} error`, { name: integration.name, error: integration.lastError });
+      integration.lastError = urlCheck.error;
+      logService.warn('SYSTEM', `Webhook URL bloqueada (SSRF)`, { name: integration.name, reason: urlCheck.error });
+      return;
     }
+
+    const payload = this.buildPayload(integration.type, event);
+    const MAX_RETRIES = 3;
+    const BACKOFF_BASE_MS = 1000;
+    let lastError: string | undefined;
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        const delay = BACKOFF_BASE_MS * Math.pow(2, attempt - 1); // 1s, 2s, 4s
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+      try {
+        const res = await this.postWithTimeout(integration.url, payload);
+        integration.lastTriggeredAt = new Date().toISOString();
+        if (res.ok) {
+          integration.successCount++;
+          logService.info('SYSTEM', `Webhook ${integration.type} sent`, { name: integration.name, status: res.status, attempt: attempt + 1 });
+          return;
+        } else {
+          lastError = `HTTP ${res.status}`;
+          // 4xx errors não devem ser retried (client error)
+          if (res.status >= 400 && res.status < 500) {
+            break;
+          }
+        }
+      } catch (e) {
+        lastError = e instanceof Error ? e.message : String(e);
+        logService.warn('SYSTEM', `Webhook attempt ${attempt + 1} failed`, { name: integration.name, error: lastError });
+      }
+    }
+
+    // All retries exhausted
+    integration.errorCount++;
+    integration.lastError = lastError;
+    integration.lastTriggeredAt = new Date().toISOString();
+    logService.error('SYSTEM', `Webhook ${integration.type} falhou após ${MAX_RETRIES} tentativas`, { name: integration.name, error: lastError });
   }
 
   private buildPayload(type: IntegrationType, event: AlertEvent): object {
