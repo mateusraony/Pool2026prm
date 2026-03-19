@@ -43,6 +43,10 @@ export class AlertService {
     this.saveToDb();
   }
 
+  hasRule(id: string): boolean {
+    return this.rules.has(id);
+  }
+
   removeRule(id: string): void {
     this.rules.delete(id);
     this.saveToDb();

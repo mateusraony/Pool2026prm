@@ -262,6 +262,7 @@ export default function WalletTracker() {
               placeholder="Label (opcional)"
               value={inputLabel}
               onChange={e => setInputLabel(e.target.value)}
+              maxLength={50}
               className="w-40"
             />
             <Button onClick={handleAnalyze} disabled={!inputAddress || !!addressError}>

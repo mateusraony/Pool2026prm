@@ -189,7 +189,7 @@ export default function RadarPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {pools.map((item, index) => (
             <PoolCard
-              key={item.pool.poolAddress || item.pool.externalId}
+              key={item.pool.poolAddress || item.pool.externalId || `pool-${index}`}
               pool={item.pool}
               score={item.score}
               index={index}

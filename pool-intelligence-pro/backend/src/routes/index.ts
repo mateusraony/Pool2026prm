@@ -100,13 +100,20 @@ router.get('/macro/events', (req, res) => {
 router.post('/macro/events', (req, res) => {
   try {
     const { name, date, type, impact, description, source, liquidityEffect } = req.body;
+    const validTypes = ['ECONOMIC', 'RATE_DECISION', 'CRYPTO_EVENT', 'VOLATILITY', 'EARNINGS', 'REGULATORY'];
     if (!name || !date || !type) {
       return res.status(400).json({ success: false, error: 'name, date, and type are required', timestamp: new Date() });
+    }
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ success: false, error: `type must be one of: ${validTypes.join(', ')}`, timestamp: new Date() });
+    }
+    if (isNaN(new Date(date).getTime())) {
+      return res.status(400).json({ success: false, error: 'date must be a valid ISO date string', timestamp: new Date() });
     }
     const event = macroCalendarService.addEvent({
       name,
       date: new Date(date),
-      type: type as any,
+      type: type,
       impact: impact || 'MEDIUM',
       description: description || '',
       source: source || 'user',

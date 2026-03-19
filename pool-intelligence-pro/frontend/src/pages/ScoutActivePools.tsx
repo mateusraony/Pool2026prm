@@ -113,7 +113,7 @@ export default function ScoutActivePools() {
                 </div>
                 <div className="rounded-lg bg-secondary/50 p-2 text-center">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Range</p>
-                  <p className="font-mono text-sm">{pos.rangeLower.toFixed(4)} - {pos.rangeUpper.toFixed(4)}</p>
+                  <p className="font-mono text-sm">{pos.rangeLower?.toFixed(4) ?? '—'} - {pos.rangeUpper?.toFixed(4) ?? '—'}</p>
                 </div>
                 <div className="rounded-lg bg-secondary/50 p-2 text-center">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Preco Atual</p>
@@ -121,7 +121,7 @@ export default function ScoutActivePools() {
                 </div>
                 <div className="rounded-lg bg-secondary/50 p-2 text-center">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Preco Entrada</p>
-                  <p className="font-mono text-sm">{pos.entryPrice.toFixed(4)}</p>
+                  <p className="font-mono text-sm">{pos.entryPrice?.toFixed(4) ?? '—'}</p>
                 </div>
               </div>
               {/* P&L Data */}
@@ -129,21 +129,21 @@ export default function ScoutActivePools() {
                 <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div className="rounded-lg bg-success/10 p-2 text-center">
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Fees Ganhas</p>
-                    <p className="font-mono text-sm text-success">+${pos.pnl.feesAccrued.toFixed(2)}</p>
+                    <p className="font-mono text-sm text-success">+${(pos.pnl.feesAccrued ?? 0).toFixed(2)}</p>
                   </div>
                   <div className="rounded-lg bg-destructive/10 p-2 text-center">
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground">IL</p>
-                    <p className="font-mono text-sm text-destructive">-${pos.pnl.ilActual.toFixed(2)}</p>
+                    <p className="font-mono text-sm text-destructive">-${(pos.pnl.ilActual ?? 0).toFixed(2)}</p>
                   </div>
-                  <div className={cn('rounded-lg p-2 text-center', pos.pnl.pnl >= 0 ? 'bg-success/10' : 'bg-destructive/10')}>
+                  <div className={cn('rounded-lg p-2 text-center', (pos.pnl.pnl ?? 0) >= 0 ? 'bg-success/10' : 'bg-destructive/10')}>
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground">PnL Net</p>
-                    <p className={cn('font-mono text-sm font-medium', pos.pnl.pnl >= 0 ? 'text-success' : 'text-destructive')}>
-                      {pos.pnl.pnl >= 0 ? '+' : ''}${pos.pnl.pnl.toFixed(2)}
+                    <p className={cn('font-mono text-sm font-medium', (pos.pnl.pnl ?? 0) >= 0 ? 'text-success' : 'text-destructive')}>
+                      {(pos.pnl.pnl ?? 0) >= 0 ? '+' : ''}${(pos.pnl.pnl ?? 0).toFixed(2)}
                     </p>
                   </div>
                   <div className="rounded-lg bg-secondary/50 p-2 text-center">
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Fee APR</p>
-                    <p className="font-mono text-sm text-primary">{pos.pnl.feeAPR.toFixed(1)}%</p>
+                    <p className="font-mono text-sm text-primary">{(pos.pnl.feeAPR ?? 0).toFixed(1)}%</p>
                   </div>
                 </div>
               )}

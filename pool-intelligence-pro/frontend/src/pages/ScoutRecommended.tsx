@@ -100,11 +100,15 @@ export default function ScoutRecommended() {
   }, [allPools, networkFilter, riskFilter, searchQuery, sortBy]);
 
   const handleFavorite = async (pool: Pool) => {
+    if (!pool.poolAddress) {
+      toast.error('Pool sem endereço válido — não é possível favoritar');
+      return;
+    }
     try {
       await addFavorite({
         poolId: pool.id,
         chain: pool.chain || pool.network,
-        poolAddress: pool.poolAddress || '',
+        poolAddress: pool.poolAddress,
         token0Symbol: pool.token0,
         token1Symbol: pool.token1,
         protocol: pool.dex,
@@ -288,7 +292,7 @@ export default function ScoutRecommended() {
               capitalSuggested={{
                 percent: Math.min(config.maxPerPool, Math.max(1, Math.ceil(5 - index * 0.5))),
                 usdt: Math.min(config.maxPerPool, Math.max(1, Math.ceil(5 - index * 0.5))) *
-                      (config.totalBanca / 100),
+                      ((config.totalBanca ?? 0) / 100),
               }}
               onViewDetails={() => navigate(`/pools/${pool.chain}/${pool.poolAddress}`)}
               onFavorite={() => handleFavorite(pool)}

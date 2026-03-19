@@ -245,9 +245,9 @@ router.get('/tokens', async (req, res) => {
       const dbTokens = await getPrisma().token.findMany({ select: { symbol: true }, distinct: ['symbol'], take: 500 });
       const extra = dbTokens.map((t: { symbol: string }) => t.symbol.toUpperCase());
       const merged = Array.from(new Set([...tokens, ...extra])).sort();
-      return res.json(merged);
+      return res.json({ success: true, data: merged, timestamp: new Date() });
     } catch {
-      return res.json(tokens);
+      return res.json({ success: true, data: tokens, timestamp: new Date() });
     }
   } catch (error) {
     logService.error('SYSTEM', 'GET /tokens failed', { error });
