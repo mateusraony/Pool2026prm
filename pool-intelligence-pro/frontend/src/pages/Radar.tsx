@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { TrendingUp, Eye, AlertTriangle, ArrowRight, Check, Loader2, Star } from 'lucide-react';
 import { fetchPools, addToWatchlist, fetchWatchlist, Pool, Score } from '../api/client';
+import { toast } from 'sonner';
 import { MainLayout } from '@/components/layout/MainLayout';
 import clsx from 'clsx';
 
@@ -158,8 +159,8 @@ export default function RadarPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['watchlist'] });
     },
-    onError: (error) => {
-      console.error('Failed to add to watchlist:', error);
+    onError: () => {
+      toast.error('Falha ao adicionar à watchlist. Tente novamente.');
     },
   });
 

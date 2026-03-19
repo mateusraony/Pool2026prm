@@ -366,8 +366,8 @@ export default function PoolDetailPage() {
   const uniChain = chainMap[poolChain.toLowerCase()] || 'mainnet';
   // feeTier normalized to bps (handles both fraction and bps input)
   const feeTierBps = feeTierToBps(feeTier);
-  const token0Addr = pool.token0?.address || 'ETH';
-  const token1Addr = pool.token1?.address || 'ETH';
+  const token0Addr = pool.token0?.address || '';
+  const token1Addr = pool.token1?.address || '';
 
   const addLiquidityUrl = poolProtocol.toLowerCase().includes('uniswap')
     ? `https://app.uniswap.org/add/${token0Addr}/${token1Addr}/${feeTierBps}?chain=${uniChain}`
@@ -413,11 +413,13 @@ export default function PoolDetailPage() {
             <Bell className="w-4 h-4" />
             Monitorar
           </button>
-          <a href={addLiquidityUrl} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg text-sm transition-colors">
-            <ExternalLink className="w-4 h-4" />
-            Add Liquidity
-          </a>
+          {token0Addr && token1Addr && (
+            <a href={addLiquidityUrl} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg text-sm transition-colors">
+              <ExternalLink className="w-4 h-4" />
+              Add Liquidity
+            </a>
+          )}
         </div>
       </div>
 

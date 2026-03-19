@@ -204,7 +204,11 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
 
   // Uniswap URL — feeTier normalized to bps (handles both fraction and bps input)
   const feeTierBps = feeTierToBps(pool.feeTier);
-  const uniswapUrl = `https://app.uniswap.org/add/${pool.token0?.address ?? ''}/${pool.token1?.address ?? ''}/${feeTierBps}?chain=${pool.chain}`;
+  const token0Addr = pool.token0?.address ?? '';
+  const token1Addr = pool.token1?.address ?? '';
+  const uniswapUrl = token0Addr && token1Addr
+    ? `https://app.uniswap.org/add/${token0Addr}/${token1Addr}/${feeTierBps}?chain=${pool.chain}`
+    : null;
 
   return (
     <div className="space-y-6">
@@ -460,19 +464,25 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
             )}
 
             <div className="grid grid-cols-2 gap-3">
-              <a
-                href={uniswapUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-primary py-4 text-lg flex items-center justify-center gap-2"
-              >
-                🚀 Uniswap
-                <ExternalLink className="w-4 h-4" />
-              </a>
+              {uniswapUrl ? (
+                <a
+                  href={uniswapUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-primary py-4 text-lg flex items-center justify-center gap-2"
+                >
+                  🚀 Uniswap
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              ) : (
+                <button disabled className="btn btn-primary py-4 text-lg flex items-center justify-center gap-2 opacity-50 cursor-not-allowed">
+                  🚀 Uniswap
+                </button>
+              )}
 
               <button
                 onClick={handleMonitorRange}
-                disabled={createMonitorMutation.isPending || deleteMonitorMutation.isPending}
+                disabled={createMonitorMutation.isPending || deleteMonitorMutation.isPending || priceUnavailable}
                 className={clsx(
                   'py-4 text-lg flex items-center justify-center gap-2 rounded-xl font-semibold transition-all',
                   isMonitoring
@@ -552,7 +562,7 @@ export default function SimulationPage() {
             {pools.slice(0, 6).map((item) => (
               <button
                 key={item.pool.poolAddress || item.pool.externalId}
-                onClick={() => navigate('/simulation/' + item.pool.chain + '/' + (item.pool.poolAddress || 'unknown'))}
+                onClick={() => { if (item.pool.poolAddress) navigate('/simulation/' + item.pool.chain + '/' + item.pool.poolAddress); }}
                 className="card hover:border-primary-500/50 transition-all text-left"
               >
                 <div className="p-4">

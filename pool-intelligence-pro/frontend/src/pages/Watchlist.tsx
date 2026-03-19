@@ -164,7 +164,7 @@ export default function WatchlistPage() {
                       </button>
                       <button
                         className="btn bg-danger-600 hover:bg-danger-500 p-2"
-                        onClick={(e) => { e.stopPropagation(); removeMutation.mutate(item.poolId); }}
+                        onClick={(e) => { e.stopPropagation(); if (window.confirm('Remover da watchlist?')) removeMutation.mutate(item.poolId); }}
                         disabled={removeMutation.isPending}
                         title="Remover da watchlist"
                       >

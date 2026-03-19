@@ -56,7 +56,7 @@ export function usePoolWebSocket(chain: string | undefined, address: string | un
       setState(s => ({
         ...s,
         liveData: data.pool,
-        lastUpdated: new Date(data.updatedAt),
+        lastUpdated: data.updatedAt && !isNaN(new Date(data.updatedAt).getTime()) ? new Date(data.updatedAt) : new Date(),
         positionAlert: data.positionAlert,
       }));
 

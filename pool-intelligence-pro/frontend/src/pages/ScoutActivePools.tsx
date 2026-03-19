@@ -153,7 +153,7 @@ export default function ScoutActivePools() {
                   Ver Detalhes
                 </Button>
                 <Button variant="outline" size="sm"
-                  onClick={() => deleteMutation.mutate(pos.id)}
+                  onClick={() => { if (window.confirm('Remover esta posição permanentemente?')) deleteMutation.mutate(pos.id); }}
                   disabled={deleteMutation.isPending}
                   className="text-destructive hover:text-destructive">
                   <Trash2 className="h-4 w-4" />

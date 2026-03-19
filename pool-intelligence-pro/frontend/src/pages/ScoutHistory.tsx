@@ -78,7 +78,7 @@ export default function ScoutHistory() {
                   key={entry.id}
                   entry={entry}
                   index={index}
-                  onDelete={() => deleteMutation.mutate(entry.id)}
+                  onDelete={() => { if (window.confirm('Remover este registro permanentemente?')) deleteMutation.mutate(entry.id); }}
                 />
               ))}
             </div>

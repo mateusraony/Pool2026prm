@@ -298,7 +298,7 @@ export default function PositionsPage() {
               <PositionCard
                 key={position.id}
                 position={position}
-                onDelete={() => deleteMutation.mutate(position.id)}
+                onDelete={() => { if (confirm('Remover monitoramento desta posição?')) deleteMutation.mutate(position.id); }}
               />
             ))}
           </div>

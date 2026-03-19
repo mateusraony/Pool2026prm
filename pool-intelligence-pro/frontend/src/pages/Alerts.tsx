@@ -79,7 +79,7 @@ export default function AlertsPage() {
     return poolId.slice(0, 12) + '...';
   };
 
-  const telegramConnected = health?.alerts?.rulesCount !== undefined;
+  const telegramConnected = (settings as any)?.telegram?.enabled ?? false;
 
   return (
     <div className="space-y-6">
@@ -133,7 +133,7 @@ export default function AlertsPage() {
                         </div>
                         <button
                           className="p-2 rounded-lg bg-danger-600 hover:bg-danger-500 transition-colors"
-                          onClick={() => deleteMutation.mutate(id)}
+                          onClick={() => { if (window.confirm('Remover este alerta?')) deleteMutation.mutate(id); }}
                           disabled={deleteMutation.isPending}
                         >
                           <Trash2 className="w-4 h-4" />
