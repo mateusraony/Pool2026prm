@@ -14,6 +14,7 @@ import { poolIntelligenceService } from '../services/pool-intelligence.service.j
 import {
   calcRangeRecommendation, calcUserFees, calcILRisk, calcMonteCarlo, calcBacktest, calcLVR,
   calcPortfolioAnalytics, calcAutoCompound, calcTokenCorrelation,
+  calcTickLiquidity, calcRangeBenchmark,
   type PortfolioPosition,
 } from '../services/calc.service.js';
 import { Pool, UnifiedPool } from '../types/index.js';
@@ -879,6 +880,34 @@ router.get('/pools/:chain/:address/ohlcv', async (req, res) => {
   } catch (error) {
     logService.error('SYSTEM', 'GET /pools/ohlcv failed', { error });
     res.status(500).json({ success: false, error: 'Failed to fetch price history', timestamp: new Date() });
+  }
+});
+
+// POST /api/range-benchmark — Fase 6: benchmark de range vs HODL e V2
+router.post('/range-benchmark', (req, res) => {
+  try {
+    const {
+      startPrice, endPrice, rangeLower, rangeUpper,
+      feesEarnedUsd, capitalUsd, periodDays, feeTier, volatilityAnn,
+    } = req.body as Record<string, number>;
+
+    if (!startPrice || !endPrice || !rangeLower || !rangeUpper || !capitalUsd) {
+      res.status(400).json({ success: false, error: 'Missing required fields: startPrice, endPrice, rangeLower, rangeUpper, capitalUsd' });
+      return;
+    }
+
+    const result = calcRangeBenchmark({
+      startPrice, endPrice, rangeLower, rangeUpper,
+      feesEarnedUsd: feesEarnedUsd ?? 0,
+      capitalUsd,
+      periodDays: periodDays ?? 7,
+      feeTier: feeTier ?? 0.003,
+      volatilityAnn: volatilityAnn ?? 0.8,
+    });
+
+    res.json({ success: true, data: result, timestamp: new Date() });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Benchmark calculation failed' });
   }
 });
 

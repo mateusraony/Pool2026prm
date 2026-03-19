@@ -22,6 +22,8 @@ import { macroCalendarService } from '../services/macro-calendar.service.js';
 import { marketRegimeService } from '../services/market-regime.service.js';
 import { memoryStore } from '../services/memory-store.service.js';
 import type { Pool } from '../types/index.js';
+import { decisionLogService } from '../services/decision-log.service.js';
+import { weightOptimizerService } from '../services/weight-optimizer.service.js';
 
 const router = Router();
 
@@ -182,6 +184,64 @@ router.post('/telegram/webhook', async (req, res) => {
 // ============================================
 // WEB VITALS METRICS ENDPOINT
 // ============================================
+
+// ============================================
+// DECISION LOG (Fase 6 — 6.3)
+// ============================================
+
+// GET /api/decision-log — retorna histórico de decisões
+router.get('/decision-log', (req, res) => {
+  const limit = Math.min(parseInt(String(req.query.limit ?? '50')), 200);
+  const type = req.query.type as string | undefined;
+  const entries = decisionLogService.getEntries(limit, type as Parameters<typeof decisionLogService.getEntries>[1]);
+  const stats = decisionLogService.getStats();
+  res.json({ success: true, data: { entries, stats }, timestamp: new Date() });
+});
+
+// POST /api/decision-log — adiciona entrada manual
+router.post('/decision-log', (req, res) => {
+  const { summary, data, poolId, poolName } = req.body as {
+    summary?: string;
+    data?: Record<string, unknown>;
+    poolId?: string;
+    poolName?: string;
+  };
+  if (!summary) {
+    res.status(400).json({ success: false, error: 'summary is required' });
+    return;
+  }
+  const entry = decisionLogService.addEntry({
+    type: 'MANUAL',
+    summary,
+    data: data ?? {},
+    poolId,
+    poolName,
+  });
+  res.json({ success: true, data: entry, timestamp: new Date() });
+});
+
+// ============================================
+// SCORE WEIGHTS (Fase 6 — 6.4)
+// ============================================
+
+// GET /api/score-weights — pesos atuais
+router.get('/score-weights', (_req, res) => {
+  const weights = weightOptimizerService.getCurrentWeights();
+  const lastAdjustedAt = weightOptimizerService.getLastAdjustedAt();
+  res.json({ success: true, data: { weights, lastAdjustedAt }, timestamp: new Date() });
+});
+
+// POST /api/score-weights/auto-adjust — ajuste baseado no regime atual
+router.post('/score-weights/auto-adjust', (_req, res) => {
+  const result = weightOptimizerService.autoAdjust();
+  res.json({ success: true, data: result, timestamp: new Date() });
+});
+
+// POST /api/score-weights/reset — volta para defaults
+router.post('/score-weights/reset', (_req, res) => {
+  const weights = weightOptimizerService.resetToDefaults();
+  res.json({ success: true, data: { weights }, timestamp: new Date() });
+});
 
 // POST /api/metrics/vitals — Receive Web Vitals from frontend
 router.post('/metrics/vitals', (req, res) => {
