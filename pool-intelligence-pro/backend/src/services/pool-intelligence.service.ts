@@ -147,8 +147,15 @@ export function enrichToUnifiedPool(
     bluechip: p.bluechip ?? isBluechip(pool.token0.symbol, pool.token1.symbol),
     warnings,
     updatedAt: updatedAt.toISOString(),
-    // Data confidence metadata
+    // Data confidence metadata — merge adapter-provided price/volume/fees with
+    // freshly computed volatility and apr values
     dataConfidence: {
+      // Carry through adapter-provided confidence for price, volume, fees
+      // (fall back to safe defaults if the adapter did not populate them)
+      price: pool.dataConfidence?.price ?? { method: 'observed' as const, confidence: 'low' as const },
+      volume: pool.dataConfidence?.volume ?? { method: 'observed' as const, confidence: 'low' as const },
+      fees: pool.dataConfidence?.fees ?? { method: 'derived_volume' as const, confidence: 'low' as const },
+      // Computed here in pool-intelligence service
       volatility: {
         method: volResult.method,
         dataPoints: volResult.dataPoints,
