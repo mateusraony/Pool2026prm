@@ -286,8 +286,8 @@ export default function ScoutRecommended() {
               key={pool.id}
               pool={pool}
               capitalSuggested={{
-                percent: Math.min(config.maxPerPool, Math.ceil(5 - index * 0.5)),
-                usdt: Math.min(config.maxPerPool, Math.ceil(5 - index * 0.5)) *
+                percent: Math.min(config.maxPerPool, Math.max(1, Math.ceil(5 - index * 0.5))),
+                usdt: Math.min(config.maxPerPool, Math.max(1, Math.ceil(5 - index * 0.5))) *
                       (config.totalBanca / 100),
               }}
               onViewDetails={() => navigate(`/pools/${pool.chain}/${pool.poolAddress}`)}

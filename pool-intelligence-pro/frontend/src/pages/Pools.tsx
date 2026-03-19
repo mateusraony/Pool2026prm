@@ -452,7 +452,7 @@ export default function PoolsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => refetch()} disabled={isFetching} className="p-2 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors disabled:opacity-50">
+          <button onClick={() => refetch({ cancelRefetch: false })} disabled={isFetching} className="p-2 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors disabled:opacity-50">
             <RefreshCw className={clsx('w-4 h-4', isFetching && 'animate-spin')} />
           </button>
           <button

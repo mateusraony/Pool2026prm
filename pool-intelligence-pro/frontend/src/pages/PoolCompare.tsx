@@ -32,8 +32,11 @@ function getScoreColor(score: number) {
 
 function getBestClass(values: number[], index: number, higher = true) {
   if (values.length < 2) return '';
-  const best = higher ? Math.max(...values) : Math.min(...values);
-  return values[index] === best ? 'text-primary font-bold' : '';
+  const validValues = values.filter(v => isFinite(v) && !isNaN(v));
+  if (validValues.length === 0) return '';
+  const best = higher ? Math.max(...validValues) : Math.min(...validValues);
+  const v = values[index];
+  return (isFinite(v) && !isNaN(v) && v === best) ? 'text-primary font-bold' : '';
 }
 
 interface MetricRowProps {

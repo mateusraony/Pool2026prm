@@ -58,13 +58,7 @@ export default function ScoutPoolDetail() {
   // WebSocket real-time por pool
   const { liveData, lastUpdated, isConnected, positionAlert } = usePoolWebSocket(chain, address);
 
-  // Contador de segundos desde último update (re-renderiza a cada 1s quando há update)
-  const [, forceRender] = useState(0);
-  useEffect(() => {
-    if (!lastUpdated) return;
-    const interval = setInterval(() => forceRender(n => n + 1), 1000);
-    return () => clearInterval(interval);
-  }, [lastUpdated]);
+  // Contador de segundos desde último update — valor estático calculado na renderização
   const secondsSince = lastUpdated ? Math.floor((Date.now() - lastUpdated.getTime()) / 1000) : 0;
 
   // Toast quando posição sai do range (throttle: 1 toast a cada 2 min)

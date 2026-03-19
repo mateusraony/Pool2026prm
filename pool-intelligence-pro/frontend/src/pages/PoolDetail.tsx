@@ -340,7 +340,7 @@ export default function PoolDetailPage() {
   const healthScore = pool.healthScore ?? 0;
 
   // Build chart data
-  const chartData = (data.history ?? []).slice(0, 48).reverse().map((h) => ({
+  const chartData = (data.history ?? []).slice(0, 48).map((h) => ({
     ts: new Date(h.timestamp).toISOString(),
     price: h.price ?? 0,
     tvl: h.tvl ?? 0,
@@ -503,8 +503,9 @@ export default function PoolDetailPage() {
               <label className="block text-xs text-dark-400 mb-1.5">Capital (USD)</label>
               <input
                 type="number"
+                min={0}
                 value={capital}
-                onChange={e => setCapital(parseFloat(e.target.value) || 1000)}
+                onChange={e => setCapital(Math.max(0, parseFloat(e.target.value) || 0))}
                 className="w-28 bg-dark-700 border border-dark-600 rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none focus:border-primary-500"
               />
             </div>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { TrendingUp, Eye, AlertTriangle, ArrowRight, Check, Loader2, Star } from 'lucide-react';
 import { fetchPools, addToWatchlist, fetchWatchlist, Pool, Score } from '../api/client';
+import { MainLayout } from '@/components/layout/MainLayout';
 import clsx from 'clsx';
 
 function formatNum(num: number): string {
@@ -163,12 +164,8 @@ export default function RadarPage() {
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">📡 Radar de Pools</h1>
-          <p className="text-dark-400 mt-1">Descoberta automatica de oportunidades em DeFi</p>
-        </div>
+    <MainLayout title="Radar de Pools" subtitle="Descoberta automatica de oportunidades em DeFi">
+      <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2 text-sm text-dark-400">
           <TrendingUp className="w-4 h-4 text-success-500" />
           {(pools?.length || 0) + ' pools encontradas'}
@@ -212,6 +209,6 @@ export default function RadarPage() {
           <p className="text-dark-400">O radar esta buscando pools...</p>
         </div>
       )}
-    </div>
+    </MainLayout>
   );
 }
