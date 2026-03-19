@@ -128,6 +128,16 @@ async function initPersistence() {
     await alertService.loadFromDb();
     console.log('[BOOT] Alert rules loaded from DB');
 
+    // Inicializar Push Notifications (VAPID)
+    const { pushService } = await import('./services/push.service.js');
+    await pushService.init();
+    console.log('[BOOT] Push notification service initialized');
+
+    // Inicializar Wallet Tracker
+    const { walletService } = await import('./services/wallet.service.js');
+    await walletService.init();
+    console.log('[BOOT] Wallet tracker service initialized');
+
     // Auto-detect appUrl from RENDER_EXTERNAL_URL if not set by user
     const currentAppUrl = notificationSettingsService.getAppUrl();
     const renderUrl = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || '';

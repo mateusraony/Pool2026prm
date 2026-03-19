@@ -15,6 +15,9 @@ import dataRouter from './data.routes.js';
 import docsRouter from './docs.routes.js';
 import historyRouter from './history.routes.js';
 import integrationsRouter from './integrations.routes.js';
+import aiInsightsRouter from './ai-insights.routes.js';
+import pushRouter from './push.routes.js';
+import walletRouter from './wallet.routes.js';
 import { macroCalendarService } from '../services/macro-calendar.service.js';
 
 const router = Router();
@@ -61,6 +64,9 @@ router.use(dataRouter);
 router.use(docsRouter);
 router.use(historyRouter);
 router.use(integrationsRouter);
+router.use(aiInsightsRouter);
+router.use(pushRouter);
+router.use(walletRouter);
 
 // ============================================
 // MACRO CALENDAR ROUTES

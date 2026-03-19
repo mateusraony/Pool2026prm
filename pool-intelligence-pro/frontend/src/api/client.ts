@@ -996,3 +996,9 @@ export async function fetchOhlcv(
     return null;
   }
 }
+
+// ============================================================
+// RAW AXIOS CLIENT — ETAPA 17
+// Exported for hooks that need direct axios access (e.g. push notifications)
+// ============================================================
+export { api as apiClient };
