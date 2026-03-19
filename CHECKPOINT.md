@@ -2,15 +2,48 @@
 
 ## Status Atual
 **Branch:** `claude/review-audit-checkpoint-ZFYUM`
-**Data:** 2026-03-18 UTC
-**Fase:** ETAPAS 1–15 concluídas ✅
+**Data:** 2026-03-19 UTC
+**Fase:** ETAPAS 1–16 concluídas ✅ + Auditoria Profunda + Correções P0/P1
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-18 — ETAPA 15 concluída, planejar ETAPA 16"`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-19 — Auditoria concluída, corrigir bugs P2/P3 restantes"`
 
 ---
 
 ## O QUE FOI FEITO
+
+### Auditoria Profunda + Correções P0/P1 ✅ (2026-03-19)
+
+**Auditoria:** 6 agentes paralelos analisaram ~100 arquivos, identificando 65 bugs (12 críticos, 35 médios).
+
+**Commits desta sessão:**
+- `9e23523` — fix backend: validação alertSchema, persistência DB via AppConfig, thresholds configuráveis
+- `29eba48` — fix frontend: Radar MainLayout, ranges distintos, capital mínimo, chartData, NaN handling, forceRender
+
+**Bugs críticos corrigidos (P0):**
+- AlertService: regras agora persistem em DB (AppConfig) — antes perdiam em restart
+- alertSchema: type usa z.enum (12 tipos válidos) — antes aceitava qualquer string
+- alerts.routes: ID com randomUUID() — antes colisão em concorrência
+- VOLUME_DROP/LIQUIDITY_FLIGHT/VOLATILITY_SPIKE: usam rule.value configurado pelo usuário
+- ScoutDashboard: ranges defensive/optimized/aggressive são distintos (antes triplicados)
+- ScoutRecommended: capital sugerido mínimo 1% (antes zerava para rank >= 10)
+- Radar.tsx: envolvido em MainLayout (era a única página sem layout)
+
+**Bugs P1 corrigidos:**
+- PoolDetail: .reverse() removido em chartData (eixo X estava invertido); min={0} no capital
+- PoolCompare: getBestClass() com NaN/Infinity handling correto
+- ScoutPoolDetail: forceRender removido (re-render 60x/min eliminado)
+- Pools.tsx: refetch manual passa cancelRefetch:false
+
+**Bugs P2/P3 pendentes (próxima sessão):**
+- Implementar ou remover RSI_ABOVE/BELOW, MACD_CROSS_* (declarados mas sem lógica)
+- Webhook retry (exponential backoff)
+- Zod validation em /api/notes GET (query param poolId)
+- N+1 em /api/ranges (indexar por poolId)
+- Paginação ScoutHistory (limit: 200 hard-coded)
+- Comandos Telegram (/start, /pools, /alerts)
+- Autenticação em /api/integrations
+- Validation SSRF em webhook URLs
 
 ### ETAPA 16 — WebSocket por Pool (Rooms) ✅ (2026-03-18)
 
