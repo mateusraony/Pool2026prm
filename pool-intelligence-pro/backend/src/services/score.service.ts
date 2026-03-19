@@ -60,8 +60,12 @@ export class ScoreService {
       // Determine recommended mode
       const recommendedMode = this.determineMode(pool, metrics, total);
       
-      // Avaliar risco via RiskService (Fase 4)
+      // Avaliar risco via RiskService (Fase 4) + flags de domínio locais
       const riskAssessment = riskService.assessPool(pool);
+      const suspectFlags = this.checkSuspect(pool, metrics, breakdown);
+      const isSuspect = riskAssessment.level === 'HIGH' || riskAssessment.level === 'CRITICAL' || suspectFlags.isSuspect;
+      // Preferir razão de domínio quando disponível; fallback para summary do risk service
+      const suspectReason = suspectFlags.suspectReason ?? (riskAssessment.factors.length > 0 ? riskAssessment.summary : undefined);
 
       return {
         total: Math.round(total * 10) / 10,
@@ -70,8 +74,8 @@ export class ScoreService {
         risk: Math.round(riskPenalty * 10) / 10,
         breakdown,
         recommendedMode,
-        isSuspect: riskAssessment.level === 'HIGH' || riskAssessment.level === 'CRITICAL',
-        suspectReason: riskAssessment.factors.length > 0 ? riskAssessment.summary : undefined,
+        isSuspect,
+        suspectReason,
       };
     } catch (error) {
       logService.error('SCORE', 'Failed to calculate score', { pool: pool.externalId, error });

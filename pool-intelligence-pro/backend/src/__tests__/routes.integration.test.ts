@@ -132,6 +132,30 @@ vi.mock('../routes/prisma.js', () => ({
   }),
 }));
 
+// Mock Fase 6 services (weight-optimizer reads config at class-field init time)
+vi.mock('../services/weight-optimizer.service.js', () => ({
+  weightOptimizerService: {
+    getCurrentWeights: vi.fn().mockReturnValue({ health: 40, return: 35, risk: 25 }),
+    getLastAdjustedAt: vi.fn().mockReturnValue(null),
+    autoAdjust: vi.fn().mockResolvedValue({
+      before: { health: 40, return: 35, risk: 25 },
+      after: { health: 40, return: 35, risk: 25 },
+      reason: 'test',
+      regimeBased: false,
+    }),
+    resetToDefaults: vi.fn().mockReturnValue({ health: 40, return: 35, risk: 25 }),
+  },
+}));
+
+vi.mock('../services/decision-log.service.js', () => ({
+  decisionLogService: {
+    getEntries: vi.fn().mockReturnValue([]),
+    getStats: vi.fn().mockReturnValue({ total: 0, byType: {} }),
+    addEntry: vi.fn().mockReturnValue({ id: 'test-id', timestamp: new Date(), type: 'MANUAL', summary: 'test' }),
+    logEvent: vi.fn(),
+  },
+}));
+
 // Use real calc service for range-calc tests
 vi.mock('../services/calc.service.js', async () => {
   return await vi.importActual('../services/calc.service.js');
