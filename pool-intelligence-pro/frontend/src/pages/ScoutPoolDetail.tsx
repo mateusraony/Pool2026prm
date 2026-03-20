@@ -308,7 +308,10 @@ export default function ScoutPoolDetail() {
           />
           <div className="absolute top-2 right-2"><ConfBadge conf={pool.dataConfidence?.volume?.confidence} /></div>
         </div>
-        <StatCard label="APR" value={`${pool.apr.toFixed(1)}%`} icon={<TrendingUp className="h-5 w-5" />} variant="success" />
+        <div className="relative">
+          <StatCard label="APR" value={`${pool.apr.toFixed(1)}%`} icon={<TrendingUp className="h-5 w-5" />} variant="success" />
+          <div className="absolute top-2 right-2"><ConfBadge conf={pool.dataConfidence?.apr?.confidence} /></div>
+        </div>
         <StatCard label="Risco" value={riskLabels[pool.risk]} icon={<Shield className="h-5 w-5" />}
           variant={pool.risk === 'low' ? 'success' : pool.risk === 'medium' ? 'warning' : 'danger'} />
       </div>
@@ -339,7 +342,7 @@ export default function ScoutPoolDetail() {
             <p className="font-mono text-lg text-success">+{(pool.metrics.feesEstimated * 100).toFixed(3)}%</p>
           </div>
           <div className="text-center p-3 rounded-lg bg-secondary/50">
-            <p className="stat-label">IL est.</p>
+            <p className="stat-label">IL est.<ConfBadge conf={pool.dataConfidence?.volatility?.confidence} /></p>
             <p className="font-mono text-lg text-destructive">-{(pool.metrics.ilEstimated * 100).toFixed(3)}%</p>
           </div>
           <div className="text-center p-3 rounded-lg bg-secondary/50">
