@@ -33,6 +33,9 @@ import {
   Webhook,
   Globe,
   AlertCircle,
+  KeyRound,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -1096,12 +1099,24 @@ function IntegrationsSection() {
   const [saving, setSaving] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, 'ok' | 'error' | null>>({});
+  const [adminKey, setAdminKey] = useState<string>(() => localStorage.getItem('integrations_admin_key') ?? '');
+  const [showAdminKey, setShowAdminKey] = useState(false);
+
+  const handleAdminKeyChange = (value: string) => {
+    setAdminKey(value);
+    if (value) {
+      localStorage.setItem('integrations_admin_key', value);
+    } else {
+      localStorage.removeItem('integrations_admin_key');
+    }
+  };
 
   useEffect(() => {
-    fetchIntegrations()
+    fetchIntegrations(adminKey || undefined)
       .then(setIntegrations)
       .catch(() => toast.error('Falha ao carregar integrações'))
       .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleAdd = async () => {
@@ -1117,7 +1132,7 @@ function IntegrationsSection() {
         url: formUrl.trim(),
         enabled: true,
         events: formEvents,
-      });
+      }, adminKey || undefined);
       setIntegrations(prev => [...prev, created]);
       setAdding(null);
       setFormName('');
@@ -1133,7 +1148,7 @@ function IntegrationsSection() {
 
   const handleToggle = async (integration: Integration) => {
     try {
-      const updated = await updateIntegration(integration.id, { enabled: !integration.enabled });
+      const updated = await updateIntegration(integration.id, { enabled: !integration.enabled }, adminKey || undefined);
       setIntegrations(prev => prev.map(i => i.id === updated.id ? updated : i));
     } catch {
       toast.error('Falha ao atualizar integração');
@@ -1142,7 +1157,7 @@ function IntegrationsSection() {
 
   const handleDelete = async (id: string) => {
     try {
-      await deleteIntegration(id);
+      await deleteIntegration(id, adminKey || undefined);
       setIntegrations(prev => prev.filter(i => i.id !== id));
       toast.success('Integração removida');
     } catch {
@@ -1154,7 +1169,7 @@ function IntegrationsSection() {
     setTestingId(id);
     setTestResults(prev => ({ ...prev, [id]: null }));
     try {
-      const result = await testIntegration(id);
+      const result = await testIntegration(id, adminKey || undefined);
       setTestResults(prev => ({ ...prev, [id]: result.ok ? 'ok' : 'error' }));
       if (result.ok) {
         toast.success('Teste enviado com sucesso!');
@@ -1188,6 +1203,33 @@ function IntegrationsSection() {
           <h2 className="text-lg font-semibold">Integrações Externas</h2>
           <p className="text-sm text-muted-foreground">Discord, Slack e Webhooks para receber alertas</p>
         </div>
+      </div>
+
+      {/* Admin Key */}
+      <div className="mb-5 p-3 rounded-lg border border-border bg-secondary/10">
+        <Label className="text-xs mb-1.5 block text-muted-foreground flex items-center gap-1.5">
+          <KeyRound className="w-3.5 h-3.5" />
+          Chave de Admin (ADMIN_SECRET)
+        </Label>
+        <div className="flex gap-2">
+          <Input
+            type={showAdminKey ? 'text' : 'password'}
+            value={adminKey}
+            onChange={e => handleAdminKeyChange(e.target.value)}
+            placeholder="Deixe vazio se ADMIN_SECRET não configurado"
+            className="h-8 text-sm font-mono flex-1"
+          />
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setShowAdminKey(v => !v)}
+            className="h-8 w-8 p-0 text-muted-foreground"
+            title={showAdminKey ? 'Ocultar' : 'Mostrar'}
+          >
+            {showAdminKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+          </Button>
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-1">Enviada como header <code>X-Admin-Key</code> em todas as operações de integração. Salva no navegador.</p>
       </div>
 
       {/* Existing integrations */}
