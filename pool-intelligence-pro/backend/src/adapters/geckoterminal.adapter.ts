@@ -156,6 +156,9 @@ export class GeckoTerminalAdapter extends BaseAdapter {
       price: this.parseNumber(attrs.base_token_price_usd),
       tvl: this.parseNumber(attrs.reserve_in_usd),
       volume24h: this.parseNumber(attrs.volume_usd?.h24),
+      priceChange24h: attrs.price_change_percentage?.h24 != null
+        ? parseFloat(attrs.price_change_percentage.h24)
+        : undefined,
       dataConfidence: {
         price: { method: 'observed' as const, confidence: 'high' as const },
         volume: { method: 'observed' as const, confidence: 'high' as const },

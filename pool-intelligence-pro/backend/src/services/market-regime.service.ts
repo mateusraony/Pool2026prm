@@ -4,23 +4,29 @@ import { logService } from './log.service.js';
 export class MarketRegimeService {
   /**
    * Classifica o regime de mercado de uma pool individual.
+   *
+   * Usa pool.priceChange24h (em %) quando disponível (dado real do adapter).
+   * Quando ausente, classifica somente por volatilidade e liquidez —
+   * evita produzir falsos TRENDING_UP/DOWN por proxy sempre positivo.
    */
   classifyPool(pool: Pool): RegimeAnalysis {
     const volatilityAnn = pool.volatilityAnn ?? 0;
-    const volPct = volatilityAnn * 100;
-
-    // Proxy para priceChange24h usando volume/tvl + volatilidade
     const volumeTvlRatio = pool.tvl > 0 ? pool.volume24h / pool.tvl : 0;
-    const priceChangePct = (volumeTvlRatio > 0.5 && volPct > 50) ? 0.06 : 0.02;
+
+    // priceChangePct: dado real (%) → decimal, ou null quando indisponível
+    let priceChangePct: number | null = null;
+    if (pool.priceChange24h != null && isFinite(pool.priceChange24h)) {
+      priceChangePct = pool.priceChange24h / 100; // converte % → decimal
+    }
 
     const regime = this.classifyRegime(volatilityAnn, priceChangePct, volumeTvlRatio);
     const lpFriendly = this.isLpFriendly(regime);
 
-    // Confidence baseada na qualidade dos dados disponíveis
+    // Confidence: HIGH quando temos dado real de priceChange24h + vol calculado
     let confidence: 'HIGH' | 'MEDIUM' | 'LOW';
-    if (pool.volatilityAnn != null && pool.volume24h > 0 && pool.tvl > 100000) {
+    if (pool.volatilityAnn != null && pool.priceChange24h != null && pool.tvl > 100000) {
       confidence = 'HIGH';
-    } else if (pool.volume24h > 0 || pool.tvl > 0) {
+    } else if (pool.volatilityAnn != null && pool.volume24h > 0 && pool.tvl > 0) {
       confidence = 'MEDIUM';
     } else {
       confidence = 'LOW';
@@ -105,12 +111,13 @@ export class MarketRegimeService {
    * Determina o regime com base em volatilidade, variação de preço e ratio volume/tvl.
    * Inputs:
    *   volatilityAnn — volatilidade anualizada em decimal (ex: 0.8 = 80%)
-   *   priceChangePct — variação de preço em decimal (ex: 0.06 = 6%)
+   *   priceChangePct — variação de preço real em decimal (ex: 0.06 = +6%, -0.05 = -5%)
+   *                    null quando dado indisponível (sem dados direcionais)
    *   volumeTvlRatio — volume24h / tvl
    */
   private classifyRegime(
     volatilityAnn: number,
-    priceChangePct: number,
+    priceChangePct: number | null,
     volumeTvlRatio: number,
   ): MarketRegime {
     const volPct = volatilityAnn * 100;
@@ -121,13 +128,13 @@ export class MarketRegimeService {
     // Prioridade 2: volatilidade extrema (>= 80%)
     if (volPct >= 80) return 'HIGH_VOLATILITY';
 
-    // Prioridade 3: tendência de alta (>5% de variação positiva)
-    if (priceChangePct > 0.05) return 'TRENDING_UP';
+    // Prioridade 3: tendência direcional — APENAS quando temos dado real
+    if (priceChangePct !== null) {
+      if (priceChangePct > 0.05) return 'TRENDING_UP';
+      if (priceChangePct < -0.05) return 'TRENDING_DOWN';
+    }
 
-    // Prioridade 4: tendência de queda (<-5% de variação negativa)
-    if (priceChangePct < -0.05) return 'TRENDING_DOWN';
-
-    // Prioridade 5: volatilidade moderada (30% a 80%)
+    // Prioridade 4: volatilidade moderada (30% a 80%)
     if (volPct >= 30 && volPct < 80) return 'HIGH_VOLATILITY';
 
     // Default: mercado lateral (favorável para LP)

@@ -26,6 +26,8 @@ export interface Pool {
   tickSpacing?: number;
   bluechip?: boolean;
   volatilityAnn?: number; // Annualized volatility for live calculations
+  /** Variação de preço 24h em % (ex: 5.2 = +5.2%, -3.1 = -3.1%). Populado pelo GeckoTerminal. */
+  priceChange24h?: number;
   // Data confidence metadata (populated by adapters)
   dataConfidence?: {
     price?: { method: 'observed' | 'estimated_stable' | 'estimated_tvl' | 'unavailable'; confidence: 'high' | 'medium' | 'low' };
