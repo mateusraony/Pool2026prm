@@ -481,32 +481,15 @@ export function calcPositionPnL(params: {
   const dailyFees = fees24h * userShare * k_active;
   const feesAccrued = dailyFees * daysActive;
 
-  // --- IL calculation (concentrated liquidity) ---
-  // IL for CL: IL = 2*sqrt(P1/P0) / (1 + P1/P0) - 1
-  // This gives IL as a fraction (negative = loss)
-  const priceRatio = currentPrice / entryPrice;
-  let ilFraction = 0;
-
-  if (priceRatio > 0 && priceRatio !== 1) {
-    // Standard Uniswap V3 IL formula for concentrated liquidity
-    const sqrtRatio = Math.sqrt(priceRatio);
-    ilFraction = (2 * sqrtRatio) / (1 + priceRatio) - 1; // always <= 0
-  }
-
-  // If price is out of range, IL is worse
-  const isOutOfRange = currentPrice < rangeLower || currentPrice > rangeUpper;
-  if (isOutOfRange) {
-    // Amplify IL when out of range (concentrated = higher IL)
-    const rangeWidth = (rangeUpper - rangeLower) / entryPrice;
-    const concentrationFactor = rangeWidth > 0 ? Math.min(3, 1 / rangeWidth) : 1;
-    ilFraction = ilFraction * Math.min(concentrationFactor, 2.5);
-  }
-
-  const ilActual = Math.abs(ilFraction * capital); // IL as positive USD amount
+  // --- IL calculation — usa calcIL() para garantir consistência com o resto do sistema
+  const ilResult = calcIL({ entryPrice, currentPrice, rangeLower, rangeUpper, poolType: 'CL' });
+  const ilFraction = ilResult.ilPercent / 100; // ilPercent já é negativo (ex: -3.5%)
+  const ilActual = Math.abs(ilFraction * capital);
 
   // --- HODL comparison ---
   // Assume 50/50 split at entry: half in token0, half in token1 (quote)
   // token0 value changes with price, token1 stays
+  const priceRatio = currentPrice / entryPrice;
   const hodlValue = (capital / 2) * priceRatio + (capital / 2);
 
   // LP value = capital + fees - IL
@@ -621,23 +604,10 @@ export function calcMonteCarlo(params: {
     // Fees earned (only for days in range)
     const feesEarned = dailyFees * daysInRange;
 
-    // IL calculation (concentrated liquidity formula)
-    const priceRatio = price / currentPrice;
-    let ilFraction = 0;
-    if (priceRatio > 0 && priceRatio !== 1) {
-      const sqrtR = Math.sqrt(priceRatio);
-      ilFraction = (2 * sqrtR) / (1 + priceRatio) - 1;
-    }
-
-    // Amplify IL for out-of-range positions
+    // IL calculation — usa calcIL() com tratamento correto de boundary price
     const isInRange = price >= rangeLower && price <= rangeUpper;
-    if (!isInRange) {
-      const rangeWidth = (rangeUpper - rangeLower) / currentPrice;
-      const concFactor = rangeWidth > 0 ? Math.min(2.5, 1 / rangeWidth) : 1;
-      ilFraction = ilFraction * concFactor;
-    }
-
-    const ilLoss = Math.abs(ilFraction * capital);
+    const ilResult = calcIL({ entryPrice: currentPrice, currentPrice: price, rangeLower, rangeUpper, poolType: 'CL' });
+    const ilLoss = Math.abs(ilResult.ilPercent / 100 * capital);
     const pnl = feesEarned - ilLoss;
     const pnlPercent = capital > 0 ? (pnl / capital) * 100 : 0;
 
@@ -785,14 +755,9 @@ export function calcBacktest(params: {
     if (!inRange && wasInRange) rebalances++;
     wasInRange = inRange;
 
-    // Cumulative IL
-    const priceRatio = price / entryPrice;
-    let ilFrac = 0;
-    if (priceRatio > 0 && priceRatio !== 1) {
-      const sqrtR = Math.sqrt(priceRatio);
-      ilFrac = (2 * sqrtR) / (1 + priceRatio) - 1;
-    }
-    totalIL = Math.abs(ilFrac * capital);
+    // Cumulative IL — usa calcIL() com tratamento correto de boundary price
+    const ilResult = calcIL({ entryPrice, currentPrice: price, rangeLower, rangeUpper, poolType: 'CL' });
+    totalIL = Math.abs(ilResult.ilPercent / 100 * capital);
 
     const cumulativeRebalanceCost = rebalances * rebalanceCost;
     const cumPnl = totalFees - totalIL - entryExitCost - cumulativeRebalanceCost;
