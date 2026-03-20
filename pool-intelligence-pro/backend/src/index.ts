@@ -139,6 +139,11 @@ async function initPersistence() {
     await walletService.init();
     console.log('[BOOT] Wallet tracker service initialized');
 
+    // Amarrar event bus: registrar listeners (ALERT_FIRED → webhook + telegram)
+    const { bootstrapEventBus } = await import('./services/event-bus.bootstrap.js');
+    bootstrapEventBus();
+    console.log('[BOOT] Event bus listeners registered');
+
     // Auto-detect appUrl from RENDER_EXTERNAL_URL if not set by user
     const currentAppUrl = notificationSettingsService.getAppUrl();
     const renderUrl = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || '';
