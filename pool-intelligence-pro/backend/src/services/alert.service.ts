@@ -3,6 +3,7 @@ import { logService } from './log.service.js';
 import { config } from '../config/index.js';
 import { webhookService } from './webhook.service.js'; // mantido para uso futuro via event bus listener
 import { eventBus } from './event-bus.service.js';
+import { memoryStore } from './memory-store.service.js';
 import { getPrisma } from '../routes/prisma.js';
 import { Prisma } from '@prisma/client';
 
@@ -204,6 +205,41 @@ export class AlertService {
           }
         }
         break;
+
+      case 'OUT_OF_RANGE': {
+        const rangeLower = rule.condition?.rangeLower as number | undefined;
+        const rangeUpper = rule.condition?.rangeUpper as number | undefined;
+        if (rangeLower != null && rangeUpper != null && pool.price != null) {
+          if (pool.price < rangeLower || pool.price > rangeUpper) {
+            return this.createEvent(rule.type, pool,
+              'Preço de ' + pool.token0.symbol + '/' + pool.token1.symbol +
+              ' saiu do range ($' + rangeLower.toFixed(4) + ' - $' + rangeUpper.toFixed(4) + ')',
+              { currentPrice: pool.price, rangeLower, rangeUpper }
+            );
+          }
+        }
+        break;
+      }
+
+      case 'NEAR_RANGE_EXIT': {
+        const rangeLower = rule.condition?.rangeLower as number | undefined;
+        const rangeUpper = rule.condition?.rangeUpper as number | undefined;
+        const proximityPct = rule.value ?? 5; // default: alertar quando a 5% do limite
+        if (rangeLower != null && rangeUpper != null && pool.price != null) {
+          const distToLower = ((pool.price - rangeLower) / pool.price) * 100;
+          const distToUpper = ((rangeUpper - pool.price) / pool.price) * 100;
+          if (distToLower < proximityPct || distToUpper < proximityPct) {
+            const nearLower = distToLower < distToUpper;
+            const dist = nearLower ? distToLower : distToUpper;
+            return this.createEvent(rule.type, pool,
+              'Preço de ' + pool.token0.symbol + '/' + pool.token1.symbol +
+              ' a ' + dist.toFixed(1) + '% do limite ' + (nearLower ? 'inferior' : 'superior') + ' do range',
+              { currentPrice: pool.price, rangeLower, rangeUpper, distToLower, distToUpper }
+            );
+          }
+        }
+        break;
+      }
     }
 
     return null;
@@ -213,6 +249,23 @@ export class AlertService {
     rule: AlertRule,
     pools: Map<string, { pool: Pool; previousPool?: Pool }>
   ): AlertEvent | null {
+    // NEW_RECOMMENDATION: verificado via memoryStore (não depende de pools individuais)
+    if (rule.type === 'NEW_RECOMMENDATION') {
+      const minScore = rule.value ?? 70;
+      const recs = memoryStore.getRecommendations();
+      if (recs && recs.length > 0) {
+        const topRec = recs.find(r => r.score?.total != null && r.score.total >= minScore);
+        if (topRec) {
+          return this.createEvent(rule.type, topRec.pool,
+            'Nova recomendação de alta qualidade: ' + topRec.pool.token0.symbol + '/' +
+            topRec.pool.token1.symbol + ' (score: ' + topRec.score.total + ')',
+            { score: topRec.score.total, poolId: topRec.pool.externalId, rank: topRec.rank }
+          );
+        }
+      }
+      return null;
+    }
+
     // Check for any pool matching condition
     for (const [, { pool, previousPool }] of pools) {
       switch (rule.type) {
