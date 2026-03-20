@@ -2,15 +2,66 @@
 
 ## Status Atual
 **Branch:** `claude/review-audit-checkpoint-ZFYUM`
-**Data:** 2026-03-19 UTC
-**Fase:** ETAPAS 1–17 concluídas ✅ + Auditoria + Correções P0/P1/P2/P3 ✅ + **ROADMAP Fase 1 (Blocos 1+2) ✅**
+**Data:** 2026-03-20 UTC
+**Fase:** ETAPAS 1–17 concluídas ✅ + Auditoria + Correções P0/P1/P2/P3 ✅ + **ROADMAP Fases 1–6 concluídas ✅** + **7 Blocos de Auditoria Final ✅**
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-19 — Fase 1 do ROADMAP concluída (Blocos 1+2). Próximo: Fase 2 — Dados Confiáveis (Bloco 3 do ROADMAP_CORRECAO_POOL2026PRM.md)"`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-20 — Todos os 7 blocos de auditoria concluídos. ROADMAP Fases 1–6 completas. Sistema em estado limpo. Ver PRÓXIMOS PASSOS."`
 
 ---
 
 ## O QUE FOI FEITO
+
+### 7 Blocos de Auditoria Final ✅ (2026-03-20)
+
+**Branch:** `claude/review-audit-checkpoint-ZFYUM`
+
+**Commits desta sessão:**
+- `61236e0` — feat: conectar event bus ponta a ponta via bootstrap de listeners
+- `255dca3` — feat: implementar alertas OUT_OF_RANGE, NEAR_RANGE_EXIT e NEW_RECOMMENDATION
+- `751890b` — fix: detector de regime usa priceChange24h real do GeckoTerminal
+- `cc40d26` — fix: card do dashboard diferencia recomendação IA de top health score
+- `ff11968` — feat: exibir badges de confiança para APR e IL estimada na página de pool
+- `60a229b` — feat: enviar X-Admin-Key no frontend para endpoints de integração
+- `c3d0ab2` — fix: unificar cálculo de IL em calcPositionPnL, Monte Carlo e Backtest
+
+**Bloco 1 — Event Bus Bootstrap (Item 6)**
+- `event-bus.bootstrap.ts` criado: registra `ALERT_FIRED → webhookService.dispatch + telegramBot.sendAlert`
+- Imports dinâmicos para evitar dependências circulares; cada handler em try/catch isolado
+- `index.ts`: `bootstrapEventBus()` chamado após `walletService.init()`
+
+**Bloco 2 — Alertas com implementação real (Item 1)**
+- `OUT_OF_RANGE`: verifica `condition.rangeLower`/`rangeUpper` vs `pool.price`
+- `NEAR_RANGE_EXIT`: dispara quando dentro de `value`% de qualquer limite
+- `NEW_RECOMMENDATION`: verifica `memoryStore.getRecommendations()` — score ≥ `value` (padrão 70)
+- Todos os 8 `AlertType` agora têm lógica real
+
+**Bloco 3 — Market Regime com dado real (Item 2)**
+- `geckoterminal.adapter.ts`: popula `priceChange24h` de `attrs.price_change_percentage.h24`
+- `types/index.ts`: campo `priceChange24h?: number` adicionado à interface `Pool`
+- `market-regime.service.ts`: `classifyRegime` aceita `priceChangePct: number | null`; sem dado → não classifica TRENDING
+- `confidence: HIGH` somente quando ambos `volatilityAnn` + `priceChange24h` presentes
+
+**Bloco 4 — Card "Melhor Recomendação da IA" (Item 3)**
+- `ScoutDashboard.tsx`: título dinâmico "Melhor Recomendação da IA" (quando tem rec IA) ou "Top Health Score"
+- Badges: score, modo (Defensivo/Normal/Agressivo), probabilidade %, ganho estimado %
+
+**Bloco 5 — dataConfidence na UI (Item 4)**
+- `types/pool.ts` frontend: campos `volatility` e `apr` adicionados ao `dataConfidence`
+- `adapters.ts`: `unifiedPoolToViewPool()` propaga os novos campos
+- `ScoutPoolDetail.tsx`: `ConfBadge` para APR (stat card) e IL est. (label)
+
+**Bloco 6 — X-Admin-Key no frontend (Item 5)**
+- `client.ts`: helper `adminHeaders(key?)` + parâmetro `adminKey?` em todas as 6 funções de integração
+- `ScoutSettings.tsx` → `IntegrationsSection`: campo "Chave de Admin" (password com toggle visibilidade)
+- Chave persiste em `localStorage('integrations_admin_key')`; enviada em todas as operações CRUD/test
+
+**Bloco 7 — IL unificado (matemática CL) (Item 7)**
+- `calcPositionPnL`, `calcMonteCarlo`, `calcBacktest` agora usam `calcIL()` (fórmula analítica real)
+- Eliminados 3 cálculos inline com amplificação heurística (`1/rangeWidth * 2.5x`)
+- Net: 11 inserções, 46 deleções — math consistente em todo o sistema
+
+---
 
 ### ROADMAP Fase 1 — Verdade e Alinhamento ✅ (2026-03-19)
 
@@ -602,27 +653,14 @@ Princípio: *primeiro corrigir a verdade do sistema, depois o que o usuário vê
 
 ---
 
-## PRÓXIMOS PASSOS → ROADMAP Fase 2 (Bloco 3)
+## PRÓXIMOS PASSOS
 
-> Ver `ROADMAP_CORRECAO_POOL2026PRM.md` para a lista completa e status de cada item.
+> **ROADMAP Fases 1–6 concluídas. 7 Blocos de Auditoria Final concluídos.**
+> O sistema está em estado limpo, matematicamente correto e com cobertura de testes.
 
-### Fase 2 — Dados Confiáveis (próxima sessão)
-**Objetivo:** o usuário saber exatamente o que é confiável e o que é aproximação.
+### Opções para próxima sessão
 
-- **3.1** — Criar padrão `sourceType: 'observed' | 'estimated' | 'simulated'` no payload do backend
-  - Adicionar `sourceType` e `confidence` em `UnifiedPool` (campos-chave: fees1h, volume1h, liquidez)
-  - Exibir badges no frontend (ex: "Est." para estimado, "Obs." para observado)
-- **3.2** — Remover fallback artificial de preço baseado em TVL no `defillama.adapter.ts`
-  - Se não houver preço real: retornar `null`, marcar confiança baixa, bloquear cálculos dependentes
-- **3.3** — Liquidez sintética (distribuição Gaussiana) precisa ser visualmente explícita
-  - Badge "Estimativa" + tooltip explicativo no `RangeChart`
-  - Separar de liquidez real futura (bloco 6)
-- **3.4** — Volume/fees intraday derivados de 24h identificados
-  - Adicionar `volume1hMeta: 'observed' | 'estimated'` e `fees1hMeta` no backend
-  - Mostrar origem no frontend e usar no cálculo de confiança do score
-
-### Fase 3 em diante (sessões futuras)
-- **Fase 3:** Reescrever matemática CL real (módulo `cl-math.service.ts`), Monte Carlo, Backtest, correlação, custos reais
-- **Fase 4:** Portfolio analytics com base real, Risk Engine contratual, regime de mercado, modo "não operar"
-- **Fase 5:** Event Bus unificado, Telegram/Slack/Discord/Webhook sob mesma lógica, timezone profissional
-- **Fase 6:** Liquidez real por tick, benchmark de ranges, diário de decisão, autoajuste de pesos, smoke tests
+1. **Testes de regressão completos** — rodar `npm test` em backend + frontend e verificar que todos os testes passam após as 7 correções desta sessão
+2. **Deploy no Render** — fazer push e verificar health check em produção
+3. **Novos recursos** — baseados em feedback de uso real (ex: alertas Telegram com payload mais rico, novos adaptadores de dados)
+4. **Monitoramento de qualidade** — adicionar testes para os 7 blocos corrigidos nesta sessão

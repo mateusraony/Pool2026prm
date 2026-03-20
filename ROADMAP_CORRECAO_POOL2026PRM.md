@@ -152,30 +152,30 @@
 
 ---
 
-## Fase 4 — Portfolio e Risco
+## Fase 4 — Portfolio e Risco ✅
 
 **Objetivo:** sair de "calculadora bonita" para "sistema de decisão maduro".
 
 #### 5.1 — Criar camada séria de risco de contrato/token/pool
-- **Status**: ⬜ Não iniciado
+- **Status**: ✅ Concluído (sessão 4)
 
 #### 5.2 — Criar classificador de regime de mercado para LP
-- **Status**: ⬜ Não iniciado
+- **Status**: ✅ Concluído (sessão 4 + aprimorado sessão 7 com priceChange24h real do GeckoTerminal)
 
 #### 5.3 — Criar modo "não operar"
-- **Status**: ⬜ Não iniciado
+- **Status**: ✅ Concluído (sessão 4)
 
 ---
 
-## Fase 5 — Eventos e Automação
+## Fase 5 — Eventos e Automação ✅
 
 **Objetivo:** tudo o que sai do sistema ter coerência.
 
 #### 5.4 — Criar motor único de eventos (event bus)
-- **Status**: ⬜ Não iniciado
+- **Status**: ✅ Concluído (sessão 5 + bootstrap ponta-a-ponta sessão 7)
 
 #### 5.5 — Timezone e agendamento profissional
-- **Status**: ⬜ Não iniciado
+- **Status**: ✅ Concluído (sessão 5)
 
 ---
 
@@ -201,3 +201,4 @@
 | 4 | 2026-03-19 | Fase 4 — RiskLayer, market regime, no-operate | `5c88edb` + `511b7f0` |
 | 5 | 2026-03-19 | Fase 5 — Event bus, timezone profissional | `ea73a6f` |
 | 6 | 2026-03-19 | Fase 6 — Inteligência Premium (tick, benchmark, decision log, weights, smoke tests) | `14f8743` |
+| 7 | 2026-03-20 | 7 Blocos Auditoria Final (event bus, alertas reais, regime c/OHLCV real, dashboard, dataConfidence, X-Admin-Key, IL unificado) | `61236e0`–`60a229b` |
