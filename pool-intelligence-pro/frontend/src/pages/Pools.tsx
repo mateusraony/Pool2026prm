@@ -9,6 +9,7 @@ import clsx from 'clsx';
 import { fetchUnifiedPools, fetchTokens, fetchFavorites, addFavorite, removeFavorite, UnifiedPool } from '../api/client';
 import { ExportButton } from '@/components/common/ExportButton';
 import { exportCSV, exportPrintReport } from '@/lib/export';
+import { ConfBadge } from '@/components/common/ConfBadge';
 
 // ============================================================
 // HELPERS
@@ -128,6 +129,7 @@ function PoolRow({ pool, isFav, onToggleFav, onClick }: {
         <span className={clsx('font-mono', (pool.aprTotal ?? 0) > 50 ? 'text-green-400' : '')}>
           {fmtPct(pool.aprTotal)}
         </span>
+        <ConfBadge conf={pool.dataConfidence?.apr?.confidence} />
       </td>
 
       {/* APR Adjusted */}
@@ -217,7 +219,9 @@ function PoolMobileCard({ pool, isFav, onToggleFav, onClick }: {
         </div>
         <div>
           <p className="text-[10px] text-dark-500 mb-0.5">APR</p>
-          <p className={clsx('text-xs font-mono font-medium', (pool.aprTotal ?? 0) > 50 ? 'text-green-400' : '')}>{fmtPct(pool.aprTotal)}</p>
+          <p className={clsx('text-xs font-mono font-medium', (pool.aprTotal ?? 0) > 50 ? 'text-green-400' : '')}>
+            {fmtPct(pool.aprTotal)}<ConfBadge conf={pool.dataConfidence?.apr?.confidence} />
+          </p>
         </div>
         <div>
           <p className="text-[10px] text-dark-500 mb-0.5">APR Aj.</p>

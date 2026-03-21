@@ -82,6 +82,8 @@ export function unifiedPoolToViewPool(
       price: p.dataConfidence.price,
       volume: p.dataConfidence.volume,
       fees: p.dataConfidence.fees,
+      volatility: p.dataConfidence.volatility,
+      apr: p.dataConfidence.apr,
     } : undefined,
   };
 }

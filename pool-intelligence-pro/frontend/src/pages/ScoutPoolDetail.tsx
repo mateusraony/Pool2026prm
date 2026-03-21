@@ -8,6 +8,7 @@ import { PerformanceCharts } from '@/components/charts/PerformanceCharts';
 import { CandlestickChart, type Timeframe } from '@/components/charts/CandlestickChart';
 import { PoolNotes } from '@/components/common/PoolNotes';
 import { HodlVsLp } from '@/components/common/HodlVsLp';
+import { ConfBadge } from '@/components/common/ConfBadge';
 import { AIInsightsCard } from '@/components/AIInsightsCard';
 import { TokenCorrelation } from '@/components/common/TokenCorrelation';
 import { Button } from '@/components/ui/button';
@@ -35,17 +36,6 @@ import { usePoolWebSocket } from '@/hooks/usePoolWebSocket';
 import type { Pool } from '@/types/pool';
 
 /** Badge de confiança para dados estimados ou suplementados */
-function ConfBadge({ conf }: { conf?: 'high' | 'medium' | 'low' }) {
-  if (!conf || conf === 'high') return null;
-  return (
-    <span
-      className={`ml-1 text-[9px] px-1 rounded font-mono ${conf === 'medium' ? 'bg-yellow-500/10 text-yellow-400' : 'bg-muted text-muted-foreground'}`}
-      title={conf === 'medium' ? 'Dado estimado ou suplementado' : 'Dado de baixa confiança — estimativa'}
-    >
-      {conf === 'medium' ? 'est.' : 'aprox.'}
-    </span>
-  );
-}
 
 /** Flash visual por 2s quando um valor muda — indica update live */
 function useValueFlash(value: unknown): boolean {
@@ -308,7 +298,10 @@ export default function ScoutPoolDetail() {
           />
           <div className="absolute top-2 right-2"><ConfBadge conf={pool.dataConfidence?.volume?.confidence} /></div>
         </div>
-        <StatCard label="APR" value={`${pool.apr.toFixed(1)}%`} icon={<TrendingUp className="h-5 w-5" />} variant="success" />
+        <div className="relative">
+          <StatCard label="APR" value={`${pool.apr.toFixed(1)}%`} icon={<TrendingUp className="h-5 w-5" />} variant="success" />
+          <div className="absolute top-2 right-2"><ConfBadge conf={pool.dataConfidence?.apr?.confidence} /></div>
+        </div>
         <StatCard label="Risco" value={riskLabels[pool.risk]} icon={<Shield className="h-5 w-5" />}
           variant={pool.risk === 'low' ? 'success' : pool.risk === 'medium' ? 'warning' : 'danger'} />
       </div>
@@ -339,7 +332,7 @@ export default function ScoutPoolDetail() {
             <p className="font-mono text-lg text-success">+{(pool.metrics.feesEstimated * 100).toFixed(3)}%</p>
           </div>
           <div className="text-center p-3 rounded-lg bg-secondary/50">
-            <p className="stat-label">IL est.</p>
+            <p className="stat-label">IL est.<ConfBadge conf={pool.dataConfidence?.volatility?.confidence} /></p>
             <p className="font-mono text-lg text-destructive">-{(pool.metrics.ilEstimated * 100).toFixed(3)}%</p>
           </div>
           <div className="text-center p-3 rounded-lg bg-secondary/50">

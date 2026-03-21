@@ -347,27 +347,45 @@ export default function ScoutDashboard() {
 
         {/* Sidebar */}
         <div className="space-y-4">
-          {/* Top Recommendation */}
+          {/* Top Recommendation / Top Health Score */}
           {(topRecommendation?.pool || topPool) && (() => {
-            const displayPool = topRecommendation
+            const isAiRec = !!topRecommendation;
+            const displayPool = isAiRec
               ? (() => {
                   const rec = topRecommendation.pool;
-                  // Map Recommendation.pool (Pool from client.ts) to the view Pool shape
                   return pools.find(
                     (p) => p.poolAddress === rec.poolAddress && p.chain === rec.chain
                   ) || topPool;
                 })()
               : topPool;
             if (!displayPool) return null;
+            const modeLabel: Record<string, string> = { DEFENSIVE: 'Defensivo', NORMAL: 'Normal', AGGRESSIVE: 'Agressivo' };
             return (
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-lg font-semibold">Melhor Oportunidade</h2>
+                  <h2 className="text-lg font-semibold">
+                    {isAiRec ? 'Melhor Recomendação da IA' : 'Top Health Score'}
+                  </h2>
                 </div>
-                {topRecommendation && (
-                  <span className="block text-xs text-muted-foreground mb-2">
-                    Recomendacao IA · Score {topRecommendation.score?.total ?? '—'}
-                  </span>
+                {isAiRec && topRecommendation && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                      Score {topRecommendation.score?.total ?? '—'}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-secondary/50 px-2 py-0.5 text-xs text-muted-foreground">
+                      Modo: {modeLabel[topRecommendation.mode] ?? topRecommendation.mode}
+                    </span>
+                    {topRecommendation.probability > 0 && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-xs text-success">
+                        {topRecommendation.probability.toFixed(0)}% prob.
+                      </span>
+                    )}
+                    {topRecommendation.estimatedGainPercent > 0 && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-xs text-success">
+                        +{topRecommendation.estimatedGainPercent.toFixed(1)}% est.
+                      </span>
+                    )}
+                  </div>
                 )}
                 <PoolCard
                   pool={displayPool}

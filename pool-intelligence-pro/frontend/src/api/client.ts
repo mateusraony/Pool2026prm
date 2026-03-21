@@ -932,8 +932,12 @@ export interface Integration {
   lastError?: string;
 }
 
-export async function fetchIntegrations(): Promise<Integration[]> {
-  const res = await api.get<{ success: boolean; data: Integration[] }>('/integrations');
+function adminHeaders(adminKey?: string): Record<string, string> | undefined {
+  return adminKey ? { 'X-Admin-Key': adminKey } : undefined;
+}
+
+export async function fetchIntegrations(adminKey?: string): Promise<Integration[]> {
+  const res = await api.get<{ success: boolean; data: Integration[] }>('/integrations', { headers: adminHeaders(adminKey) });
   return res.data.data ?? [];
 }
 
@@ -943,27 +947,27 @@ export async function createIntegration(params: {
   url: string;
   enabled?: boolean;
   events?: string[];
-}): Promise<Integration> {
-  const res = await api.post<{ success: boolean; data: Integration }>('/integrations', params);
+}, adminKey?: string): Promise<Integration> {
+  const res = await api.post<{ success: boolean; data: Integration }>('/integrations', params, { headers: adminHeaders(adminKey) });
   return res.data.data;
 }
 
-export async function updateIntegration(id: string, params: Partial<Pick<Integration, 'name' | 'url' | 'enabled' | 'events'>>): Promise<Integration> {
-  const res = await api.put<{ success: boolean; data: Integration }>(`/integrations/${id}`, params);
+export async function updateIntegration(id: string, params: Partial<Pick<Integration, 'name' | 'url' | 'enabled' | 'events'>>, adminKey?: string): Promise<Integration> {
+  const res = await api.put<{ success: boolean; data: Integration }>(`/integrations/${id}`, params, { headers: adminHeaders(adminKey) });
   return res.data.data;
 }
 
-export async function deleteIntegration(id: string): Promise<void> {
-  await api.delete(`/integrations/${id}`);
+export async function deleteIntegration(id: string, adminKey?: string): Promise<void> {
+  await api.delete(`/integrations/${id}`, { headers: adminHeaders(adminKey) });
 }
 
-export async function testIntegration(id: string): Promise<{ ok: boolean; statusCode?: number; error?: string }> {
-  const res = await api.post<{ success: boolean; data: { ok: boolean; statusCode?: number; error?: string } }>(`/integrations/${id}/test`);
+export async function testIntegration(id: string, adminKey?: string): Promise<{ ok: boolean; statusCode?: number; error?: string }> {
+  const res = await api.post<{ success: boolean; data: { ok: boolean; statusCode?: number; error?: string } }>(`/integrations/${id}/test`, undefined, { headers: adminHeaders(adminKey) });
   return res.data.data;
 }
 
-export async function testIntegrationUrl(url: string, type: string): Promise<{ ok: boolean; statusCode?: number; error?: string }> {
-  const res = await api.post<{ success: boolean; data: { ok: boolean; statusCode?: number; error?: string } }>('/integrations/test-url', { url, type });
+export async function testIntegrationUrl(url: string, type: string, adminKey?: string): Promise<{ ok: boolean; statusCode?: number; error?: string }> {
+  const res = await api.post<{ success: boolean; data: { ok: boolean; statusCode?: number; error?: string } }>('/integrations/test-url', { url, type }, { headers: adminHeaders(adminKey) });
   return res.data.data;
 }
 

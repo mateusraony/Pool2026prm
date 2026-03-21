@@ -100,10 +100,13 @@ describe('calcBacktest', () => {
     expect(result.dailyReturns.length).toBe(30);
   });
 
-  it('netPnl = totalFees - totalIL (sem tx costs)', () => {
-    // transactionCostPct: 0 isola a fórmula core sem descontar custos de transação
-    const result = calcBacktest({ ...baseParams, transactionCostPct: 0 });
-    expect(result.netPnl).toBeCloseTo(result.totalFees - result.totalIL, 0);
+  it('netPnl = totalFees - totalIL - transactionCosts.total (fórmula completa com dados reais)', () => {
+    // Verifica a fórmula real com custos de transação reais (default 0.1%)
+    const result = calcBacktest(baseParams);
+    expect(result.netPnl).toBeCloseTo(
+      result.totalFees - result.totalIL - result.transactionCosts.total,
+      0
+    );
   });
 
   it('maxDrawdown is non-negative', () => {

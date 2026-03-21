@@ -3,19 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Bell, BellOff, Settings, Plus, X, Send, Trash2 } from 'lucide-react';
 import { fetchHealth, fetchPools, fetchAlerts, createAlert, deleteAlert, fetchSettings, Pool, Score } from '../api/client';
 import clsx from 'clsx';
-
-type AlertType = 'PRICE_ABOVE' | 'PRICE_BELOW' | 'VOLUME_DROP' | 'LIQUIDITY_FLIGHT' | 'VOLATILITY_SPIKE' | 'OUT_OF_RANGE' | 'NEAR_RANGE_EXIT' | 'NEW_RECOMMENDATION';
-
-const alertTypeConfig: Record<AlertType, { label: string; icon: string; unit: string; description: string }> = {
-  PRICE_ABOVE: { label: 'Preco Acima', icon: '📈', unit: '$', description: 'Notificar quando preco subir acima' },
-  PRICE_BELOW: { label: 'Preco Abaixo', icon: '📉', unit: '$', description: 'Notificar quando preco cair abaixo' },
-  VOLUME_DROP: { label: 'Queda de Volume', icon: '💧', unit: '%', description: 'Notificar quando volume cair' },
-  LIQUIDITY_FLIGHT: { label: 'Fuga de Liquidez', icon: '🚨', unit: '%', description: 'Notificar fuga de TVL' },
-  VOLATILITY_SPIKE: { label: 'Pico de Volatilidade', icon: '⚡', unit: '%', description: 'Notificar quando volatilidade disparar' },
-  OUT_OF_RANGE: { label: 'Fora do Range', icon: '📍', unit: '%', description: 'Notificar quando preco sair do range da posicao' },
-  NEAR_RANGE_EXIT: { label: 'Proximo de Sair do Range', icon: '⚠️', unit: '%', description: 'Notificar quando preco se aproximar do limite do range' },
-  NEW_RECOMMENDATION: { label: 'Nova Recomendacao', icon: '🎯', unit: '', description: 'Notificar quando nova recomendacao de pool aparecer' },
-};
+import { AlertType, alertTypeConfig } from '@/data/alert-events';
 
 export default function AlertsPage() {
   const queryClient = useQueryClient();

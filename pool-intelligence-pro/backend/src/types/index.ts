@@ -26,6 +26,8 @@ export interface Pool {
   tickSpacing?: number;
   bluechip?: boolean;
   volatilityAnn?: number; // Annualized volatility for live calculations
+  /** Variação de preço 24h em % (ex: 5.2 = +5.2%, -3.1 = -3.1%). Populado pelo GeckoTerminal. */
+  priceChange24h?: number;
   // Data confidence metadata (populated by adapters)
   dataConfidence?: {
     price?: { method: 'observed' | 'estimated_stable' | 'estimated_tvl' | 'unavailable'; confidence: 'high' | 'medium' | 'low' };
@@ -193,15 +195,10 @@ export interface Recommendation {
 // ALERT TYPES
 // ============================================
 
-export type AlertType =
-  | 'PRICE_ABOVE'
-  | 'PRICE_BELOW'
-  | 'VOLUME_DROP'
-  | 'LIQUIDITY_FLIGHT'
-  | 'VOLATILITY_SPIKE'
-  | 'OUT_OF_RANGE'
-  | 'NEAR_RANGE_EXIT'
-  | 'NEW_RECOMMENDATION';
+import { ALERT_TYPE_VALUES } from '../constants/alert-events.js';
+
+/** União derivada da fonte canônica — ver constants/alert-events.ts */
+export type AlertType = typeof ALERT_TYPE_VALUES[number];
 
 export interface AlertTrigger {
   type: AlertType;
