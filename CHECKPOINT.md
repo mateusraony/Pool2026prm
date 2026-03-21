@@ -3,14 +3,37 @@
 ## Status Atual
 **Branch:** `claude/review-audit-checkpoint-ZFYUM`
 **Data:** 2026-03-21 UTC
-**Fase:** ETAPAS 1–17 concluídas ✅ + Auditoria + Correções P0/P1/P2/P3 ✅ + **ROADMAP Fases 1–6 concluídas ✅** + **7 Blocos de Auditoria Final ✅** + **Gap A + Gap B ✅** + **Segunda Auditoria: 57 Fixes P0/P1/P2/P3 ✅**
+**Fase:** ETAPAS 1–17 ✅ + ROADMAP Fases 1–6 ✅ + 7 Blocos Auditoria ✅ + Gap A/B ✅ + Segunda Auditoria 57 fixes ✅ + **Terceira Auditoria: 7 Fixes P0/P1/P2 ✅**
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-21 — Segunda rodada de 57 fixes concluída em 3 sprints (P0/P1/P2/P3). Build limpo. 3 commits: c11ab37, 101fdad, 5615336."`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-21 — Terceira auditoria: 7 bugs reais corrigidos (2 P0 divisão por zero backend, 3 P1 NaN/inconsistência, 2 P2 chart). Build limpo. Commits: 7277df8, 6087ecd, 5650fc8."`
 
 ---
 
 ## O QUE FOI FEITO
+
+### Terceira Auditoria: 7 Fixes P0/P1/P2 ✅ (2026-03-21)
+
+**Metodologia:** auditoria paralela com 2 agentes (backend + frontend) → 7 bugs reais confirmados (falsos positivos descartados) → 3 sprints com commit de checkpoint entre cada um.
+
+**Sprint P0 (commit `7277df8`):** 2 arquivos, divisão por zero backend
+- `adapters/index.ts:227`: `0/0=NaN` confidence quando `basePool.tvl=0` → guard `basePool.tvl > 0`
+- `alert.service.ts:229`: `pool.price=0` → `distToLower=-Infinity < 5 = true` → false alerts → guard `pool.price > 0`
+
+**Sprint P1 (commit `6087ecd`):** 3 arquivos, comportamento errado
+- `cache.service.ts:82`: `hitRate=NaN` quando hits+misses=0 (`0/0`, `|| 0` não pega NaN) → guard explícito
+- `ScoutDashboard.tsx:144`: `posStatus=NaN` quando `currentPrice=undefined` → null-check + `Infinity` como fallback
+- `adapters.ts:128,129`: `ilEstimated` 100x diferente entre `legacyPool` (vol×0.05) e `unifiedPool` (vol²/730) → unificado para `½σ²/365`; `netReturn` também unificado para fee-based
+
+**Sprint P2 (commit `5650fc8`):** 1 arquivo
+- `InteractiveChart.tsx:170,172`: `rangePercent=Infinity` e `rangeWidth=Infinity` quando `currentPrice=0` → guard `currentPrice > 0` com fallbacks `'0.0'` / `'70'`
+
+**Falsos positivos descartados:**
+- Bug#2/5/6/9 (auditor): APR em Simulation.tsx usa % corretamente (15 → /52 = 0.288%/semana)
+- Bug#4 (auditor): `score.health` e `score.return` existem na interface Score e são populados
+- Bug#8 (auditor): Watchlist loading state é comportamento normal de React Query
+
+---
 
 ### Segunda Auditoria: 57 Fixes P0/P1/P2/P3 ✅ (2026-03-21)
 
