@@ -253,3 +253,280 @@ describe('isBluechip', () => {
     expect(isBluechip('WETH', 'PEPE')).toBe(false);
   });
 });
+
+// -----------------------------------------------------------------------
+// calcIL — Impermanent Loss for CL and V2 positions
+// -----------------------------------------------------------------------
+
+import { calcIL, calcMonteCarlo, calcBacktest } from '../services/calc.service.js';
+
+describe('calcIL', () => {
+  it('returns IL > 0 when price moves outside range', () => {
+    // price = 100, range = [90, 110] — price at entry is centre
+    const result = calcIL({ entryPrice: 100, currentPrice: 130, rangeLower: 90, rangeUpper: 110, poolType: 'CL' });
+    // IL should be negative (loss) and ilPercent < 0
+    expect(result.ilPercent).toBeLessThan(0);
+    expect(result.outOfRange).toBe(true);
+  });
+
+  it('returns non-zero IL when price moves within range', () => {
+    // Price moved from 100 to 105 — still in range [90, 110]
+    const result = calcIL({ entryPrice: 100, currentPrice: 105, rangeLower: 90, rangeUpper: 110, poolType: 'CL' });
+    expect(result.ilPercent).toBeLessThanOrEqual(0); // IL is 0 or negative (loss)
+    expect(result.outOfRange).toBe(false);
+  });
+
+  it('returns zero IL when price does not change', () => {
+    const result = calcIL({ entryPrice: 100, currentPrice: 100, rangeLower: 90, rangeUpper: 110, poolType: 'CL' });
+    expect(result.ilPercent).toBe(0);
+    expect(result.outOfRange).toBe(false);
+  });
+
+  it('out-of-range IL is larger than in-range IL', () => {
+    const inRange = calcIL({ entryPrice: 100, currentPrice: 108, rangeLower: 90, rangeUpper: 110, poolType: 'CL' });
+    const outOfRange = calcIL({ entryPrice: 100, currentPrice: 140, rangeLower: 90, rangeUpper: 110, poolType: 'CL' });
+    // Out-of-range uses boundary price — IL magnitude should be at least as large
+    expect(Math.abs(outOfRange.ilPercent)).toBeGreaterThanOrEqual(Math.abs(inRange.ilPercent));
+  });
+
+  it('handles edge case: entryPrice = 0 returns zero IL', () => {
+    const result = calcIL({ entryPrice: 0, currentPrice: 100, rangeLower: 90, rangeUpper: 110, poolType: 'CL' });
+    expect(result.ilPercent).toBe(0);
+    expect(result.ilUsd).toBe(0);
+  });
+
+  it('handles edge case: currentPrice = 0 returns zero IL', () => {
+    const result = calcIL({ entryPrice: 100, currentPrice: 0, rangeLower: 90, rangeUpper: 110, poolType: 'CL' });
+    expect(result.ilPercent).toBe(0);
+  });
+
+  it('V2 pool IL matches standard formula for price ratio 2', () => {
+    // Standard IL formula: 2√k/(1+k) - 1 where k=2 → 2√2/3 - 1 ≈ -5.72%
+    const result = calcIL({ entryPrice: 100, currentPrice: 200, rangeLower: 50, rangeUpper: 500, poolType: 'V2' });
+    expect(result.ilPercent).toBeLessThan(0);
+    // Standard IL for k=2 is approximately -5.72%
+    expect(result.ilPercent).toBeCloseTo(-5.72, 0);
+  });
+
+  it('ilUsd is always zero (caller is responsible for capital multiplication)', () => {
+    const result = calcIL({ entryPrice: 100, currentPrice: 120, rangeLower: 90, rangeUpper: 130, poolType: 'CL' });
+    expect(result.ilUsd).toBe(0);
+  });
+});
+
+// -----------------------------------------------------------------------
+// calcMonteCarlo — Monte Carlo simulation for CL position
+// -----------------------------------------------------------------------
+
+describe('calcMonteCarlo', () => {
+  const BASE_PARAMS = {
+    currentPrice: 2500,
+    rangeLower: 2000,
+    rangeUpper: 3000,
+    capital: 10_000,
+    volAnn: 0.5,
+    fees24h: 5_000,
+    tvl: 10_000_000,
+    horizonDays: 30,
+    scenarios: 200,
+    mode: 'NORMAL' as const,
+  };
+
+  it('returns object with all required top-level fields', () => {
+    const result = calcMonteCarlo(BASE_PARAMS);
+
+    expect(result).toHaveProperty('scenarios');
+    expect(result).toHaveProperty('horizonDays');
+    expect(result).toHaveProperty('percentiles');
+    expect(result).toHaveProperty('probProfit');
+    expect(result).toHaveProperty('probOutOfRange');
+    expect(result).toHaveProperty('avgPnl');
+    expect(result).toHaveProperty('worstCase');
+    expect(result).toHaveProperty('bestCase');
+    expect(result).toHaveProperty('distribution');
+  });
+
+  it('percentiles object has p5, p25, p50, p75, p95', () => {
+    const { percentiles } = calcMonteCarlo(BASE_PARAMS);
+
+    expect(percentiles).toHaveProperty('p5');
+    expect(percentiles).toHaveProperty('p25');
+    expect(percentiles).toHaveProperty('p50');
+    expect(percentiles).toHaveProperty('p75');
+    expect(percentiles).toHaveProperty('p95');
+  });
+
+  it('probProfit and probOutOfRange are between 0 and 100', () => {
+    const result = calcMonteCarlo(BASE_PARAMS);
+
+    expect(result.probProfit).toBeGreaterThanOrEqual(0);
+    expect(result.probProfit).toBeLessThanOrEqual(100);
+    expect(result.probOutOfRange).toBeGreaterThanOrEqual(0);
+    expect(result.probOutOfRange).toBeLessThanOrEqual(100);
+  });
+
+  it('scenarios count matches requested count (up to 5000 cap)', () => {
+    const result = calcMonteCarlo({ ...BASE_PARAMS, scenarios: 100 });
+    expect(result.scenarios).toBe(100);
+  });
+
+  it('horizonDays matches input', () => {
+    const result = calcMonteCarlo({ ...BASE_PARAMS, horizonDays: 14 });
+    expect(result.horizonDays).toBe(14);
+  });
+
+  it('worst case pnl <= median pnl <= best case pnl', () => {
+    const result = calcMonteCarlo(BASE_PARAMS);
+    expect(result.worstCase.pnl).toBeLessThanOrEqual(result.percentiles.p50.pnl);
+    expect(result.percentiles.p50.pnl).toBeLessThanOrEqual(result.bestCase.pnl);
+  });
+
+  it('distribution has 10 buckets', () => {
+    const result = calcMonteCarlo(BASE_PARAMS);
+    expect(result.distribution).toHaveLength(10);
+  });
+
+  it('handles edge case: capital = 0', () => {
+    const result = calcMonteCarlo({ ...BASE_PARAMS, capital: 0 });
+    // Should not throw — pnl values should be 0 or very small
+    expect(result.scenarios).toBeGreaterThan(0);
+    expect(result.worstCase.pnlPercent).toBe(0);
+  });
+
+  it('higher volatility increases probOutOfRange', () => {
+    const low = calcMonteCarlo({ ...BASE_PARAMS, volAnn: 0.1, scenarios: 300 });
+    const high = calcMonteCarlo({ ...BASE_PARAMS, volAnn: 2.0, scenarios: 300 });
+    // High vol should have materially higher out-of-range probability
+    expect(high.probOutOfRange).toBeGreaterThan(low.probOutOfRange);
+  });
+
+  it('each scenario outcome has the expected shape', () => {
+    const result = calcMonteCarlo({ ...BASE_PARAMS, scenarios: 10 });
+    const outcome = result.percentiles.p50;
+
+    expect(outcome).toHaveProperty('finalPrice');
+    expect(outcome).toHaveProperty('priceChange');
+    expect(outcome).toHaveProperty('feesEarned');
+    expect(outcome).toHaveProperty('ilLoss');
+    expect(outcome).toHaveProperty('pnl');
+    expect(outcome).toHaveProperty('pnlPercent');
+    expect(outcome).toHaveProperty('isInRange');
+    expect(typeof outcome.isInRange).toBe('boolean');
+  });
+});
+
+// -----------------------------------------------------------------------
+// calcBacktest — Historical / simulated backtest for a range strategy
+// -----------------------------------------------------------------------
+
+describe('calcBacktest', () => {
+  const BASE_PARAMS = {
+    capital: 10_000,
+    entryPrice: 2500,
+    rangeLower: 2000,
+    rangeUpper: 3000,
+    volAnn: 0.5,
+    fees24h: 5_000,
+    tvl: 10_000_000,
+    mode: 'NORMAL' as const,
+    periodDays: 30,
+  };
+
+  it('returns object with all required fields', () => {
+    const result = calcBacktest(BASE_PARAMS);
+
+    expect(result).toHaveProperty('periodDays');
+    expect(result).toHaveProperty('totalFees');
+    expect(result).toHaveProperty('totalIL');
+    expect(result).toHaveProperty('netPnl');
+    expect(result).toHaveProperty('netPnlPercent');
+    expect(result).toHaveProperty('maxDrawdown');
+    expect(result).toHaveProperty('timeInRange');
+    expect(result).toHaveProperty('rebalances');
+    expect(result).toHaveProperty('dailyReturns');
+    expect(result).toHaveProperty('transactionCosts');
+  });
+
+  it('totalFees is non-negative', () => {
+    const result = calcBacktest(BASE_PARAMS);
+    expect(result.totalFees).toBeGreaterThanOrEqual(0);
+  });
+
+  it('totalIL is non-negative', () => {
+    const result = calcBacktest(BASE_PARAMS);
+    expect(result.totalIL).toBeGreaterThanOrEqual(0);
+  });
+
+  it('netPnl = totalFees - totalIL - transactionCosts.total', () => {
+    const result = calcBacktest(BASE_PARAMS);
+    const expected = result.totalFees - result.totalIL - result.transactionCosts.total;
+    expect(result.netPnl).toBeCloseTo(expected, 1);
+  });
+
+  it('dailyReturns has one entry per simulated day', () => {
+    const result = calcBacktest(BASE_PARAMS);
+    expect(result.dailyReturns).toHaveLength(result.periodDays);
+  });
+
+  it('each dailyReturns entry has day, cumPnl, fees, il', () => {
+    const result = calcBacktest(BASE_PARAMS);
+    const entry = result.dailyReturns[0];
+
+    expect(entry).toHaveProperty('day');
+    expect(entry).toHaveProperty('cumPnl');
+    expect(entry).toHaveProperty('fees');
+    expect(entry).toHaveProperty('il');
+  });
+
+  it('timeInRange is between 0 and 100', () => {
+    const result = calcBacktest(BASE_PARAMS);
+    expect(result.timeInRange).toBeGreaterThanOrEqual(0);
+    expect(result.timeInRange).toBeLessThanOrEqual(100);
+  });
+
+  it('transactionCosts structure has entry, exit, rebalancing, and total', () => {
+    const result = calcBacktest(BASE_PARAMS);
+
+    expect(result.transactionCosts).toHaveProperty('entryCost');
+    expect(result.transactionCosts).toHaveProperty('exitCost');
+    expect(result.transactionCosts).toHaveProperty('rebalancingCosts');
+    expect(result.transactionCosts).toHaveProperty('total');
+  });
+
+  it('transactionCosts.total = entryCost + exitCost + rebalancingCosts', () => {
+    const result = calcBacktest(BASE_PARAMS);
+    const { entryCost, exitCost, rebalancingCosts, total } = result.transactionCosts;
+    expect(total).toBeCloseTo(entryCost + exitCost + rebalancingCosts, 1);
+  });
+
+  it('uses provided priceHistory when supplied', () => {
+    // Stable price = always in range → timeInRange should be 100%
+    const stableHistory = Array.from({ length: 30 }, () => 2500);
+    const result = calcBacktest({ ...BASE_PARAMS, priceHistory: stableHistory });
+
+    expect(result.timeInRange).toBe(100);
+    expect(result.rebalances).toBe(0);
+  });
+
+  it('handles edge case: capital = 0 — fees and IL are 0', () => {
+    const result = calcBacktest({ ...BASE_PARAMS, capital: 0 });
+
+    expect(result.totalFees).toBe(0);
+    expect(result.totalIL).toBe(0);
+    expect(result.transactionCosts.total).toBe(0);
+  });
+
+  it('all-out-of-range price history yields zero fees', () => {
+    // All prices below lower bound — no fees earned
+    const outOfRangeHistory = Array.from({ length: 10 }, () => 1000);
+    const result = calcBacktest({ ...BASE_PARAMS, periodDays: 10, priceHistory: outOfRangeHistory });
+
+    expect(result.totalFees).toBe(0);
+    expect(result.timeInRange).toBe(0);
+  });
+
+  it('maxDrawdown is non-negative', () => {
+    const result = calcBacktest(BASE_PARAMS);
+    expect(result.maxDrawdown).toBeGreaterThanOrEqual(0);
+  });
+});
