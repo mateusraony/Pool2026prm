@@ -93,6 +93,9 @@ export function enrichToUnifiedPool(
   }
 
   const finalVolAnn = volResult.volAnn > 0.05 ? volResult.volAnn : 0.20;
+  if (volResult.volAnn <= 0.05) {
+    warnings.push('volatility_fallback_20pct_default');
+  }
 
   // Health score
   const healthResult = calcHealthScore({

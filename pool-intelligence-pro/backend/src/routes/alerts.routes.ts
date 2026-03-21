@@ -26,9 +26,9 @@ router.get('/alerts', async (req, res) => {
 // Create alert rule
 router.post('/alerts', validate(alertSchema), async (req, res) => {
   try {
-    const { poolId, type, threshold } = req.body;
+    const { poolId, type, threshold, condition } = req.body;
     const id = randomUUID();
-    alertService.addRule(id, { type, poolId, value: threshold });
+    alertService.addRule(id, { type, poolId, value: threshold, condition });
 
     res.json({
       success: true,

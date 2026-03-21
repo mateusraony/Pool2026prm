@@ -798,8 +798,13 @@ export async function fetchAlerts(): Promise<{
   return data.data || { rules: [], recentAlerts: [] };
 }
 
-export async function createAlert(poolId: string | undefined, type: string, threshold: number): Promise<{ id: string }> {
-  const { data } = await api.post('/alerts', { poolId, type, threshold });
+export async function createAlert(
+  poolId: string | undefined,
+  type: string,
+  threshold: number,
+  condition?: { rangeLower: number; rangeUpper: number },
+): Promise<{ id: string }> {
+  const { data } = await api.post('/alerts', { poolId, type, threshold, condition });
   return data.data;
 }
 

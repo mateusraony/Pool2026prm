@@ -41,7 +41,19 @@ export const alertSchema = z.object({
   poolId: z.string().optional(),
   type: z.enum(ALERT_TYPE_VALUES),
   threshold: z.number().finite().min(0).max(1_000_000),
-});
+  condition: z.object({
+    rangeLower: z.number().positive(),
+    rangeUpper: z.number().positive(),
+  }).optional(),
+}).refine(
+  (data) => {
+    if (data.type === 'OUT_OF_RANGE' || data.type === 'NEAR_RANGE_EXIT') {
+      return data.condition?.rangeLower != null && data.condition?.rangeUpper != null;
+    }
+    return true;
+  },
+  { message: 'rangeLower e rangeUpper são obrigatórios para alertas de range', path: ['condition'] }
+);
 
 export const rangePositionSchema = z.object({
   poolId: z.string().min(1),
