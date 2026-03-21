@@ -56,6 +56,7 @@ import {
   testIntegration,
   Integration,
 } from '@/api/client';
+import { ALERT_EVENTS_LIST } from '@/data/alert-events';
 
 interface NotificationOption {
   key: keyof NotificationSettings['notifications'];
@@ -1078,16 +1079,9 @@ const INTEGRATION_TYPES = [
   },
 ];
 
-const ALERT_EVENTS = [
-  { value: 'PRICE_ABOVE', label: 'Preço Acima' },
-  { value: 'PRICE_BELOW', label: 'Preço Abaixo' },
-  { value: 'VOLUME_DROP', label: 'Queda de Volume' },
-  { value: 'LIQUIDITY_FLIGHT', label: 'Fuga de Liquidez' },
-  { value: 'VOLATILITY_SPIKE', label: 'Spike de Volatilidade' },
-  { value: 'OUT_OF_RANGE', label: 'Fora do Range' },
-  { value: 'NEAR_RANGE_EXIT', label: 'Próximo do Limite' },
-  { value: 'NEW_RECOMMENDATION', label: 'Nova Recomendação' },
-];
+// ALERT_EVENTS importado de @/data/alert-events (fonte canônica)
+// Nota: NEAR_RANGE_EXIT label mudou de 'Próximo do Limite' → 'Próximo de Sair do Range' (mais descritivo)
+const ALERT_EVENTS = ALERT_EVENTS_LIST;
 
 function IntegrationsSection() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
