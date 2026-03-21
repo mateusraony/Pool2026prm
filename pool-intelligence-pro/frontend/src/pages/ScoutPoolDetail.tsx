@@ -8,6 +8,7 @@ import { PerformanceCharts } from '@/components/charts/PerformanceCharts';
 import { CandlestickChart, type Timeframe } from '@/components/charts/CandlestickChart';
 import { PoolNotes } from '@/components/common/PoolNotes';
 import { HodlVsLp } from '@/components/common/HodlVsLp';
+import { ConfBadge } from '@/components/common/ConfBadge';
 import { AIInsightsCard } from '@/components/AIInsightsCard';
 import { TokenCorrelation } from '@/components/common/TokenCorrelation';
 import { Button } from '@/components/ui/button';
@@ -35,17 +36,6 @@ import { usePoolWebSocket } from '@/hooks/usePoolWebSocket';
 import type { Pool } from '@/types/pool';
 
 /** Badge de confiança para dados estimados ou suplementados */
-function ConfBadge({ conf }: { conf?: 'high' | 'medium' | 'low' }) {
-  if (!conf || conf === 'high') return null;
-  return (
-    <span
-      className={`ml-1 text-[9px] px-1 rounded font-mono ${conf === 'medium' ? 'bg-yellow-500/10 text-yellow-400' : 'bg-muted text-muted-foreground'}`}
-      title={conf === 'medium' ? 'Dado estimado ou suplementado' : 'Dado de baixa confiança — estimativa'}
-    >
-      {conf === 'medium' ? 'est.' : 'aprox.'}
-    </span>
-  );
-}
 
 /** Flash visual por 2s quando um valor muda — indica update live */
 function useValueFlash(value: unknown): boolean {
