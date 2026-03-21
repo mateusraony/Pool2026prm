@@ -1,4 +1,5 @@
 import { useMemo, useCallback } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { StatCard } from '@/components/common/StatCard';
@@ -137,11 +138,13 @@ export default function ScoutDashboard() {
 
       // Determine status from P&L and price position
       const currentPrice = pos.currentPrice ?? pos.entryPrice;
-      const isOutOfRange = currentPrice < pos.rangeLower || currentPrice > pos.rangeUpper;
-      const distToEdge = Math.min(
-        Math.abs(currentPrice - pos.rangeLower),
-        Math.abs(currentPrice - pos.rangeUpper),
-      ) / currentPrice * 100;
+      const isOutOfRange = currentPrice != null && (currentPrice < pos.rangeLower || currentPrice > pos.rangeUpper);
+      const distToEdge = currentPrice != null && currentPrice > 0
+        ? Math.min(
+            Math.abs(currentPrice - pos.rangeLower),
+            Math.abs(currentPrice - pos.rangeUpper),
+          ) / currentPrice * 100
+        : Infinity;
       const posStatus: 'ok' | 'attention' | 'critical' = isOutOfRange
         ? 'critical'
         : distToEdge < 5
@@ -192,9 +195,30 @@ export default function ScoutDashboard() {
   if (isLoading) {
     return (
       <MainLayout title="Dashboard" subtitle="Visao geral do seu portfolio de liquidez">
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <span className="ml-3 text-muted-foreground">Conectando ao servidor...</span>
+        {/* Skeleton layout espelha estrutura real do dashboard */}
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="rounded-xl border border-border/40 bg-card p-4 space-y-3">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-8 w-32" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 rounded-xl border border-border/40 bg-card p-4 space-y-3">
+              <Skeleton className="h-5 w-40" />
+              {[...Array(3)].map((_, i) => (
+                <Skeleton key={i} className="h-16 w-full" />
+              ))}
+            </div>
+            <div className="rounded-xl border border-border/40 bg-card p-4 space-y-3">
+              <Skeleton className="h-5 w-32" />
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-8 w-full" />
+            </div>
+          </div>
         </div>
       </MainLayout>
     );

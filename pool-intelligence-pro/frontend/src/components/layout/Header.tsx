@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import { RefreshCw, Wifi, WifiOff, Sun, Moon } from 'lucide-react';
 import { format } from 'date-fns';
+import { useTheme } from 'next-themes';
 import { fetchHealth } from '../../api/client';
 import { MobileMenuButton } from './Sidebar';
 import { NotificationBell } from '@/components/common/NotificationBell';
@@ -9,6 +10,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { cn } from '@/lib/utils';
 
 export default function Header() {
+  const { theme, setTheme } = useTheme();
   const { data: health, isLoading, refetch } = useQuery({
     queryKey: ['health'],
     queryFn: fetchHealth,
@@ -57,8 +59,18 @@ export default function Header() {
           onClick={() => refetch()}
           className="p-2 rounded-lg bg-secondary/60 hover:bg-secondary transition-all duration-200 hover:scale-105 active:scale-95"
           disabled={isLoading}
+          title="Atualizar dados"
         >
           <RefreshCw className={cn('w-4 h-4', isLoading && 'animate-spin')} />
+        </button>
+
+        {/* Dark/Light theme toggle */}
+        <button
+          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          className="p-2 rounded-lg bg-secondary/60 hover:bg-secondary transition-all duration-200 hover:scale-105 active:scale-95"
+          title={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+        >
+          {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
 
         {/* Notification bell */}

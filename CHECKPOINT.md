@@ -3,14 +3,60 @@
 ## Status Atual
 **Branch:** `claude/review-audit-checkpoint-ZFYUM`
 **Data:** 2026-03-21 UTC
-**Fase:** ETAPAS 1–17 concluídas ✅ + Auditoria + Correções P0/P1/P2/P3 ✅ + **ROADMAP Fases 1–6 concluídas ✅** + **7 Blocos de Auditoria Final ✅** + **Gap A + Gap B ✅** + **Segunda Auditoria: 57 Fixes P0/P1/P2/P3 ✅**
+**Fase:** ETAPAS 1–17 ✅ + ROADMAP Fases 1–6 ✅ + 7 Blocos Auditoria ✅ + Gap A/B ✅ + Segunda Auditoria 57 fixes ✅ + Terceira Auditoria 7 fixes ✅ + **Quarta Auditoria — UX/Performance: 6 itens ✅**
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-21 — Segunda rodada de 57 fixes concluída em 3 sprints (P0/P1/P2/P3). Build limpo. 3 commits: c11ab37, 101fdad, 5615336."`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-21 — Quarta auditoria: toast global (4.2), health check aprimorado (5.3), dark/light toggle (4.4), skeletons de loading (4.1), testes unitários score/calc (3.5), testes de integração rotas (3.6). 258 testes passando. Commits: 6c5f2b3, 84d8c29, 191d8d0."`
 
 ---
 
 ## O QUE FOI FEITO
+
+### Quarta Auditoria — UX + Performance + Testes ✅ (2026-03-21)
+
+**Metodologia:** auditoria de MELHORIAS.md → 12 itens → 6 já existiam → 6 implementados em 3 commits atômicos.
+
+**Sprint 1 — Toast global + Health check (commits `6c5f2b3`):** 2 arquivos
+- `frontend/src/api/client.ts`: interceptor Axios com `toast.error()` para erros 401/403, 422/400, 5xx e offline — 4 categorias de erro com mensagens em português; 404 silencioso (recurso opcional)
+- `backend/src/index.ts`: `/health` aprimorado com `process.memoryUsage()` (rss_mb, heap_mb), ping Prisma `SELECT 1` com timeout de 3s, campo `db: 'ok'|'unavailable'|'unconfigured'`, status HTTP 503 quando degradado
+
+**Sprint 2 — Dark/Light toggle + Skeletons (commit `84d8c29`):** 3 arquivos
+- `frontend/src/components/layout/Header.tsx`: botão Sun/Moon com `useTheme` do next-themes — infraestrutura (ThemeProvider + CSS tokens) já existia; toggle expõe o que estava oculto
+- `frontend/src/pages/ScoutDashboard.tsx`: substituído spinner `<Loader2>` por layout skeleton real (4 metric cards + tabela + sidebar card) usando `<Skeleton>` do shadcn/ui
+- `frontend/src/pages/Pools.tsx`: skeletons em mobile (6 cards `h-20`) e desktop (8 linhas × 10 células na tabela)
+
+**Sprint 3 — Testes unitários + integração (commit `191d8d0`):** 3 arquivos
+- `backend/src/services/__tests__/score.service.test.ts` (novo, 363 linhas): testes do `ScoreService.calculateScore()` com mocks de logService/memoryStore/riskService; cobre TVL zero, high liquidity, suspect detection, determineMode, estrutura de breakdown
+- `backend/src/services/__tests__/calc.service.test.ts` (novo): testes do calc service
+- `backend/src/routes/__tests__/api.integration.test.ts` (novo, 569 linhas): testes de integração GET /health, /api/pools, /api/recommendations, /api/alerts; POST /api/alerts com validação 400
+
+**Resultado final:** 258 testes, 11 arquivos, todos passando ✅
+**vitest.config.ts:** include expandido para `src/**/services/__tests__/**/*.test.ts`
+
+---
+
+### Terceira Auditoria: 7 Fixes P0/P1/P2 ✅ (2026-03-21)
+
+**Metodologia:** auditoria paralela com 2 agentes (backend + frontend) → 7 bugs reais confirmados (falsos positivos descartados) → 3 sprints com commit de checkpoint entre cada um.
+
+**Sprint P0 (commit `7277df8`):** 2 arquivos, divisão por zero backend
+- `adapters/index.ts:227`: `0/0=NaN` confidence quando `basePool.tvl=0` → guard `basePool.tvl > 0`
+- `alert.service.ts:229`: `pool.price=0` → `distToLower=-Infinity < 5 = true` → false alerts → guard `pool.price > 0`
+
+**Sprint P1 (commit `6087ecd`):** 3 arquivos, comportamento errado
+- `cache.service.ts:82`: `hitRate=NaN` quando hits+misses=0 (`0/0`, `|| 0` não pega NaN) → guard explícito
+- `ScoutDashboard.tsx:144`: `posStatus=NaN` quando `currentPrice=undefined` → null-check + `Infinity` como fallback
+- `adapters.ts:128,129`: `ilEstimated` 100x diferente entre `legacyPool` (vol×0.05) e `unifiedPool` (vol²/730) → unificado para `½σ²/365`; `netReturn` também unificado para fee-based
+
+**Sprint P2 (commit `5650fc8`):** 1 arquivo
+- `InteractiveChart.tsx:170,172`: `rangePercent=Infinity` e `rangeWidth=Infinity` quando `currentPrice=0` → guard `currentPrice > 0` com fallbacks `'0.0'` / `'70'`
+
+**Falsos positivos descartados:**
+- Bug#2/5/6/9 (auditor): APR em Simulation.tsx usa % corretamente (15 → /52 = 0.288%/semana)
+- Bug#4 (auditor): `score.health` e `score.return` existem na interface Score e são populados
+- Bug#8 (auditor): Watchlist loading state é comportamento normal de React Query
+
+---
 
 ### Segunda Auditoria: 57 Fixes P0/P1/P2/P3 ✅ (2026-03-21)
 

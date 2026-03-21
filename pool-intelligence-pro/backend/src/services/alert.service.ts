@@ -225,7 +225,7 @@ export class AlertService {
         const rangeLower = rule.condition?.rangeLower as number | undefined;
         const rangeUpper = rule.condition?.rangeUpper as number | undefined;
         const proximityPct = rule.value ?? 5; // default: alertar quando a 5% do limite
-        if (rangeLower != null && rangeUpper != null && pool.price != null) {
+        if (rangeLower != null && rangeUpper != null && pool.price != null && pool.price > 0) {
           const distToLower = ((pool.price - rangeLower) / pool.price) * 100;
           const distToUpper = ((rangeUpper - pool.price) / pool.price) * 100;
           if (distToLower < proximityPct || distToUpper < proximityPct) {

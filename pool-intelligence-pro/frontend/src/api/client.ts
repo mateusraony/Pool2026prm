@@ -1,4 +1,5 @@
 import axios, { AxiosError } from 'axios';
+import { toast } from 'sonner';
 
 // Resolve API base URL (the part BEFORE /api):
 // In production (Render single-service): empty string → relative /api paths
@@ -48,6 +49,21 @@ api.interceptors.response.use(undefined, async (error: AxiosError) => {
     // Wait before retry: 3s first, 8s second (gives cold start time)
     await new Promise(r => setTimeout(r, retryCount === 0 ? 3000 : 8000));
     return api.request(config);
+  }
+
+  // Show user-friendly toast for unrecoverable errors
+  const status = error.response?.status;
+  const serverMsg = (error.response?.data as any)?.error;
+  if (status === 401 || status === 403) {
+    toast.error('Acesso negado', { description: serverMsg || 'Você não tem permissão para esta ação.' });
+  } else if (status === 404) {
+    // 404 is common for missing optional resources — don't toast
+  } else if (status === 422 || status === 400) {
+    toast.error('Dados inválidos', { description: serverMsg || 'Verifique os campos e tente novamente.' });
+  } else if (status && status >= 500) {
+    toast.error('Erro no servidor', { description: serverMsg || 'Tente novamente em instantes.' });
+  } else if (!error.response) {
+    toast.error('Sem conexão', { description: 'Não foi possível conectar ao servidor após 2 tentativas.' });
   }
 
   return Promise.reject(error);

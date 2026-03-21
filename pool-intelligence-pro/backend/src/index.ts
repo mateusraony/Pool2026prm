@@ -48,8 +48,34 @@ app.use(compression());
 app.use(express.json());
 
 // Health check (FIRST - before anything else, for Render health checks)
-app.get('/health', (_req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/health', async (_req, res) => {
+  const mem = process.memoryUsage();
+  const memMb = Math.round(mem.rss / 1024 / 1024);
+  const heapMb = Math.round(mem.heapUsed / 1024 / 1024);
+
+  // DB ping (non-blocking: timeout 3s so health check stays fast)
+  let dbStatus: 'ok' | 'unavailable' | 'unconfigured' = 'unconfigured';
+  if (process.env.DATABASE_URL) {
+    try {
+      const prisma = getPrisma();
+      await Promise.race([
+        prisma.$queryRaw`SELECT 1`,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+      ]);
+      dbStatus = 'ok';
+    } catch {
+      dbStatus = 'unavailable';
+    }
+  }
+
+  const healthy = dbStatus !== 'unavailable';
+  res.status(healthy ? 200 : 503).json({
+    status: healthy ? 'ok' : 'degraded',
+    timestamp: new Date().toISOString(),
+    uptime: Math.round(process.uptime()),
+    memory: { rss_mb: memMb, heap_mb: heapMb },
+    db: dbStatus,
+  });
 });
 
 // Debug endpoint — only available in development (exposes internal paths and env info)
