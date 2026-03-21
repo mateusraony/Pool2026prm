@@ -8,6 +8,7 @@ import {
 import clsx from 'clsx';
 import { fetchUnifiedPools, fetchTokens, fetchFavorites, addFavorite, removeFavorite, UnifiedPool } from '../api/client';
 import { ExportButton } from '@/components/common/ExportButton';
+import { Skeleton } from '@/components/ui/skeleton';
 import { exportCSV, exportPrintReport } from '@/lib/export';
 import { ConfBadge } from '@/components/common/ConfBadge';
 
@@ -597,9 +598,8 @@ export default function PoolsPage() {
       {/* Mobile card list (12.9) — visível apenas em mobile */}
       <div className="sm:hidden space-y-2">
         {isLoading ? (
-          <div className="py-12 text-center text-dark-400">
-            <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
-            Carregando pools...
+          <div className="space-y-2">
+            {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
           </div>
         ) : sorted.length === 0 ? (
           <div className="py-12 text-center text-dark-400">
@@ -638,12 +638,17 @@ export default function PoolsPage() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr>
-                  <td colSpan={10} className="px-3 py-12 text-center text-dark-400">
-                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
-                    Carregando pools...
-                  </td>
-                </tr>
+                <>
+                  {[...Array(8)].map((_, i) => (
+                    <tr key={i} className="border-b border-dark-700">
+                      {[...Array(10)].map((__, j) => (
+                        <td key={j} className="px-3 py-3">
+                          <Skeleton className="h-4 w-full" />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </>
               ) : sorted.length === 0 && (data?.syncing || isFetching) ? (
                 <tr>
                   <td colSpan={10} className="px-3 py-12 text-center text-dark-400">
