@@ -144,6 +144,7 @@ export function enrichToUnifiedPool(
     aprTotal,
     aprAdjusted,
     volatilityAnn: finalVolAnn,
+    priceChange24h: (pool as Pool & { priceChange24h?: number }).priceChange24h,
     ratio,
     healthScore: healthResult.score,
     penaltyTotal: healthResult.penaltyTotal,

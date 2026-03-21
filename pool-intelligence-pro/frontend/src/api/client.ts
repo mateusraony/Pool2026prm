@@ -274,6 +274,7 @@ export interface UnifiedPool {
   aprTotal: number | null;
   aprAdjusted: number | null;
   volatilityAnn: number;
+  priceChange24h?: number;
   ratio: number;
   healthScore: number;
   penaltyTotal: number;

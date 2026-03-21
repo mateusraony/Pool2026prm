@@ -60,7 +60,7 @@ export async function getPoolWithFallback(
       price: memPool.price,
       tvl: memPool.tvlUSD,
       volume24h: memPool.volume24hUSD,
-      fees24h: memPool.fees24hUSD ?? 0,
+      fees24h: memPool.fees24hUSD ?? undefined,  // preservar null como "dado indisponível" (não zero)
       apr: memPool.aprTotal ?? memPool.aprFee ?? 0,
     } as Pool;
     return { pool, provider: 'memory-store', usedFallback: false };

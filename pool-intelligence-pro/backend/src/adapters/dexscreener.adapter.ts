@@ -69,8 +69,15 @@ export class DexScreenerAdapter extends BaseAdapter {
   
   private async fetchPoolsBySearch(chain: string, limit: number): Promise<Pool[]> {
     // DexScreener doesn't have a "list all pools" endpoint
-    // We search for popular tokens on the chain
-    const searchTerms = ['ETH', 'USDC', 'USDT', 'WBTC', 'ARB', 'OP'];
+    // We search for popular tokens on the chain — terms adapted per chain
+    const chainTerms: Record<string, string[]> = {
+      ethereum:  ['ETH', 'USDC', 'USDT', 'WBTC', 'DAI', 'WETH'],
+      arbitrum:  ['ETH', 'USDC', 'USDT', 'WBTC', 'ARB', 'GMX'],
+      base:      ['ETH', 'USDC', 'USDT', 'cbETH', 'cbBTC', 'WETH'],
+      polygon:   ['ETH', 'USDC', 'USDT', 'WBTC', 'MATIC', 'POL'],
+      optimism:  ['ETH', 'USDC', 'USDT', 'WBTC', 'OP', 'WETH'],
+    };
+    const searchTerms = chainTerms[chain] ?? ['ETH', 'USDC', 'USDT', 'WBTC'];
     const allPools: Pool[] = [];
     const seen = new Set<string>();
     
@@ -130,6 +137,12 @@ export class DexScreenerAdapter extends BaseAdapter {
       price: this.parseNumber(data.priceUsd),
       tvl: data.liquidity?.usd || 0,
       volume24h: data.volume?.h24 || 0,
+      priceChange24h: data.priceChange?.h24,
+      dataConfidence: {
+        price: { method: 'observed' as const, confidence: 'high' as const },
+        volume: { method: 'observed' as const, confidence: 'high' as const },
+        fees: { method: 'derived_volume' as const, confidence: 'low' as const },
+      },
     };
   }
   
