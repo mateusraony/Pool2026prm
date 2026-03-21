@@ -2,15 +2,47 @@
 
 ## Status Atual
 **Branch:** `claude/review-audit-checkpoint-ZFYUM`
-**Data:** 2026-03-20 UTC
-**Fase:** ETAPAS 1–17 concluídas ✅ + Auditoria + Correções P0/P1/P2/P3 ✅ + **ROADMAP Fases 1–6 concluídas ✅** + **7 Blocos de Auditoria Final ✅** + **Gap A + Gap B ✅**
+**Data:** 2026-03-21 UTC
+**Fase:** ETAPAS 1–17 concluídas ✅ + Auditoria + Correções P0/P1/P2/P3 ✅ + **ROADMAP Fases 1–6 concluídas ✅** + **7 Blocos de Auditoria Final ✅** + **Gap A + Gap B ✅** + **Segunda Auditoria: 57 Fixes P0/P1/P2/P3 ✅**
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-20 — Gap A (fonte única AlertType) e Gap B (ConfBadge em Pools) concluídos. 152+98 testes passando. Sistema limpo."`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-21 — Segunda rodada de 57 fixes concluída em 3 sprints (P0/P1/P2/P3). Build limpo. 3 commits: c11ab37, 101fdad, 5615336."`
 
 ---
 
 ## O QUE FOI FEITO
+
+### Segunda Auditoria: 57 Fixes P0/P1/P2/P3 ✅ (2026-03-21)
+
+**Sprint 1 — P0 (commit `c11ab37`):** 7 arquivos, 123 inserções, 30 deleções
+- `validation.ts`: `alertSchema` com campo `condition` + `.refine()` obrigando rangeLower/rangeUpper para OUT_OF_RANGE/NEAR_RANGE_EXIT
+- `alerts.routes.ts`: desestrutura e repassa `condition` para `alertService.addRule`
+- `pool-intelligence.service.ts`: warning `volatility_fallback_20pct_default` quando vol ≤ 5%
+- `client.ts` (frontend): `createAlert` aceita parâmetro opcional `condition`
+- `Alerts.tsx`: campos de range no modal; guard `isFormValid()` por tipo; reset correto de condition
+
+**Sprint 2 — P1 (commit `101fdad`):** 5 arquivos, 29 inserções, 18 deleções
+- `score.service.ts`: `determineMode` AGGRESSIVE agora exige vol ≤ `NORMAL.volatilityMax` (15%), não 30%
+- `ScoutPoolDetail.tsx`: TVL e Volume usam `formatCurrency(value, true)` para K/M/B adaptativo
+- `adapters.ts`: `unifiedPoolToViewPool` remove divisor `/30` arbitrário em `ilEstimated`; fee e IL em mesma unidade (diário)
+- `client.ts`: `recommendedMode` derivado de `volatilityAnn + healthScore` (não hardcoded `'NORMAL'`)
+- `ScoutDashboard.tsx`: mapping `NORMAL → 'optimized'`; `topRecommendation` usa `legacyPoolToViewPool` diretamente; label de alerta via `alertTypeConfig`
+
+**Sprint 3 — P2/P3 (commit `5615336`):** 6 arquivos, 24 inserções, 3 deleções
+- `types/index.ts` (backend): `priceChange24h?: number` em `UnifiedPool`
+- `pool-intelligence.service.ts`: propaga `priceChange24h` do Pool para UnifiedPool
+- `adapters/index.ts`: `fees24h ?? 0` → `fees24h ?? undefined` (null = dado indisponível)
+- `dexscreener.adapter.ts`: termos de busca por chain (ETH/ARB/Base/Polygon); `dataConfidence` e `priceChange24h`
+- `thegraph.adapter.ts`: `dataConfidence` adicionado ao `transformPool`
+- `client.ts` (frontend): `priceChange24h?: number` em interface `UnifiedPool`
+
+**False positives confirmados e ignorados (não eram bugs):**
+- P1-1: `volatility * 100` em Pools.tsx — correto (decimal → %)
+- P1-11: PnL mistura USD/% — campos diferentes, propósitos diferentes
+- P1-14: `removeFavorite(fav.poolId)` — correto, backend DELETE usa poolId
+- P1-15: cache `TTL * 2` — design intencional (stale-while-revalidate)
+
+---
 
 ### Gap A + Gap B — Fonte única AlertType + ConfBadge em Pools ✅ (2026-03-20)
 
