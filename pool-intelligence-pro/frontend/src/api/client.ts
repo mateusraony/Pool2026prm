@@ -205,6 +205,13 @@ export async function fetchPools(chain?: string): Promise<{ pool: Pool; score: S
       feeTier: p.feeTier || 0.003,
       volatilityAnn: p.volatilityAnn || undefined,
     });
+    // Derive recommendedMode from actual data: low volatility + high score → AGGRESSIVE
+    const vol_pct = (p.volatilityAnn ?? 0) * 100; // convert decimal to percent
+    const hScore = p.healthScore || 50;
+    const derivedMode: 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE' =
+      hScore >= 70 && vol_pct <= 15 ? 'AGGRESSIVE'
+      : hScore >= 50 && vol_pct <= 30 ? 'NORMAL'
+      : 'DEFENSIVE';
     return {
       pool: poolObj,
       score: {
@@ -212,7 +219,7 @@ export async function fetchPools(chain?: string): Promise<{ pool: Pool; score: S
         health: p.healthScore || 50,
         return: 0,
         risk: 0,
-        recommendedMode: 'NORMAL' as const,
+        recommendedMode: derivedMode,
         isSuspect: (p.warnings?.length || 0) > 0,
         breakdown: {
           health: { liquidityStability: liqScore, ageScore: 50, volumeConsistency: volConsist },

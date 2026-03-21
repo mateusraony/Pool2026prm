@@ -308,13 +308,13 @@ export class ScoreService {
   private determineMode(pool: Pool, metrics: PoolWithMetrics['metrics'] | undefined, score: number): Mode {
     const volatility = metrics?.volatility24h || 10;
     
-    // High score + low volatility = can be aggressive
-    if (score >= 70 && volatility <= MODE_THRESHOLDS.AGGRESSIVE.volatilityMax) {
+    // High score + LOW volatility = safe for aggressive narrow ranges
+    if (score >= 70 && volatility <= MODE_THRESHOLDS.NORMAL.volatilityMax) {
       return 'AGGRESSIVE';
     }
-    
-    // Medium score or medium volatility = normal
-    if (score >= 50 && volatility <= MODE_THRESHOLDS.NORMAL.volatilityMax) {
+
+    // Good score + medium volatility = normal ranges
+    if (score >= 50 && volatility <= MODE_THRESHOLDS.AGGRESSIVE.volatilityMax) {
       return 'NORMAL';
     }
     

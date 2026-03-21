@@ -9,8 +9,9 @@ import { LiveIndicator } from '@/components/common/LiveIndicator';
 import { useRiskConfig } from '@/hooks/useRiskConfig';
 import { fetchUnifiedPools, fetchRangePositions, fetchAlerts, fetchHealth, fetchRecommendations, fetchMarketConditions, API_BASE_URL } from '@/api/client';
 import type { RangePosition, Recommendation } from '@/api/client';
-import { unifiedPoolToViewPool } from '@/data/adapters';
+import { unifiedPoolToViewPool, legacyPoolToViewPool } from '@/data/adapters';
 import type { Pool, ActivePool } from '@/types/pool';
+import { alertTypeConfig, type AlertType } from '@/data/alert-events';
 import { formatCurrency } from '@/lib/utils';
 import {
   Wallet,
@@ -157,7 +158,7 @@ export default function ScoutDashboard() {
         ilActual,
         status: posStatus,
         lastAction: pos.lastCheckedAt || pos.createdAt || new Date().toISOString(),
-        rangeSelected: (pos.mode ?? 'normal').toLowerCase() as 'defensive' | 'optimized' | 'aggressive',
+        rangeSelected: ({ DEFENSIVE: 'defensive', NORMAL: 'optimized', AGGRESSIVE: 'aggressive' } as const)[pos.mode ?? 'NORMAL'] ?? 'optimized',
       };
     });
   }, [positions, pools]);
@@ -353,9 +354,12 @@ export default function ScoutDashboard() {
             const displayPool = isAiRec
               ? (() => {
                   const rec = topRecommendation.pool;
-                  return pools.find(
+                  // Tentar encontrar nos pools já carregados (dados enriquecidos)
+                  const found = pools.find(
                     (p) => p.poolAddress === rec.poolAddress && p.chain === rec.chain
-                  ) || topPool;
+                  );
+                  // Fallback: converter a pool da recomendação diretamente (dados corretos)
+                  return found ?? legacyPoolToViewPool({ pool: rec, score: topRecommendation.score });
                 })()
               : topPool;
             if (!displayPool) return null;
@@ -414,7 +418,7 @@ export default function ScoutDashboard() {
                   <div key={`${alert.type}_${i}`} className="flex items-start gap-3 rounded-lg bg-warning/10 p-3">
                     <AlertTriangle className="h-4 w-4 text-warning mt-0.5" />
                     <div className="flex-1">
-                      <p className="text-sm font-medium">{alert.type}</p>
+                      <p className="text-sm font-medium">{alertTypeConfig[alert.type as AlertType]?.label || alert.type}</p>
                       <p className="text-xs text-muted-foreground">{alert.message}</p>
                     </div>
                   </div>
