@@ -3,14 +3,35 @@
 ## Status Atual
 **Branch:** `claude/review-audit-checkpoint-ZFYUM`
 **Data:** 2026-03-20 UTC
-**Fase:** ETAPAS 1–17 concluídas ✅ + Auditoria + Correções P0/P1/P2/P3 ✅ + **ROADMAP Fases 1–6 concluídas ✅** + **7 Blocos de Auditoria Final ✅**
+**Fase:** ETAPAS 1–17 concluídas ✅ + Auditoria + Correções P0/P1/P2/P3 ✅ + **ROADMAP Fases 1–6 concluídas ✅** + **7 Blocos de Auditoria Final ✅** + **Gap A + Gap B ✅**
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-20 — Todos os 7 blocos de auditoria concluídos. ROADMAP Fases 1–6 completas. Sistema em estado limpo. Ver PRÓXIMOS PASSOS."`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-20 — Gap A (fonte única AlertType) e Gap B (ConfBadge em Pools) concluídos. 152+98 testes passando. Sistema limpo."`
 
 ---
 
 ## O QUE FOI FEITO
+
+### Gap A + Gap B — Fonte única AlertType + ConfBadge em Pools ✅ (2026-03-20)
+
+**Commits:** `88240b4`, `1aabb92`, `47631a2`, `89c94cf`
+
+**Gap A — Fonte única AlertType (backend + frontend):**
+- `backend/src/constants/alert-events.ts` (novo): array canônico `ALERT_TYPE_VALUES` + `ALERT_TYPE_META`
+- `backend/src/types/index.ts`: `AlertType` = `typeof ALERT_TYPE_VALUES[number]` — sem union literal
+- `backend/src/routes/validation.ts`: `z.enum(ALERT_TYPE_VALUES)` — sem literal duplicado
+- `frontend/src/data/alert-events.ts` (novo): mirror + `alertTypeConfig` + `ALERT_EVENTS_LIST`
+- `frontend/src/pages/Alerts.tsx`: importa do data file
+- `frontend/src/pages/ScoutSettings.tsx`: importa `ALERT_EVENTS_LIST` do data file
+
+**Gap B — ConfBadge reutilizável + lista de pools:**
+- `frontend/src/components/common/ConfBadge.tsx` (novo): componente extraído de ScoutPoolDetail
+- `frontend/src/pages/ScoutPoolDetail.tsx`: importa do comum
+- `frontend/src/pages/Pools.tsx`: APR (tabela + card mobile) com `ConfBadge`
+
+**Testes:** 152 backend + 98 frontend passando ✅
+
+---
 
 ### 7 Blocos de Auditoria Final ✅ (2026-03-20)
 
