@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Request, Response, NextFunction } from 'express';
+import { ALERT_TYPE_VALUES } from '../constants/alert-events.js';
 
 // ============================================
 // PARAM VALIDATION
@@ -38,7 +39,7 @@ export const watchlistSchema = z.object({
 
 export const alertSchema = z.object({
   poolId: z.string().optional(),
-  type: z.enum(['PRICE_ABOVE', 'PRICE_BELOW', 'VOLUME_DROP', 'LIQUIDITY_FLIGHT', 'VOLATILITY_SPIKE', 'OUT_OF_RANGE', 'NEAR_RANGE_EXIT', 'NEW_RECOMMENDATION']),
+  type: z.enum(ALERT_TYPE_VALUES),
   threshold: z.number().finite().min(0).max(1_000_000),
 });
 

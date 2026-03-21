@@ -195,15 +195,10 @@ export interface Recommendation {
 // ALERT TYPES
 // ============================================
 
-export type AlertType =
-  | 'PRICE_ABOVE'
-  | 'PRICE_BELOW'
-  | 'VOLUME_DROP'
-  | 'LIQUIDITY_FLIGHT'
-  | 'VOLATILITY_SPIKE'
-  | 'OUT_OF_RANGE'
-  | 'NEAR_RANGE_EXIT'
-  | 'NEW_RECOMMENDATION';
+import { ALERT_TYPE_VALUES } from '../constants/alert-events.js';
+
+/** União derivada da fonte canônica — ver constants/alert-events.ts */
+export type AlertType = typeof ALERT_TYPE_VALUES[number];
 
 export interface AlertTrigger {
   type: AlertType;
