@@ -83,6 +83,7 @@ export interface UnifiedPool {
 
   // Volatility & Risk
   volatilityAnn: number;         // annualized volatility
+  priceChange24h?: number;       // % price change in 24h (from GeckoTerminal when available)
   ratio: number;                 // volume1h / tvl (capital efficiency proxy)
 
   // Health Score (institutional formula)

@@ -20,8 +20,8 @@ import { useRiskConfig } from '@/hooks/useRiskConfig';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ExportButton } from '@/components/common/ExportButton';
 import { exportCSV, exportPrintReport, poolColumns } from '@/lib/export';
-import { fetchUnifiedPools, addFavorite } from '@/api/client';
-import { unifiedPoolToViewPool } from '@/data/adapters';
+import { fetchRecommendations, addFavorite } from '@/api/client';
+import { legacyPoolToViewPool } from '@/data/adapters';
 import type { Pool } from '@/types/pool';
 
 export default function ScoutRecommended() {
@@ -37,14 +37,14 @@ export default function ScoutRecommended() {
   // React Query: auto-retry 3x, refetch every 2min, stale after 30s
   const { data: poolsData, isLoading, error: fetchError, dataUpdatedAt, refetch, isFetching } = useQuery({
     queryKey: ['recommended-pools'],
-    queryFn: () => fetchUnifiedPools({ limit: 50, sortBy: 'healthScore', sortDirection: 'desc' }),
+    queryFn: () => fetchRecommendations(undefined, 50),
     refetchInterval: 120000,
     staleTime: 30000,
   });
 
   const allPools = useMemo(() => {
-    if (!poolsData?.pools) return [];
-    return poolsData.pools.map((p) => unifiedPoolToViewPool(p));
+    if (!poolsData || poolsData.length === 0) return [];
+    return poolsData.map((rec) => legacyPoolToViewPool({ pool: rec.pool, score: rec.score }));
   }, [poolsData]);
 
   const lastFetched = dataUpdatedAt ? new Date(dataUpdatedAt) : null;

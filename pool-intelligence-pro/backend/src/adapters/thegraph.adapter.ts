@@ -200,6 +200,11 @@ function transformPool(raw: GraphQLPool, chain: string): Pool {
     poolType,
     tickSpacing: raw.tickSpacing ? parseInt(raw.tickSpacing) : undefined,
     bluechip: calcService.isBluechip(raw.token0.symbol, raw.token1.symbol),
+    dataConfidence: {
+      price: { method: 'observed' as const, confidence: 'high' as const },
+      volume: { method: 'observed' as const, confidence: ((raw.poolHourData?.length ?? 0) > 0 ? 'high' : 'medium') as 'high' | 'medium' },
+      fees: { method: 'observed' as const, confidence: ((raw.poolHourData?.length ?? 0) > 0 ? 'high' : 'medium') as 'high' | 'medium' },
+    },
   };
 
   return pool;

@@ -32,12 +32,12 @@ export function unifiedPoolToViewPool(
   const aggressiveMin = aggRange?.lower ?? price * (1 - vol * 0.15);
   const aggressiveMax = aggRange?.upper ?? price * (1 + vol * 0.15);
 
-  // Estimate metrics
+  // Estimate metrics (all in daily terms for consistency)
   const fees24h = p.fees24hUSD ?? 0;
   const tvl = p.tvlUSD || p.tvl || 1;
-  const feesEstimated = tvl > 0 ? (fees24h / tvl) : 0;
-  const ilEstimated = vol > 0 ? vol * 0.05 : 0.02;
-  const netReturn = Math.max(0, feesEstimated - ilEstimated / 30);
+  const feesEstimated = tvl > 0 ? (fees24h / tvl) : 0;        // daily fee rate
+  const ilEstimated = vol > 0 ? (vol * vol) / (2 * 365) : 0.0001; // daily IL proxy (½σ²/365)
+  const netReturn = Math.max(0, feesEstimated - ilEstimated);  // daily net return
   const gasEstimated = (p.chain === 'ethereum') ? 15 : 1.5;
   const timeInRange = optRange
     ? Math.round((1 - (optRange.probOutOfRange ?? 0.3)) * 100)

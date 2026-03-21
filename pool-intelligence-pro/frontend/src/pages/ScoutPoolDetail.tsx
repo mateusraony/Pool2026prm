@@ -27,7 +27,7 @@ import {
   AlertCircle,
   RefreshCw,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
 import { fetchPoolDetail, addFavorite, fetchOhlcv, API_BASE_URL } from '@/api/client';
 import { unifiedPoolToViewPool } from '@/data/adapters';
@@ -285,14 +285,14 @@ export default function ScoutPoolDetail() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <StatCard
           label="TVL"
-          value={`$${((liveData?.tvlUSD ?? pool.tvl) / 1e6).toFixed(1)}M`}
+          value={formatCurrency(liveData?.tvlUSD ?? pool.tvl, true)}
           icon={<DollarSign className="h-5 w-5" />}
           className={cn(tvlFlash && 'ring-1 ring-green-500/40 transition-all duration-300')}
         />
         <div className="relative">
           <StatCard
             label="Volume 24h"
-            value={`$${((liveData?.volume24hUSD ?? pool.volume24h) / 1e6).toFixed(1)}M`}
+            value={formatCurrency(liveData?.volume24hUSD ?? pool.volume24h, true)}
             icon={<BarChart3 className="h-5 w-5" />}
             className={cn(volFlash && 'ring-1 ring-green-500/40 transition-all duration-300')}
           />

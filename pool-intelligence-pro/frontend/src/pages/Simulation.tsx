@@ -134,9 +134,14 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
       const feesPercent = capital > 0 && serverCalc.feeEstimate
         ? (serverCalc.feeEstimate.expectedFees7d / capital) * 100
         : 0;
-      const ilPercent = serverCalc.ilRisk
-        ? serverCalc.ilRisk.ilRiskScore
-        : 0;
+      // ilRiskScore é probabilidade de sair do range (0..1), NÃO percentual de IL
+      // Calcular IL com a mesma fórmula do fallback local para consistência
+      const volAnn_srv = pool.volatilityAnn || 0.40;
+      const sqrtT_srv = Math.sqrt(7 / 365);
+      const weeklyVol_srv = volAnn_srv * sqrtT_srv;
+      const widthFraction_srv = rangeWidth > 0 ? rangeWidth / 100 : 0.10;
+      const concentrationFactor_srv = Math.min(5, 0.10 / widthFraction_srv);
+      const ilPercent = Math.max(0, 0.5 * weeklyVol_srv * weeklyVol_srv * concentrationFactor_srv * 100);
       const netReturn = feesPercent - ilPercent - gasPercent;
 
       return {

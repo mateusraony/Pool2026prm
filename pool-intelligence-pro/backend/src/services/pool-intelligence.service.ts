@@ -93,6 +93,9 @@ export function enrichToUnifiedPool(
   }
 
   const finalVolAnn = volResult.volAnn > 0.05 ? volResult.volAnn : 0.20;
+  if (volResult.volAnn <= 0.05) {
+    warnings.push('volatility_fallback_20pct_default');
+  }
 
   // Health score
   const healthResult = calcHealthScore({
@@ -141,6 +144,7 @@ export function enrichToUnifiedPool(
     aprTotal,
     aprAdjusted,
     volatilityAnn: finalVolAnn,
+    priceChange24h: (pool as Pool & { priceChange24h?: number }).priceChange24h,
     ratio,
     healthScore: healthResult.score,
     penaltyTotal: healthResult.penaltyTotal,
