@@ -125,8 +125,8 @@ export function legacyPoolToViewPool(item: {
     },
     metrics: {
       feesEstimated: p.tvl > 0 ? (p.fees24h ?? 0) / p.tvl : 0,
-      ilEstimated: vol > 0 ? vol * 0.05 : 0.02,
-      netReturn: Math.max(0, (p.apr ?? 0) / 365 / 100),
+      ilEstimated: vol > 0 ? (vol * vol) / (2 * 365) : 0.0001, // daily IL proxy (½σ²/365) — mesma fórmula de unifiedPoolToViewPool
+      netReturn: Math.max(0, p.tvl > 0 ? ((p.fees24h ?? 0) / p.tvl) - (vol * vol) / (2 * 365) : 0),
       gasEstimated: p.chain === 'ethereum' ? 15 : 1.5,
       timeInRange: Math.round(70 - vol * 30),
     },

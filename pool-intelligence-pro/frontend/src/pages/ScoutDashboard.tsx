@@ -137,11 +137,13 @@ export default function ScoutDashboard() {
 
       // Determine status from P&L and price position
       const currentPrice = pos.currentPrice ?? pos.entryPrice;
-      const isOutOfRange = currentPrice < pos.rangeLower || currentPrice > pos.rangeUpper;
-      const distToEdge = Math.min(
-        Math.abs(currentPrice - pos.rangeLower),
-        Math.abs(currentPrice - pos.rangeUpper),
-      ) / currentPrice * 100;
+      const isOutOfRange = currentPrice != null && (currentPrice < pos.rangeLower || currentPrice > pos.rangeUpper);
+      const distToEdge = currentPrice != null && currentPrice > 0
+        ? Math.min(
+            Math.abs(currentPrice - pos.rangeLower),
+            Math.abs(currentPrice - pos.rangeUpper),
+          ) / currentPrice * 100
+        : Infinity;
       const posStatus: 'ok' | 'attention' | 'critical' = isOutOfRange
         ? 'critical'
         : distToEdge < 5

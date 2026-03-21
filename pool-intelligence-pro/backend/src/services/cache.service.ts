@@ -79,7 +79,7 @@ class CacheService {
     return {
       ...this.stats,
       keys: this.cache.keys().length,
-      hitRate: this.stats.hits / (this.stats.hits + this.stats.misses) || 0,
+      hitRate: (this.stats.hits + this.stats.misses) > 0 ? this.stats.hits / (this.stats.hits + this.stats.misses) : 0,
     };
   }
 
