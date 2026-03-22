@@ -36,6 +36,12 @@ export const defiGlossary: Record<string, { term: string; short: string; full: s
     full: 'Fee Tier é a porcentagem cobrada de cada trade na pool. Tiers comuns: 0.01% (stables), 0.05% (pairs correlacionados), 0.3% (mainstream), 1% (exóticos). Fees maiores = mais retorno por trade, mas menos volume.',
   },
 
+  estimatedReturn: {
+    term: 'Retorno Est. (7d)',
+    short: 'Retorno líquido em 7 dias, já descontando Impermanent Loss esperado.',
+    full: 'Retorno líquido estimado para 7 dias de posição. Fórmula: Fees × Modo − IL(σ²) × Concentração. Já deduz o Impermanent Loss calculado pela volatilidade do par e pelo range escolhido.',
+  },
+
   // Impermanent Loss & Risco
   il: {
     term: 'Impermanent Loss',
