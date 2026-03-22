@@ -1,0 +1,19 @@
+# Anti-patterns do projeto Pool Intelligence Pro
+# Usado pelo Agente E da skill /audit-review
+# Baseado em CLAUDE.md — REGRA ABSOLUTA #1
+# Formato: REGEX|DESCRIÇÃO|SEVERIDADE
+
+: any|TypeScript strict violado — nunca usar ': any' sem justificativa documentada|CRÍTICO
+as any|TypeScript strict violado — cast 'as any' sem justificativa|CRÍTICO
+catch\s*\{\s*\}|Catch vazio — erro silenciado silenciosamente (anti-pattern crítico)|CRÍTICO
+catch\s*\([^)]*\)\s*\{\s*\}|Catch com parâmetro mas corpo vazio — erro silenciado|CRÍTICO
+// @ts-nocheck|Supressão total de checagem TypeScript no arquivo|CRÍTICO
+console\.log|Usar logService.info/warn/error em produção (não console.log)|IMPORTANTE
+console\.error(?!.*logService)|console.error direto — usar logService.error|IMPORTANTE
+// @ts-ignore|Supressão pontual de erro TypeScript — justificar ou corrigir|IMPORTANTE
+TODO(?!.*#[0-9])|TODO sem número de issue (formato correto: TODO #123)|AVISO
+FIXME(?!.*#[0-9])|FIXME sem número de issue|AVISO
+HACK\b|HACK no código — deve ter justificativa e issue|AVISO
+setTimeout.*,\s*0\b|Anti-pattern: setTimeout com delay zero (event loop hack)|AVISO
+\.then\(.*\)\.catch\(\s*\(\s*\)\s*=>\s*\{\s*\}\)|Promise com catch vazio|CRÍTICO
+new Error\(\s*\)|new Error() sem mensagem — sempre incluir mensagem descritiva|AVISO

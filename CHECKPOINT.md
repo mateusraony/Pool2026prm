@@ -10,6 +10,34 @@
 
 ---
 
+## Auditoria Pré-Commit — 2026-03-22 11:25
+
+| Verificação        | Resultado | Detalhes                                                                 |
+|--------------------|-----------|--------------------------------------------------------------------------|
+| tsc backend        | ✅        | 0 erros                                                                  |
+| tsc frontend       | ✅        | 0 erros                                                                  |
+| vitest             | ✅        | 264/264 passando (12 arquivos)                                           |
+| build              | ✅        | exit 0 — vite 8.02s, tsc backend ok                                     |
+| verification       | ✅        | Evidências reais confirmadas; 4 vulns moderate (telegram-bot, sem high)  |
+| code-review        | ⚠️        | 1 novo: paths hardcoded em audit-review.md; 2 pré-existentes em index.ts |
+| simplify           | ⚠️        | pt-patterns.txt formato quebrado (3 linhas); contradição Agente D spec   |
+| português          | ⚠️        | 20 ocorrências em frontend/backend (strings UI sem acento)               |
+| antipatterns       | ⚠️        | 22x console.log + 4x :any em index.ts (todos pré-existentes)            |
+| conformidade       | ⚠️        | CHECKPOINT desatualizado — 4 commits recentes sem documentação           |
+
+**Veredicto: ⚠️ APROVADO COM AVISOS**
+
+**Próximas ações (priorizadas):**
+1. [IMPORTANTE — NOVO] `audit-review.md:9,10,21,22,45,65,73` — substituir paths `/home/user/Pool2026prm/...` por `$(git rev-parse --show-toplevel)` para portabilidade
+2. [IMPORTANTE] `pt-patterns.txt:39,44,45` — remover linhas com `→ OK` que quebram formato `REGEX|SUGESTÃO`
+3. [IMPORTANTE — pré-existente] `backend/src/index.ts:133–323` — migrar ~22 `console.log` do boot/shutdown para `logService`
+4. [IMPORTANTE — pré-existente] `backend/src/index.ts:180,193,274,295` — tipar `err: unknown` nos catches (substituir `: any`)
+5. [AVISO] `audit-review.md` — corrigir descrição do Agente D (não é paralelo; é sequencial após A/B/C)
+6. [AVISO] `settings.json:44` — reescrever hook Python em forma explícita com `if` em vez de `or`
+7. [AVISO] CHECKPOINT.md — atualizar com commits `6c1371f`, `4c5aea0`, `50fe270`, `6be160d`
+
+---
+
 ## O QUE FOI FEITO
 
 ### Sexta Auditoria — Alinhamento Frontend + UX (6 itens) ✅ (2026-03-22)
