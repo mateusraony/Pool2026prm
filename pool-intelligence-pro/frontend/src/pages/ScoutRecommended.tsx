@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, ArrowUpDown, Zap, RefreshCw, Loader2 } from 'lucide-react';
+import { Search, Filter, Zap, RefreshCw, Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useRiskConfig } from '@/hooks/useRiskConfig';
@@ -173,7 +173,6 @@ export default function ScoutRecommended() {
 
             <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
               <SelectTrigger className="w-[130px]">
-                <ArrowUpDown className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Ordenar" />
               </SelectTrigger>
               <SelectContent>
@@ -216,13 +215,13 @@ export default function ScoutRecommended() {
             </span>
           )}
           {networkFilter !== 'all' && (
-            <Badge variant="outline" className="cursor-pointer" onClick={() => setNetworkFilter('all')}>
-              {networkFilter} x
+            <Badge variant="outline" className="cursor-pointer gap-1" onClick={() => setNetworkFilter('all')}>
+              {networkFilter} <X className="h-3 w-3" />
             </Badge>
           )}
           {riskFilter !== 'all' && (
-            <Badge variant="outline" className="cursor-pointer" onClick={() => setRiskFilter('all')}>
-              Risco: {riskFilter} x
+            <Badge variant="outline" className="cursor-pointer gap-1" onClick={() => setRiskFilter('all')}>
+              Risco: {riskFilter} <X className="h-3 w-3" />
             </Badge>
           )}
         </div>

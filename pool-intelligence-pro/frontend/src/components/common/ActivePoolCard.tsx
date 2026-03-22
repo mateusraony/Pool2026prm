@@ -1,9 +1,9 @@
 import { ActivePool } from '@/types/pool';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Settings, XCircle, TrendingUp, TrendingDown } from 'lucide-react';
-import { networkColors, dexLogos } from '@/data/constants';
+import { networkColors } from '@/data/constants';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -24,8 +24,8 @@ export function ActivePoolCard({
 }: ActivePoolCardProps) {
   const statusStyles = {
     ok: { bg: 'bg-success/8', border: 'border-success/25', dot: 'text-success', label: 'OK' },
-    attention: { bg: 'bg-warning/8', border: 'border-warning/25', dot: 'text-warning', label: 'Atencao' },
-    critical: { bg: 'bg-destructive/8', border: 'border-destructive/25', dot: 'text-destructive', label: 'Critico' },
+    attention: { bg: 'bg-warning/8', border: 'border-warning/25', dot: 'text-warning', label: 'Atenção' },
+    critical: { bg: 'bg-destructive/8', border: 'border-destructive/25', dot: 'text-destructive', label: 'Crítico' },
   };
 
   const status = statusStyles[pool.status];
@@ -55,8 +55,8 @@ export function ActivePoolCard({
         {/* Header */}
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary/80 text-xl ring-1 ring-border/30">
-              {dexLogos[pool.dex] || '\u{1F535}'}
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary/80 text-[11px] font-bold font-mono ring-1 ring-border/30 text-primary uppercase tracking-tight">
+              {(pool.dex || 'DEX').replace(/\s*(v\d+)$/i, '').slice(0, 4)}
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -101,8 +101,8 @@ export function ActivePoolCard({
         <div className="mt-4 grid grid-cols-4 gap-2">
           <div className="rounded-xl bg-secondary/40 p-2.5 text-center ring-1 ring-border/20">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-display">Capital</p>
-            <p className="font-mono text-sm mt-0.5">${pool.capital}</p>
-            <p className="text-[10px] text-muted-foreground">{pool.capitalPercent}%</p>
+            <p className="font-mono text-sm mt-0.5">{formatCurrency(pool.capital)}</p>
+            <p className="text-[10px] text-muted-foreground">{pool.capitalPercent.toFixed(1)}%</p>
           </div>
           <div className="rounded-xl bg-secondary/40 p-2.5 text-center ring-1 ring-border/20">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-display">Fees</p>
@@ -137,6 +137,7 @@ export function ActivePoolCard({
           <Button
             variant="ghost"
             size="sm"
+            aria-label="Ajustar posição"
             onClick={() => onAdjust?.()}
           >
             <Settings className="h-4 w-4" />

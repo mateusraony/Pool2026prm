@@ -57,9 +57,10 @@ export default function Header() {
 
         <button
           onClick={() => refetch()}
-          className="p-2 rounded-lg bg-secondary/60 hover:bg-secondary transition-all duration-200 hover:scale-105 active:scale-95"
+          className="p-2 rounded-lg bg-secondary/60 hover:bg-secondary transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer"
           disabled={isLoading}
           title="Atualizar dados"
+          aria-label="Atualizar dados"
         >
           <RefreshCw className={cn('w-4 h-4', isLoading && 'animate-spin')} />
         </button>
@@ -67,8 +68,9 @@ export default function Header() {
         {/* Dark/Light theme toggle */}
         <button
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          className="p-2 rounded-lg bg-secondary/60 hover:bg-secondary transition-all duration-200 hover:scale-105 active:scale-95"
+          className="p-2 rounded-lg bg-secondary/60 hover:bg-secondary transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer"
           title={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+          aria-label={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
         >
           {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>

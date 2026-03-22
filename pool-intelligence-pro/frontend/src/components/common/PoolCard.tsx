@@ -3,7 +3,7 @@ import { cn, formatCurrency } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Star, Eye, Activity, TrendingUp } from 'lucide-react';
-import { networkColors, dexLogos } from '@/data/constants';
+import { networkColors } from '@/data/constants';
 
 interface PoolCardProps {
   pool: Pool;
@@ -53,8 +53,8 @@ export function PoolCard({
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary/80 text-xl ring-1 ring-border/30">
-            {dexLogos[pool.dex] || '🔵'}
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary/80 text-[11px] font-bold font-mono ring-1 ring-border/30 text-primary uppercase tracking-tight">
+            {(pool.dex || 'DEX').replace(/\s*(v\d+)$/i, '').slice(0, 4)}
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -155,6 +155,7 @@ export function PoolCard({
           <Button
             variant="ghost"
             size="sm"
+            aria-label="Adicionar aos favoritos"
             onClick={() => onFavorite?.()}
           >
             <Star className="h-4 w-4" />
