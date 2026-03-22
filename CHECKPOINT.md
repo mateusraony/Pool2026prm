@@ -3,14 +3,50 @@
 ## Status Atual
 **Branch:** `claude/review-audit-checkpoint-ZFYUM`
 **Data:** 2026-03-22 UTC
-**Fase:** ETAPAS 1–17 ✅ + ROADMAP Fases 1–6 ✅ + 7 Blocos Auditoria ✅ + Gap A/B ✅ + Segunda Auditoria 57 fixes ✅ + Terceira Auditoria 7 fixes ✅ + Quarta Auditoria UX ✅ + **Quinta Auditoria — Cálculos Críticos: 16 bugs ✅**
+**Fase:** ETAPAS 1–17 ✅ + ROADMAP Fases 1–6 ✅ + 7 Blocos Auditoria ✅ + Gap A/B ✅ + Segunda Auditoria 57 fixes ✅ + Terceira Auditoria 7 fixes ✅ + Quarta Auditoria UX ✅ + Quinta Auditoria 16 bugs ✅ + **Sexta Auditoria — Alinhamento Frontend + UX: 6 itens ✅**
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-22 — Quinta auditoria de cálculos concluída: 16 bugs corrigidos em calc.service.ts / score.service.ts / recommendation.service.ts / jobs/index.ts. Score agora varia por modo (DEFENSIVO/NORMAL/AGRESSIVO). IL out-of-range corrigido. 258 testes passando. Commits: 2ce7a62, 49369d6, 8acadef, 0424dc3."`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-22 — Sexta auditoria: alinhamento frontend/backend + melhorias UX. volatilityAnn fallback 0.3→0.50, tipo Recommendation completo, tooltip IL, badge modo, gainPercent em ScoutRecommended, 6 testes estimateGains. 264 testes passando. REGRA #0 gravada (verificação independente + skills). Commits: 576feb8, 6906027, 85fea8e, 4ca8595, e12859b."`
 
 ---
 
 ## O QUE FOI FEITO
+
+### Sexta Auditoria — Alinhamento Frontend + UX (6 itens) ✅ (2026-03-22)
+
+**Metodologia:** 3 agentes paralelos + verificação independente (tsc + vitest + build). Skills usadas: `dispatching-parallel-agents`, `verification-before-completion`.
+
+**Agent A — adapters.ts + client.ts (commit `576feb8`):**
+- `adapters.ts:21,101` — fallback `volatilityAnn 0.3 → 0.50` em `unifiedPoolToViewPool` e `legacyPoolToViewPool` (frontend agora alinhado com backend)
+- `client.ts:106-133` — tipo `Recommendation` agora inclui campos que o backend retorna: `regimeAnalysis?`, `riskAssessment?`, `noOperate?`, `noOperateReason?`
+
+**Agent C — recommendation.service.test.ts (commit `6906027`):**
+- Novo arquivo `backend/src/services/__tests__/recommendation.service.test.ts` com 6 testes cobrindo `estimateGains`:
+  - DEFENSIVE tem `concentrationFactor` maior → mais IL deduzido que AGGRESSIVE
+  - Pool com vol 150% → `gainPercent` negativo em DEFENSIVE (informação real)
+  - Pool estável vol=20% APR=100% → positivo nos 3 modos
+  - AGGRESSIVE `modeMultiplier=1.3x` > NORMAL para mesma pool
+  - `generateTop3` usa `mode` do caller, não `recommendedMode` dos pools
+  - `gainPercent` negativo não é truncado a zero
+
+**Regras permanentes (commit `85fea8e`):**
+- `CLAUDE.md`: REGRA ABSOLUTA #0 adicionada — verificação independente obrigatória + tabela de skills por tipo de tarefa
+- `.claude/settings.json`: Stop hook com checklist visual (`✅ vitest / tsc / build / skills usadas?`)
+
+**Agent B — UX frontend (commits `4ca8595`, `e12859b`):**
+- `Recommendations.tsx` — tooltip em "Retorno Est. (7d)" explica: "Retorno líquido = Fees×Modo − IL(σ²)×Concentração"
+- `PoolCard.tsx` — badge 🛡️/⚖️/🎯 ao lado do score indicando modo (DEFENSIVE/NORMAL/AGGRESSIVE)
+- `ScoutRecommended.tsx` — exibe `estimatedGainPercent` com cor verde/vermelho e label "(após IL)"
+- `pool.ts` — `recommendedMode?: string` adicionado ao tipo `ViewPool`
+- `glossary.ts` — termo "Retorno Líquido" adicionado ao glossário
+
+**Verificação final independente:**
+- 264/264 testes passando (12 arquivos — +6 novos em recommendation.service.test.ts)
+- TypeScript frontend: `tsc --noEmit` exit 0
+- TypeScript backend: `tsc --noEmit` exit 0
+- Build: exit 0
+
+---
 
 ### Quinta Auditoria — Cálculos Críticos (16 bugs) ✅ (2026-03-22)
 
