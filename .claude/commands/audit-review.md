@@ -6,8 +6,8 @@ Execute os 4 estágios abaixo em ordem. Seja preciso, capture evidências reais 
 ## STAGE 1 — TypeScript (bloqueante)
 
 Rode EM PARALELO (2 chamadas Bash na mesma mensagem):
-- `cd /home/user/Pool2026prm/pool-intelligence-pro/backend && npx tsc --noEmit 2>&1`
-- `cd /home/user/Pool2026prm/pool-intelligence-pro/frontend && npx tsc --noEmit 2>&1`
+- `cd $(git rev-parse --show-toplevel)/pool-intelligence-pro/backend && npx tsc --noEmit 2>&1`
+- `cd $(git rev-parse --show-toplevel)/pool-intelligence-pro/frontend && npx tsc --noEmit 2>&1`
 
 Se qualquer um retornar erros → VEREDICTO: ❌ BLOQUEADO. Exiba os erros. NÃO prossiga para Stage 2. Informe o usuário que o commit foi bloqueado e quais arquivos têm erros TypeScript.
 
@@ -18,8 +18,8 @@ Se ambos passarem → prossiga para Stage 2.
 ## STAGE 2 — Testes + Build (bloqueante)
 
 Rode EM PARALELO (2 chamadas Bash na mesma mensagem):
-- `cd /home/user/Pool2026prm/pool-intelligence-pro/backend && npx vitest run 2>&1`
-- `cd /home/user/Pool2026prm/pool-intelligence-pro && npm run build 2>&1`
+- `cd $(git rev-parse --show-toplevel)/pool-intelligence-pro/backend && npx vitest run 2>&1`
+- `cd $(git rev-parse --show-toplevel)/pool-intelligence-pro && npm run build 2>&1`
 
 Capture:
 - Número de testes passando/falhando (ex: "264/264")
@@ -31,9 +31,9 @@ Se ambos passarem → prossiga para Stage 3.
 
 ---
 
-## STAGE 3 — Revisão Profunda (5 agentes em paralelo, não-bloqueante individualmente)
+## STAGE 3 — Revisão Profunda (não-bloqueante individualmente)
 
-Dispatch 5 agentes EM PARALELO usando a ferramenta Task. Cada agente deve retornar texto estruturado — NENHUM agente deve escrever arquivos.
+Dispatch 4 agentes EM PARALELO (A, B, C, E) usando a ferramenta Task. Após receber todos os outputs, dispatch o Agente D passando os textos coletados. NENHUM agente deve escrever arquivos.
 
 **Agente A — Verificação de Evidências**
 Use a skill `verification-before-completion`.
@@ -42,7 +42,7 @@ Retorne: lista de evidências confirmadas + warnings encontrados.
 
 **Agente B — Code Review vs Requisitos**
 Use a skill `requesting-code-review`.
-Contexto: leia `/home/user/Pool2026prm/CHECKPOINT.md` (seção mais recente "O QUE FOI FEITO") e rode `git diff HEAD~1 HEAD --name-only` para ver arquivos alterados.
+Contexto: leia `$(git rev-parse --show-toplevel)/CHECKPOINT.md` (seção mais recente "O QUE FOI FEITO") e rode `git diff HEAD~1 HEAD --name-only` para ver arquivos alterados.
 Verifique: os arquivos alterados correspondem ao que foi prometido no CHECKPOINT? Padrões do CLAUDE.md estão sendo seguidos (imports .js no backend, sem console.log, Zod em routes, etc.)?
 Retorne: lista de conformidades ✅ e não-conformidades ⚠️/❌ com arquivo:linha.
 
@@ -62,7 +62,7 @@ Execute 3 verificações:
 
 1. **Português** — rode os seguintes greps (escopo: *.ts, *.tsx, *.md, excluindo node_modules/ dist/ .git/):
 ```bash
-cd /home/user/Pool2026prm && grep -rn --include="*.ts" --include="*.tsx" --include="*.md" \
+cd $(git rev-parse --show-toplevel) && grep -rn --include="*.ts" --include="*.tsx" --include="*.md" \
   -E "\bnao\b|\btambem\b|\bvoce\b|\bconfiguracao\b|\binformacao\b|\boperacao\b|\bconexao\b|\batualizacao\b|\bremocao\b|\badicao\b" \
   --exclude-dir={node_modules,dist,.git} \
   pool-intelligence-pro/ 2>/dev/null | grep -v "//.*http" | head -20
@@ -70,7 +70,7 @@ cd /home/user/Pool2026prm && grep -rn --include="*.ts" --include="*.tsx" --inclu
 
 2. **Anti-patterns** — rode:
 ```bash
-cd /home/user/Pool2026prm && grep -rn --include="*.ts" --include="*.tsx" \
+cd $(git rev-parse --show-toplevel) && grep -rn --include="*.ts" --include="*.tsx" \
   -E "(: any|as any|console\.log|catch\s*\{\s*\}|// @ts-ignore|// @ts-nocheck)" \
   --exclude-dir={node_modules,dist,.git} \
   pool-intelligence-pro/backend/src/ pool-intelligence-pro/frontend/src/ 2>/dev/null | head -30
@@ -78,7 +78,7 @@ cd /home/user/Pool2026prm && grep -rn --include="*.ts" --include="*.tsx" \
 
 3. **Conformidade** — rode:
 ```bash
-git -C /home/user/Pool2026prm log --oneline -5
+git -C $(git rev-parse --show-toplevel) log --oneline -5
 ```
 Compare os 5 últimos commits com a seção mais recente do CHECKPOINT.md. Estão documentados?
 
@@ -88,7 +88,7 @@ Retorne: resultados das 3 verificações com arquivo:linha para cada achado.
 
 ## STAGE 4 — Consolidação e Escrita no CHECKPOINT.md
 
-Você (orquestrador) recebeu os outputs de todos os 5 agentes. Agora:
+Você (orquestrador) recebeu os outputs de todos os agentes. Agora:
 
 1. **Determine o veredicto final:**
    - `✅ APROVADO` — Stages 1+2 passaram, Stage 3 sem itens CRÍTICO ou IMPORTANTE
@@ -135,5 +135,5 @@ Você (orquestrador) recebeu os outputs de todos os 5 agentes. Agora:
 - NUNCA escreva no CHECKPOINT.md antes de ter todos os outputs do Stage 3
 - SEMPRE rode Stage 1 antes de Stage 2, Stage 2 antes de Stage 3
 - Stages 1 e 2: rode as 2 chamadas Bash EM PARALELO (mesma mensagem, 2 tool calls)
-- Stage 3: dispatch todos os 5 agentes EM PARALELO (mesma mensagem, 5 tool calls Task)
+- Stage 3: dispatch 4 agentes EM PARALELO (A, B, C, E), depois Agente D com os outputs coletados
 - Apenas Stage 4 escreve no CHECKPOINT.md
