@@ -118,6 +118,21 @@ export interface Recommendation {
   mode: 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE';
   dataTimestamp: string;
   validUntil: string;
+  // Análise de regime de mercado
+  regimeAnalysis?: {
+    regime: string;
+    confidence: number;
+    signal: string;
+  };
+  // Avaliação de risco detalhada
+  riskAssessment?: {
+    level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    factors: string[];
+    maxDrawdown?: number;
+  };
+  // Flag de não-operação (condições adversas de mercado)
+  noOperate?: boolean;
+  noOperateReason?: string;
 }
 
 export interface HealthData {

@@ -18,7 +18,7 @@ export function unifiedPoolToViewPool(
   const totalScore = score?.total ?? p.healthScore ?? 50;
   const apr = p.aprTotal ?? p.aprFee ?? 0;
   const price = p.price ?? 1;
-  const vol = p.volatilityAnn ?? 0.3;
+  const vol = p.volatilityAnn ?? 0.50; // Fallback 0.50 = 50% anualizado — alinhado com backend (calc.service.ts default)
 
   // Derive ranges: use backend ranges if available, otherwise estimate from volatility
   const defRange = ranges?.DEFENSIVE;
@@ -98,7 +98,7 @@ export function legacyPoolToViewPool(item: {
   const p = item.pool;
   const s = item.score;
   const price = p.price ?? 1;
-  const vol = p.volatilityAnn ?? 0.3;
+  const vol = p.volatilityAnn ?? 0.50; // Fallback 0.50 = 50% anualizado — alinhado com backend (calc.service.ts default)
   const totalScore = s.total ?? 50;
 
   return {
@@ -136,5 +136,6 @@ export function legacyPoolToViewPool(item: {
     poolAddress: p.poolAddress,
     chain: p.chain,
     protocol: p.protocol,
+    recommendedMode: s.recommendedMode,
   };
 }
