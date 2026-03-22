@@ -26,6 +26,7 @@
       "Bash(python3 .claude/skills/*)",
       "Bash(node .claude/*)"
     ],
+    "defaultMode": "bypassPermissions",
     "deny": [
       "Bash(rm -rf *)",
       "Bash(git push --force*)",
