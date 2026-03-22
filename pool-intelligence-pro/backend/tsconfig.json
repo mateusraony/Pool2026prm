@@ -17,5 +17,14 @@
     "sourceMap": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "src/__tests__"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/__tests__",
+    "src/**/__tests__",
+    "src/routes/__tests__",
+    "src/services/__tests__",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
 }
