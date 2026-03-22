@@ -130,55 +130,56 @@ async function initPersistence() {
   try {
     const { persistService } = await import('./services/persist.service.js');
     await persistService.init();
-    console.log('[BOOT] Database persistence initialized');
+    logService.info('BOOT', 'Database persistence initialized');
 
     const { telegramBot } = await import('./bot/telegram.js');
     telegramBot.loadFromDb();
-    console.log('[BOOT] Telegram config loaded from DB');
+    logService.info('BOOT', 'Telegram config loaded from DB');
     await telegramBot.setupCommands();
-    console.log('[BOOT] Telegram bot commands registered');
+    logService.info('BOOT', 'Telegram bot commands registered');
 
     const { notificationSettingsService } = await import('./services/notification-settings.service.js');
     notificationSettingsService.loadFromDb();
-    console.log('[BOOT] Notification settings loaded from DB');
+    logService.info('BOOT', 'Notification settings loaded from DB');
 
     const { rangeMonitorService } = await import('./services/range.service.js');
     await rangeMonitorService.loadFromDb();
-    console.log('[BOOT] Range positions loaded from DB');
+    logService.info('BOOT', 'Range positions loaded from DB');
 
     const { loadIntegrations } = await import('./routes/integrations.routes.js');
     await loadIntegrations();
-    console.log('[BOOT] Webhook integrations loaded from DB');
+    logService.info('BOOT', 'Webhook integrations loaded from DB');
 
     // Carregar regras de alerta persistidas
     const { alertService } = await import('./services/alert.service.js');
     await alertService.loadFromDb();
-    console.log('[BOOT] Alert rules loaded from DB');
+    logService.info('BOOT', 'Alert rules loaded from DB');
 
     // Inicializar Push Notifications (VAPID)
     const { pushService } = await import('./services/push.service.js');
     await pushService.init();
-    console.log('[BOOT] Push notification service initialized');
+    logService.info('BOOT', 'Push notification service initialized');
 
     // Inicializar Wallet Tracker
     const { walletService } = await import('./services/wallet.service.js');
     await walletService.init();
-    console.log('[BOOT] Wallet tracker service initialized');
+    logService.info('BOOT', 'Wallet tracker service initialized');
 
     // Amarrar event bus: registrar listeners (ALERT_FIRED → webhook + telegram)
     const { bootstrapEventBus } = await import('./services/event-bus.bootstrap.js');
     bootstrapEventBus();
-    console.log('[BOOT] Event bus listeners registered');
+    logService.info('BOOT', 'Event bus listeners registered');
 
     // Auto-detect appUrl from RENDER_EXTERNAL_URL if not set by user
     const currentAppUrl = notificationSettingsService.getAppUrl();
     const renderUrl = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || '';
     if (renderUrl && (currentAppUrl === 'http://localhost:5173' || !currentAppUrl)) {
       notificationSettingsService.updateSettings({ appUrl: renderUrl });
-      console.log('[BOOT] Auto-set appUrl from RENDER_EXTERNAL_URL:', renderUrl);
+      logService.info('BOOT', 'Auto-set appUrl from RENDER_EXTERNAL_URL: ' + renderUrl);
     }
-  } catch (err: any) {
-    console.error('[BOOT] Persistence init failed (using defaults):', err.message);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logService.error('BOOT', 'Persistence init failed (using defaults)', { error: msg });
   }
 }
 
@@ -189,10 +190,10 @@ async function initPersistence() {
 let persistenceReady = false;
 const persistencePromise = initPersistence().then(() => {
   persistenceReady = true;
-  console.log('[BOOT] Persistence ready — API requests unblocked');
-}).catch((err: any) => {
+  logService.info('BOOT', 'Persistence ready — API requests unblocked');
+}).catch((err: unknown) => {
   persistenceReady = true; // allow requests through with defaults
-  console.error('[BOOT] Persistence init failed, using defaults:', err?.message);
+  logService.error('BOOT', 'Persistence init failed, using defaults', { error: err instanceof Error ? err.message : String(err) });
 });
 
 // Rate limiting: previne abuso da API (100 req/min por IP)
@@ -222,7 +223,7 @@ app.use('/api', async (_req, res, next) => {
 // ============================================
 import routes from './routes/index.js';
 app.use('/api', routes);
-console.log('[BOOT] API routes loaded');
+logService.info('BOOT', 'API routes loaded');
 
 // ============================================
 // SERVE FRONTEND STATIC FILES
@@ -233,9 +234,9 @@ const hasFrontend = fs.existsSync(indexHtmlPath);
 
 if (hasFrontend) {
   app.use(express.static(frontendPath));
-  console.log('[BOOT] Frontend static files: ' + frontendPath);
+  logService.info('BOOT', 'Frontend static files: ' + frontendPath);
 } else {
-  console.warn('[BOOT] No frontend build found at: ' + frontendPath);
+  logService.warn('BOOT', 'No frontend build found at: ' + frontendPath);
 }
 
 // SPA fallback: any route not matched by API or static files → index.html
@@ -263,16 +264,16 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 const PORT = config.port;
 
 server.listen(PORT, () => {
-  console.log('[BOOT] Server started on port ' + PORT);
-  console.log('[BOOT] Environment: ' + config.nodeEnv);
-  console.log('[BOOT] Frontend: ' + frontendPath + (hasFrontend ? ' (OK)' : ' (NOT FOUND)'));
-  console.log('[BOOT] Active chains: ' + config.defaults.chains.join(', '));
+  logService.info('BOOT', 'Server started on port ' + PORT);
+  logService.info('BOOT', 'Environment: ' + config.nodeEnv);
+  logService.info('BOOT', 'Frontend: ' + frontendPath + (hasFrontend ? ' (OK)' : ' (NOT FOUND)'));
+  logService.info('BOOT', 'Active chains: ' + config.defaults.chains.join(', '));
 
   // Initialize background jobs (deferred, non-blocking)
   import('./jobs/index.js').then(({ initializeJobs }) => {
     initializeJobs();
-  }).catch((err: any) => {
-    console.error('[BOOT] Failed to initialize jobs:', err.message);
+  }).catch((err: unknown) => {
+    logService.error('BOOT', 'Failed to initialize jobs', { error: err instanceof Error ? err.message : String(err) });
   });
 
   // ============================================
@@ -292,17 +293,17 @@ server.listen(PORT, () => {
       const pingUrl = `${keepAliveUrl}/health`;
       const mod = pingUrl.startsWith('https') ? 'https' : 'http';
       import(mod).then(m => {
-        m.get(pingUrl, (res: any) => { res.resume(); }).on('error', () => {});
+        m.get(pingUrl, (res: { resume(): void }) => { res.resume(); }).on('error', () => {});
       });
     });
-    console.log(`[BOOT] Keep-alive cron every 13min → ${keepAliveUrl}/health`);
+    logService.info('BOOT', 'Keep-alive cron every 13min → ' + keepAliveUrl + '/health');
   }).catch(() => {
-    console.warn('[BOOT] node-cron not available, using setInterval for keep-alive');
+    logService.warn('BOOT', 'node-cron not available, using setInterval for keep-alive');
     setInterval(() => {
       const pingUrl = `${keepAliveUrl}/health`;
       const mod = pingUrl.startsWith('https') ? 'https' : 'http';
       import(mod).then(m => {
-        m.get(pingUrl, (res: any) => { res.resume(); }).on('error', () => {});
+        m.get(pingUrl, (res: { resume(): void }) => { res.resume(); }).on('error', () => {});
       });
     }, 13 * 60 * 1000);
   });
@@ -312,15 +313,15 @@ server.listen(PORT, () => {
 // GRACEFUL SHUTDOWN
 // ============================================
 function gracefulShutdown(signal: string) {
-  console.log(`[SHUTDOWN] ${signal} received — closing server gracefully...`);
+  logService.info('SHUTDOWN', signal + ' received — closing server gracefully...');
 
   server.close(() => {
-    console.log('[SHUTDOWN] HTTP server closed');
+    logService.info('SHUTDOWN', 'HTTP server closed');
 
     // Close Prisma connections
     getPrisma().$disconnect()
       .then(() => {
-        console.log('[SHUTDOWN] Prisma disconnected');
+        logService.info('SHUTDOWN', 'Prisma disconnected');
         process.exit(0);
       })
       .catch(() => process.exit(0));
@@ -328,7 +329,7 @@ function gracefulShutdown(signal: string) {
 
   // Force exit after 10s if graceful shutdown stalls
   setTimeout(() => {
-    console.error('[SHUTDOWN] Forced exit after timeout');
+    logService.error('SHUTDOWN', 'Forced exit after timeout');
     process.exit(1);
   }, 10_000).unref();
 }

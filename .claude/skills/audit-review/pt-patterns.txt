@@ -36,10 +36,10 @@
 \bcalculacao\b|calculação (prefira: cálculo)
 \bVisualizacao\b|Visualização
 \bvisualizacao\b|visualização
-\bCancelamento\b → OK
+# OK — \bCancelamento\b (palavra correta em português, não é erro)
 \berro nao\b|erro não
 \bvalor nao\b|valor não
 \bdados nao\b|dados não
 \bpool nao\b|pool não
-\bnenhum dado\b → OK (correto)
-\bpor favor\b → OK (correto)
+# OK — \bnenhum dado\b (expressão correta, não precisa de acento)
+# OK — \bpor favor\b (expressão correta, não precisa de acento)
