@@ -89,6 +89,11 @@
         "hooks": [
           {
             "type": "command",
+            "command": "echo '{\"systemMessage\": \"✅ Checklist final: (1) vitest run passou? (2) tsc --noEmit limpo? (3) build OK? (4) Skills usadas? Evidência antes de qualquer afirmação.\"}'",
+            "timeout": 5
+          },
+          {
+            "type": "command",
             "command": "_R=\"${CLAUDE_PLUGIN_ROOT}\"; [ -z \"$_R\" ] && _R=\"$HOME/.claude/plugins/marketplaces/thedotmack/plugin\"; node \"$_R/scripts/bun-runner.js\" \"$_R/scripts/worker-service.cjs\" hook claude-code summarize 2>/dev/null || true",
             "timeout": 120
           },

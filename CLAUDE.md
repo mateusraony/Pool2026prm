@@ -4,6 +4,45 @@
 
 ---
 
+## ⛔ REGRA ABSOLUTA #0 — VERIFICAÇÃO INDEPENDENTE + SKILLS SEMPRE
+
+**APLICA-SE A ESTE E A TODOS OS PROJETOS FUTUROS.**
+
+### Verificação Independente (Iron Law)
+> "Afirmar que algo funciona sem verificar é desonestidade, não eficiência."
+
+**ANTES de qualquer claim de conclusão, commit, ou PR:**
+1. **RODAR** o comando de verificação completo (não confiar em report de agentes)
+2. **LER** o output inteiro — contar falhas, verificar exit code
+3. **EVIDÊNCIA** antes de qualquer afirmação de sucesso
+4. **JAMAIS** usar "deve funcionar", "parece correto", "provavelmente passa"
+
+```
+Obrigatório antes de "está pronto":
+  Backend:  npx vitest run && npx tsc --noEmit && npm run build
+  Frontend: npm run build (dentro de frontend/)
+  Git:      git status + git log --oneline -5
+```
+
+### Skills — Usar Sempre para Maximizar Resultado
+**Skills disponíveis e quando usá-las:**
+
+| Skill | Quando usar |
+|-------|------------|
+| `writing-plans` | Antes de qualquer implementação multi-step |
+| `dispatching-parallel-agents` | 2+ tarefas independentes → rodar em paralelo |
+| `verification-before-completion` | Antes de qualquer claim de conclusão |
+| `ui-ux-pro-max` | Qualquer mudança de UI/layout/design |
+| `brainstorming` | Antes de criar novas features/componentes |
+| `systematic-debugging` | Qualquer bug, falha de teste ou comportamento inesperado |
+| `test-driven-development` | Antes de escrever código de implementação |
+| `requesting-code-review` | Ao concluir features ou fases importantes |
+| `checkpoint` | Ao final de cada sessão de trabalho |
+
+**Regra:** Se uma skill pode melhorar o resultado → usá-la, sem esperar pedido explícito.
+
+---
+
 ## ⛔ REGRA ABSOLUTA #1 — NUNCA QUEBRAR O QUE JÁ FUNCIONA
 
 **PRIORIDADE MÁXIMA em TODAS as tarefas, commits e modificações.**
