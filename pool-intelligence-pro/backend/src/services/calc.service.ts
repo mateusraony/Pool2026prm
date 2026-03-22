@@ -124,7 +124,8 @@ export function calcAprFee(params: {
   }
 
   if (fees1h != null && fees1h > 0) {
-    const est = fees1h * 24;
+    // Desconto de 30%: fees de 1h podem estar inflados por eventos de curto prazo
+    const est = fees1h * 24 * 0.70;
     return {
       feeAPR: (est / tvl) * 365 * 100,
       source: 'fees1h',
@@ -133,7 +134,8 @@ export function calcAprFee(params: {
   }
 
   if (fees5m != null && fees5m > 0) {
-    const est = fees5m * (24 * 60 / 5);
+    // Desconto de 40%: janela de 5min é ainda mais ruidosa
+    const est = fees5m * (24 * 60 / 5) * 0.60;
     return {
       feeAPR: (est / tvl) * 365 * 100,
       source: 'fees5m',
@@ -154,7 +156,7 @@ export function calcVolatilityAnn(
 ): VolatilityResult {
   if (pricePoints.length < 3) {
     // Proxy: not enough data
-    return { volAnn: 0.15, method: 'proxy', dataPoints: pricePoints.length };
+    return { volAnn: 0.50, method: 'proxy', dataPoints: pricePoints.length };
   }
 
   const sorted = [...pricePoints].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
@@ -169,7 +171,7 @@ export function calcVolatilityAnn(
   }
 
   if (logReturns.length < 2) {
-    return { volAnn: 0.15, method: 'proxy', dataPoints: pricePoints.length };
+    return { volAnn: 0.50, method: 'proxy', dataPoints: pricePoints.length };
   }
 
   const sigma = stdev(logReturns);
@@ -182,13 +184,12 @@ export function calcVolatilityAnn(
 /** Proxy volatility using current vs 1h-ago price */
 export function calcVolatilityProxy(priceNow: number, price1hAgo: number): VolatilityResult {
   if (!price1hAgo || price1hAgo <= 0 || !priceNow || priceNow <= 0) {
-    return { volAnn: 0.15, method: 'proxy', dataPoints: 0 };
+    return { volAnn: 0.50, method: 'proxy', dataPoints: 0 };
   }
-  const volAnn = clamp(
-    Math.abs(Math.log(priceNow / price1hAgo)) * Math.sqrt(24 * 365),
-    0.05,
-    3.0
-  );
+  // Proxy de 1h é ruidoso — aplicar clamp conservador e suavização
+  // Floor 0.20 evita subestimar crypto; cap 1.50 evita pânico de 1 hora ruim
+  const rawProxy = Math.abs(Math.log(priceNow / price1hAgo)) * Math.sqrt(24 * 365);
+  const volAnn = clamp(rawProxy, 0.20, 1.50);
   return { volAnn, method: 'proxy', dataPoints: 2 };
 }
 
@@ -229,7 +230,8 @@ export function calcHealthScore(params: {
 
   // freshnessScore: how recently updated (in minutes)
   const ageMinutes = (Date.now() - updatedAt.getTime()) / 60000;
-  const freshnessScore = Math.exp(-ageMinutes / 10);
+  // Decaimento realista para APIs DeFi: meia-vida de 60 min (antes era 10 min)
+  const freshnessScore = Math.exp(-ageMinutes / 60);
 
   // Penalties
   const p1_liquidity = clamp(tvlScore * 0.70 + 0.30, 0.30, 1.00);
@@ -1422,11 +1424,24 @@ export function calcIL(params: ILParams): ILResult {
   let ilFraction = (2 * sqrtRatio) / (1 + priceRatio) - 1; // ≤ 0
 
   if (outOfRange && poolType === 'CL') {
-    // Fora do range: IL é calculado no preço da borda do range
-    const boundaryPrice = currentPrice > rangeUpper ? rangeUpper : rangeLower;
-    const bRatio = boundaryPrice / entryPrice;
-    const bSqrt = Math.sqrt(bRatio);
-    ilFraction = (2 * bSqrt) / (1 + bRatio) - 1;
+    // Fora do range: posição LP está "congelada" num único token.
+    // IL correto = valor LP congelado / valor HODL a preço atual - 1
+    // Ref: Auditless Medium (Uniswap V3 IL), arXiv:2111.09192
+    if (currentPrice > rangeUpper) {
+      // Acima do range: LP 100% token1 (ex: USDC), valor = capital × √(Pa/P0)
+      // HODL a preço atual = capital × (priceRatio + 1) / 2
+      const bRatio = rangeUpper / entryPrice;         // Pa/P0
+      const bSqrt = Math.sqrt(bRatio);
+      // ilFraction = 2×√(Pa/P0) / (P/P0 + 1) - 1
+      ilFraction = (2 * bSqrt) / (priceRatio + 1) - 1;
+    } else {
+      // Abaixo do range: LP 100% token0 (ex: ETH), valor = capital × (P/P0) / √(Pb/P0)
+      // HODL a preço atual = capital × (priceRatio + 1) / 2
+      const bRatio = rangeLower / entryPrice;         // Pb/P0
+      const bSqrt = Math.sqrt(bRatio);
+      // ilFraction = 2×(P/P0) / (√(Pb/P0) × (P/P0 + 1)) - 1
+      ilFraction = (2 * priceRatio) / (bSqrt * (priceRatio + 1)) - 1;
+    }
   }
 
   const ilPercent = Math.round(ilFraction * 10000) / 100; // em %

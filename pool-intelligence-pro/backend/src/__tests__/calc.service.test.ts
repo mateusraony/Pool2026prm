@@ -24,13 +24,13 @@ describe('calcAprFee', () => {
   it('falls back to fees1h when fees24h not available', () => {
     const result = calcAprFee({ fees1h: 50, tvl: 1_000_000 });
     expect(result.source).toBe('fees1h');
-    expect(result.fees24hUSD).toBe(1200); // 50 * 24
+    expect(result.fees24hUSD).toBeCloseTo(840, 0); // 50 * 24 * 0.70 (desconto sazonalidade)
   });
 
   it('falls back to fees5m', () => {
     const result = calcAprFee({ fees5m: 5, tvl: 1_000_000 });
     expect(result.source).toBe('fees5m');
-    expect(result.fees24hUSD).toBe(1440); // 5 * 288
+    expect(result.fees24hUSD).toBeCloseTo(864, 0); // 5 * 288 * 0.60 (desconto sazonalidade)
   });
 
   it('returns null APR when no fee data', () => {
@@ -51,7 +51,7 @@ describe('calcVolatilityAnn', () => {
       { price: 100, timestamp: new Date() },
     ]);
     expect(result.method).toBe('proxy');
-    expect(result.volAnn).toBe(0.15);
+    expect(result.volAnn).toBe(0.50);
   });
 
   it('calculates log returns with sufficient data', () => {
@@ -87,7 +87,7 @@ describe('calcVolatilityProxy', () => {
 
   it('returns default for invalid prices', () => {
     const result = calcVolatilityProxy(0, 100);
-    expect(result.volAnn).toBe(0.15);
+    expect(result.volAnn).toBe(0.50);
   });
 });
 
