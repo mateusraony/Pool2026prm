@@ -106,13 +106,16 @@ describe('RecommendationService', () => {
 
   describe('estimateGains — retorno com IL deduzido', () => {
 
-    it('DEFENSIVE tem concentrationFactor maior → IL maior que AGGRESSIVE para mesma volatilidade', () => {
+    it('AGGRESSIVE tem concentrationFactor maior → IL maior → DEFENSIVE supera AGGRESSIVE em alta volatilidade', () => {
       // Pool com vol 80% anualizada
-      // DEFENSIVE: rangeWidth=0.10 → concFactor = 0.15/0.10 = 1.5
-      // AGGRESSIVE: rangeWidth=0.22 → concFactor = 0.15/0.22 ≈ 0.68
-      // Como DEFENSIVE tem concFactor MAIOR, a dedução de IL é maior
-      // O modeMultiplier de DEFENSIVE (0.7) também é menor → fees brutas menores
-      // Para alta volatilidade, o AGGRESSIVE deve resultar em gainPercent maior
+      // DEFENSIVE: rangeWidth=0.22 → concFactor = 0.15/0.22 ≈ 0.68 (range largo = menos IL)
+      // AGGRESSIVE: rangeWidth=0.08 → concFactor = 0.15/0.08 ≈ 1.875 (range estreito = mais IL)
+      // Para alta volatilidade (vol=80%), AGGRESSIVE tem IL muito elevado → DEFENSIVE vence
+      //   DEFENSIVE: fees = (40/52)×0.7 ≈ 0.538%; IL ≈ 0.5×(0.80×√(7/365))²×0.68×100 ≈ 0.42%
+      //              netReturn ≈ +0.12%
+      //   AGGRESSIVE: fees = (40/52)×1.3 ≈ 1.0%; IL ≈ 0.5×(0.80×√(7/365))²×1.875×100 ≈ 1.15%
+      //              netReturn ≈ -0.15%
+      // → DEFENSIVE deve ter gainPercent > AGGRESSIVE
 
       const pool = makePool({ volatilityAnn: 0.80, apr: 40 });
       const score = makeScore({ total: 80 });
@@ -131,23 +134,19 @@ describe('RecommendationService', () => {
       const gainDefensive = recsDefensive[0].estimatedGainPercent;
       const gainAggressive = recsAggressive[0].estimatedGainPercent;
 
-      // Para vol=80%, o AGGRESSIVE deve bater DEFENSIVE
-      // DEFENSIVE: fees = (40/52) × 0.7 × 0.80 ≈ 0.430; IL ≈ 0.5 × (0.80 × √(7/365))² × 1.5 × 100
-      // AGGRESSIVE: fees = (40/52) × 1.3 × 0.80 ≈ 0.799; IL ≈ 0.5 × (0.80 × √(7/365))² × 0.68 × 100
-      // AGGRESSIVE ganha mais fees e tem menos IL → deve ser maior
-      expect(gainAggressive).toBeGreaterThan(gainDefensive);
+      // Para vol=80%, range estreito (AGGRESSIVE) gera IL maior que os fees extras → DEFENSIVE vence
+      expect(gainDefensive).toBeGreaterThan(gainAggressive);
     });
 
     it('pool com 150% vol anualizada gera gainPercent negativo em DEFENSIVE', () => {
-      // Com vol=1.50 e modo DEFENSIVE:
-      //   sigmaWeekly = 1.50 × √(7/365) ≈ 0.2078
-      //   concFactor = 0.15/0.10 = 1.5
-      //   weeklyIL = 0.5 × 0.2078² × 1.5 × 100 ≈ 3.23%
-      //   weeklyGross = aprEstimate / 52; para APR=40%: 40/52 ≈ 0.769%
+      // Com vol=1.50 e modo DEFENSIVE (range largo, concFactor ≈ 0.68):
+      //   sigmaWeekly = 1.50 × √(7/365) ≈ 0.2075
+      //   concFactor = 0.15/0.22 ≈ 0.682
+      //   weeklyIL = 0.5 × 0.2075² × 0.682 × 100 ≈ 1.47%
+      //   weeklyGross = APR=40%: 40/52 ≈ 0.769%
       //   grossAdjusted = 0.769 × 0.7 (DEFENSIVE) = 0.538%
-      //   confidenceFactor = score.total / 100 = 0.75
-      //   netReturn = 0.538 × 0.75 - 3.23 ≈ 0.404 - 3.23 ≈ -2.83%
-      // → gainPercent deve ser negativo
+      //   netReturn = 0.538 - 1.47 ≈ -0.93%
+      // → gainPercent deve ser negativo (IL muito alto para vol extrema)
 
       const pool = makePool({ volatilityAnn: 1.50, apr: 40 });
       const score = makeScore({ total: 75 });
@@ -164,12 +163,12 @@ describe('RecommendationService', () => {
     it('pool estável com APR alto tem gainPercent positivo em todos os modos', () => {
       // vol=0.20 (20% anualizado — pool estável como ETH/USDC)
       // APR=100% — pool com muito volume
-      //   sigmaWeekly = 0.20 × √(7/365) ≈ 0.0520
+      //   sigmaWeekly = 0.20 × √(7/365) ≈ 0.0277
       //   weeklyGross = 100/52 ≈ 1.923%
-      //   Para DEFENSIVE: grossAdjusted = 1.923 × 0.7 = 1.346%; concFactor=1.5
-      //     weeklyIL = 0.5 × 0.0520² × 1.5 × 100 ≈ 0.202%
-      //     netReturn = 1.346 × 0.75 - 0.202 ≈ 0.809 (positivo)
-      //   Para todos os modos: fees superam IL com boa margem
+      //   Para DEFENSIVE: grossAdjusted = 1.923 × 0.7 = 1.346%; concFactor=0.15/0.22≈0.68
+      //     weeklyIL = 0.5 × 0.0277² × 0.68 × 100 ≈ 0.026%
+      //     netReturn = 1.346 - 0.026 ≈ 1.32% (positivo)
+      //   Para todos os modos: fees superam IL com boa margem (vol baixa = IL insignificante)
 
       const pool = makePool({ volatilityAnn: 0.20, apr: 100 });
       const score = makeScore({ total: 75 });
