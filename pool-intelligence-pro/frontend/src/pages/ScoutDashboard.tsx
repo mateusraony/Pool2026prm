@@ -17,6 +17,7 @@ import { formatCurrency } from '@/lib/utils';
 import {
   Wallet,
   TrendingUp,
+  TrendingDown,
   Activity,
   AlertTriangle,
   ArrowRight,
@@ -24,7 +25,12 @@ import {
   XCircle,
   Loader2,
   Bell,
-  RefreshCw
+  RefreshCw,
+  Zap,
+  Droplets,
+  MapPin,
+  Star,
+  type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
@@ -192,9 +198,31 @@ export default function ScoutDashboard() {
   const recentAlerts = alertsData?.recentAlerts?.slice(0, 3) || [];
   const telegramStatus = healthData?.status === 'HEALTHY' ? 'Online' : healthData?.status === 'DEGRADED' ? 'Degradado' : 'Offline';
 
+  // Mapeamento de ícone por tipo de alerta
+  const alertIconMap: Record<string, LucideIcon> = {
+    PRICE_ABOVE: TrendingUp,
+    PRICE_BELOW: TrendingDown,
+    VOLUME_DROP: Activity,
+    LIQUIDITY_FLIGHT: Droplets,
+    VOLATILITY_SPIKE: Zap,
+    OUT_OF_RANGE: MapPin,
+    NEAR_RANGE_EXIT: AlertTriangle,
+    NEW_RECOMMENDATION: Star,
+  };
+  const alertColorMap: Record<string, string> = {
+    PRICE_ABOVE: 'text-success',
+    PRICE_BELOW: 'text-destructive',
+    VOLUME_DROP: 'text-warning',
+    LIQUIDITY_FLIGHT: 'text-primary',
+    VOLATILITY_SPIKE: 'text-warning',
+    OUT_OF_RANGE: 'text-destructive',
+    NEAR_RANGE_EXIT: 'text-warning',
+    NEW_RECOMMENDATION: 'text-success',
+  };
+
   if (isLoading) {
     return (
-      <MainLayout title="Dashboard" subtitle="Visao geral do seu portfolio de liquidez">
+      <MainLayout title="Dashboard" subtitle="Visão geral do seu portfólio de liquidez">
         {/* Skeleton layout espelha estrutura real do dashboard */}
         <div className="space-y-6">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -227,12 +255,12 @@ export default function ScoutDashboard() {
   return (
     <MainLayout
       title="Dashboard"
-      subtitle="Visao geral do seu portfolio de liquidez"
+      subtitle="Visão geral do seu portfólio de liquidez"
     >
       {/* Market Conditions Banner — regime desfavoravel para LP */}
       {marketConditions?.noOperateGlobal && (
         <div className="bg-yellow-900/50 border border-yellow-600 text-yellow-200 rounded-lg px-4 py-3 mb-4 flex items-center gap-2">
-          <span className="text-yellow-400">&#9888;</span>
+          <AlertTriangle className="h-5 w-5 text-yellow-400 flex-shrink-0" />
           <div>
             <span className="font-semibold">Condições desfavoráveis para LP</span>
             {marketConditions.noOperateReason && (
@@ -278,18 +306,18 @@ export default function ScoutDashboard() {
             <div>
               <p className="font-medium">
                 {canOperate
-                  ? 'Condicoes favoraveis para operar'
+                  ? 'Condições favoráveis para operar'
                   : pools.length === 0
                     ? 'Aguardando dados do servidor...'
-                    : 'Nao ha pools com score alto no momento'
+                    : 'Não há pools com score alto no momento'
                 }
               </p>
               <p className="text-sm text-muted-foreground">
                 {canOperate
-                  ? `${pools.filter(p => p.score > 60).length} pools disponiveis com score > 60`
+                  ? `${pools.filter(p => p.score > 60).length} pools disponíveis com score > 60`
                   : pools.length === 0
                     ? 'O backend pode estar inicializando (aguarde ~30s)'
-                    : 'Recomendacao: aguardar melhores condicoes'
+                    : 'Recomendação: aguardar melhores condições'
                 }
               </p>
             </div>
@@ -438,15 +466,19 @@ export default function ScoutDashboard() {
                   <span>Nenhum alerta recente</span>
                 </div>
               ) : (
-                recentAlerts.map((alert, i) => (
-                  <div key={`${alert.type}_${i}`} className="flex items-start gap-3 rounded-lg bg-warning/10 p-3">
-                    <AlertTriangle className="h-4 w-4 text-warning mt-0.5" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{alertTypeConfig[alert.type as AlertType]?.label || alert.type}</p>
-                      <p className="text-xs text-muted-foreground">{alert.message}</p>
+                recentAlerts.map((alert, i) => {
+                  const AlertIcon = alertIconMap[alert.type] ?? AlertTriangle;
+                  const iconColor = alertColorMap[alert.type] ?? 'text-warning';
+                  return (
+                    <div key={`${alert.type}_${i}`} className="flex items-start gap-3 rounded-lg bg-secondary/50 p-3">
+                      <AlertIcon className={`h-4 w-4 mt-0.5 flex-shrink-0 ${iconColor}`} />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{alertTypeConfig[alert.type as AlertType]?.label || alert.type}</p>
+                        <p className="text-xs text-muted-foreground">{alert.message}</p>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -501,10 +533,10 @@ export default function ScoutDashboard() {
 
           {/* Network Exposure - from real positions */}
           <div className="glass-card p-4">
-            <h3 className="font-semibold mb-3">Exposicao por Rede</h3>
+            <h3 className="font-semibold mb-3">Exposição por Rede</h3>
             <div className="space-y-2">
               {networkExposure.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Sem posicoes ativas</p>
+                <p className="text-sm text-muted-foreground">Sem posições ativas</p>
               ) : (
                 networkExposure.map(({ network, percent }) => (
                   <div key={network}>

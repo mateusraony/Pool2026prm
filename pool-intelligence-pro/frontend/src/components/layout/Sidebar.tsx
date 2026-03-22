@@ -34,7 +34,7 @@ const navSections = [
     ],
   },
   {
-    title: 'Analise',
+    title: 'Análise',
     items: [
       { path: '/recommended', icon: Brain, label: 'Recomendadas' },
       { path: '/pools', icon: Droplets, label: 'Pool Intelligence' },
@@ -44,7 +44,7 @@ const navSections = [
     ],
   },
   {
-    title: 'Operacoes',
+    title: 'Operações',
     items: [
       { path: '/active', icon: CircleDot, label: 'Pools Ativas' },
       { path: '/simulation', icon: Ruler, label: 'Simulacao' },
@@ -61,7 +61,7 @@ const navSections = [
   {
     title: 'Sistema',
     items: [
-      { path: '/scout-settings', icon: Settings, label: 'Configuracoes' },
+      { path: '/scout-settings', icon: Settings, label: 'Configurações' },
       { path: '/status', icon: Activity, label: 'Status' },
     ],
   },
