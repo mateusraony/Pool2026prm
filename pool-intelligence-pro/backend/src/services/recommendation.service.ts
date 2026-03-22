@@ -26,16 +26,16 @@ export class RecommendationService {
       .filter(({ score }) => !score.isSuspect)
       .sort((a, b) => b.score.total - a.score.total);
 
-    // Generate for each pool with its recommended mode
+    // Usar o modo solicitado pelo caller para gerar cada recomendação
+    // (item.score.recommendedMode é o modo sugerido pelo pool, não o escolhido pelo usuário)
     for (let i = 0; i < Math.min(sorted.length, limit * 3); i++) {
       const item = sorted[i];
-      const poolMode = item.score.recommendedMode;
 
       allRecommendations.push(
         this.generateRecommendation({
           pool: item.pool,
           score: item.score,
-          mode: poolMode,
+          mode,   // usar o modo passado pelo caller
           capital,
         }, i + 1)
       );
@@ -125,28 +125,49 @@ export class RecommendationService {
     capital: number,
     mode: Mode
   ): { gainPercent: number; gainUsd: number } {
-    // Use APR from score breakdown or estimate
+    // APR bruto (fee APR apenas — não inclui IL)
     const baseApr = score.breakdown.return.aprEstimate || this.estimateAprFromPool(pool);
-    
-    // Weekly return (APR / 52)
-    const weeklyReturn = baseApr / 52;
-    
-    // Adjust by mode
+
+    // Retorno semanal bruto (APR / 52)
+    const weeklyGross = baseApr / 52;
+
+    // Multiplicador por modo (ajusta exposição ao risco)
     const modeMultiplier: Record<Mode, number> = {
-      DEFENSIVE: 0.7,  // Lower but more consistent
+      DEFENSIVE: 0.7,   // range largo = menos fees mas menos IL
       NORMAL: 1.0,
-      AGGRESSIVE: 1.3, // Higher but riskier
+      AGGRESSIVE: 1.3,  // range estreito = mais fees e mais IL
     };
-    
-    const adjustedReturn = weeklyReturn * modeMultiplier[mode];
-    
-    // Apply score as confidence factor
+    const grossAdjusted = weeklyGross * modeMultiplier[mode];
+
+    // Deduzir IL semanal esperado
+    // IL ≈ 0.5 × σ² × (7/365) × fatorConcentracao
+    // σ = volatilidade anualizada do pool (decimal); fallback 0.50 se ausente
+    const volAnn = pool.volatilityAnn ?? 0.50;
+    const sigmaWeekly = volAnn * Math.sqrt(7 / 365);
+
+    // Range width implícito por modo (baseado em z-score × vol × sqrt(T))
+    const rangeWidthByMode: Record<Mode, number> = {
+      DEFENSIVE: 0.10,   // range mais largo → menos concentração
+      NORMAL: 0.15,
+      AGGRESSIVE: 0.22,  // range estreito → alta concentração
+    };
+    const rangeWidth = rangeWidthByMode[mode];
+    // fatorConcentracao: range estreito amplifica IL (cap em 4x)
+    const concentrationFactor = Math.min(4.0, 0.15 / Math.max(rangeWidth, 0.01));
+
+    // IL semanal esperado (em %)
+    const weeklyIL = 0.5 * sigmaWeekly * sigmaWeekly * concentrationFactor * 100;
+
+    // Retorno líquido = fees ajustadas - IL esperado
     const confidenceFactor = score.total / 100;
-    const expectedReturn = adjustedReturn * confidenceFactor;
-    
+    const netReturn = (grossAdjusted * confidenceFactor) - weeklyIL;
+
+    // Arredondar com 2 casas — pode ser negativo (informação real para o usuário)
+    const gainPercent = Math.round(netReturn * 100) / 100;
+
     return {
-      gainPercent: Math.round(expectedReturn * 100) / 100,
-      gainUsd: Math.round(capital * (expectedReturn / 100) * 100) / 100,
+      gainPercent,
+      gainUsd: Math.round(capital * (gainPercent / 100) * 100) / 100,
     };
   }
 

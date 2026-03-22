@@ -155,24 +155,28 @@ async function recommendationJobRunner() {
   const start = Date.now();
   let success = true;
   try {
-    const mode = config.defaults.mode;
     const capital = config.defaults.capital;
 
-    const recommendations = recommendationService.generateTop3(radarResults, mode, capital);
-    jobState.setRecommendations(recommendations);
+    // Gerar recomendações para todos os modos para que o filtro por modo nas rotas funcione
+    const allModes: Array<'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE'> = ['DEFENSIVE', 'NORMAL', 'AGGRESSIVE'];
+    const allRecommendations = allModes.flatMap(m =>
+      recommendationService.generateTop3(radarResults, m, capital, 10)
+    );
+
+    jobState.setRecommendations(allRecommendations);
 
     // Persiste recomendações no MemoryStore para leitura imediata pelas rotas
-    memoryStore.setRecommendations(recommendations);
+    memoryStore.setRecommendations(allRecommendations);
 
     // Emit top recommendation via event bus (listener aplica deduplicação)
-    if (recommendations.length > 0) {
+    if (allRecommendations.length > 0) {
       await eventBus.emit('RECOMMENDATION_UPDATED', {
-        recommendation: recommendations[0],
-        poolId: recommendations[0].pool.externalId,
+        recommendation: allRecommendations[0],
+        poolId: allRecommendations[0].pool.externalId,
       });
     }
 
-    logService.info('SYSTEM', 'Generated ' + recommendations.length + ' recommendations');
+    logService.info('SYSTEM', 'Generated ' + allRecommendations.length + ' recommendations');
   } catch (error) {
     success = false;
     logService.error('SYSTEM', 'Recommendation job failed', { error });
