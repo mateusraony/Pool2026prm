@@ -2,15 +2,54 @@
 
 ## Status Atual
 **Branch:** `claude/review-audit-checkpoint-ZFYUM`
-**Data:** 2026-03-21 UTC
-**Fase:** ETAPAS 1–17 ✅ + ROADMAP Fases 1–6 ✅ + 7 Blocos Auditoria ✅ + Gap A/B ✅ + Segunda Auditoria 57 fixes ✅ + Terceira Auditoria 7 fixes ✅ + **Quarta Auditoria — UX/Performance: 6 itens ✅**
+**Data:** 2026-03-22 UTC
+**Fase:** ETAPAS 1–17 ✅ + ROADMAP Fases 1–6 ✅ + 7 Blocos Auditoria ✅ + Gap A/B ✅ + Segunda Auditoria 57 fixes ✅ + Terceira Auditoria 7 fixes ✅ + Quarta Auditoria UX ✅ + **Quinta Auditoria — Cálculos Críticos: 16 bugs ✅**
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-21 — Quarta auditoria: toast global (4.2), health check aprimorado (5.3), dark/light toggle (4.4), skeletons de loading (4.1), testes unitários score/calc (3.5), testes de integração rotas (3.6). 258 testes passando. Commits: 6c5f2b3, 84d8c29, 191d8d0."`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-22 — Quinta auditoria de cálculos concluída: 16 bugs corrigidos em calc.service.ts / score.service.ts / recommendation.service.ts / jobs/index.ts. Score agora varia por modo (DEFENSIVO/NORMAL/AGRESSIVO). IL out-of-range corrigido. 258 testes passando. Commits: 2ce7a62, 49369d6, 8acadef, 0424dc3."`
 
 ---
 
 ## O QUE FOI FEITO
+
+### Quinta Auditoria — Cálculos Críticos (16 bugs) ✅ (2026-03-22)
+
+**Metodologia:** Auditoria profunda com 3 agentes paralelos + verificação independente final. Referências online: Auditless (Uniswap V3 IL), arXiv:2111.09192, KyberSwap Docs, Algebra Medium, Credmark Smart Money.
+
+**Relatório:** `AUDIT-CALCULOS.md` — 16 problemas ordenados por criticidade (3 críticos / 7 altos / 4 médios / 2 baixos).
+
+**Agent 1 — calc.service.ts (commit `49369d6`):**
+- `[A2]` `freshnessScore`: constante de decaimento `10min → 60min` (realista para APIs DeFi com latência 5-60min)
+- `[A5]` `calcVolatilityProxy`: clamp `[0.05, 3.0] → [0.20, 1.50]` + suavização; fallback `0.15 → 0.50`
+- `[A6]` `calcVolatilityAnn` default: `0.15 → 0.50` (15% era irreal; 50% conservador mas honesto para crypto sem histórico)
+- `[A7]` `calcAprFee`: desconto 30% em `fees1h` e 40% em `fees5m` contra sazonalidade de pico (fees DeFi não são uniformes)
+- `[C3]` `calcIL` out-of-range: fórmula corrigida para LP-congelado vs HODL-atual. Antes usava `boundaryPrice` → IL ~-0.1%. Agora usa fórmula correta: acima do range `2√(Pa/P0)/(P/P0+1)-1`; abaixo `2(P/P0)/(√(Pb/P0)(P/P0+1))-1` → IL real ~-6.8% no mesmo exemplo
+
+**Agent 2 — score.service.ts (commit `8acadef`):**
+- `[C1]` `calculateScore()`: aceita `mode: Mode = 'NORMAL'` (opcional, backward-compat). Score agora VARIA por perfil
+- `[A1]` `MODE_WEIGHTS`: pesos por modo onde `health + return = 100` (score máx = 100 real)
+  - DEFENSIVE: health=60, return=40, risk_max=35
+  - NORMAL: health=55, return=45, risk_max=25
+  - AGGRESSIVE: health=45, return=55, risk_max=15
+- `[A3]` `determineMode()`: thresholds corrigidos — AGGRESSIVE exige `vol ≤ 5%` (era 15%), NORMAL exige `vol ≤ 15%` (era 30%)
+- `[A4]` `calculateFeeEfficiency()`: guard `tvl > 0` na branch feeTier (divisão por zero silenciosa)
+- `[B1]` `estimateAgeScore()`: baseline `35 → 10` (pools precisam provar maturidade)
+- `[M1]` `calculateReturnScore()`: normalização APR logarítmica `log10(apr)/log10(200)×100` (10%→52, 50%→77, 100%→87, 200%→100)
+- `[M4]` `calculateVolatilityPenalty()`: penalidade varia por modo (DEFENSIVE hiper-sensível, AGGRESSIVE tolerante)
+- `[M2]` `checkSuspect()`: thresholds de TVL/volume por modo (DEFENSIVE: min $500k, AGGRESSIVE: min $50k)
+- `normalizeLiquidity()`: `tvl=0 → 0` (era 25 — pool sem liquidez não recebia score base)
+
+**Agent 3 — recommendation.service.ts + jobs/index.ts (commit `0424dc3`):**
+- `[C2]` `estimateGains()`: deduz IL semanal esperado (`0.5×σ²×T×fatorConcentracao`) do retorno. Pools voláteis podem mostrar retorno negativo — informação real ao usuário
+- `generateTop3()`: corrigido bug onde `poolMode = item.score.recommendedMode` ignorava o modo escolhido pelo usuário; agora usa `mode` do caller
+- `jobs/index.ts`: gera recomendações para os 3 modos (DEFENSIVE/NORMAL/AGGRESSIVE) em `flatMap`. Filtro por modo nas rotas agora retorna resultados distintos e corretos
+
+**Verificação final independente:**
+- 258/258 testes passando (11 arquivos)
+- TypeScript: `tsc --noEmit` exit 0
+- Build: exit 0 (Prisma gerado, frontend bundlado)
+
+---
 
 ### Quarta Auditoria — UX + Performance + Testes ✅ (2026-03-21)
 
