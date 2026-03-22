@@ -78,7 +78,7 @@ cd $(git rev-parse --show-toplevel) && grep -rn --include="*.ts" --include="*.ts
 
 3. **Conformidade** — rode:
 ```bash
-git -C /home/user/Pool2026prm log --oneline -5
+git -C $(git rev-parse --show-toplevel) log --oneline -5
 ```
 Compare os 5 últimos commits com a seção mais recente do CHECKPOINT.md. Estão documentados?
 
@@ -88,7 +88,7 @@ Retorne: resultados das 3 verificações com arquivo:linha para cada achado.
 
 ## STAGE 4 — Consolidação e Escrita no CHECKPOINT.md
 
-Você (orquestrador) recebeu os outputs de todos os 5 agentes. Agora:
+Você (orquestrador) recebeu os outputs de todos os agentes. Agora:
 
 1. **Determine o veredicto final:**
    - `✅ APROVADO` — Stages 1+2 passaram, Stage 3 sem itens CRÍTICO ou IMPORTANTE
@@ -135,5 +135,5 @@ Você (orquestrador) recebeu os outputs de todos os 5 agentes. Agora:
 - NUNCA escreva no CHECKPOINT.md antes de ter todos os outputs do Stage 3
 - SEMPRE rode Stage 1 antes de Stage 2, Stage 2 antes de Stage 3
 - Stages 1 e 2: rode as 2 chamadas Bash EM PARALELO (mesma mensagem, 2 tool calls)
-- Stage 3: dispatch todos os 5 agentes EM PARALELO (mesma mensagem, 5 tool calls Task)
+- Stage 3: dispatch 4 agentes EM PARALELO (A, B, C, E), depois Agente D com os outputs coletados
 - Apenas Stage 4 escreve no CHECKPOINT.md
