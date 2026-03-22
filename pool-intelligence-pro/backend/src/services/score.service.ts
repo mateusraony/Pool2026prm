@@ -34,6 +34,16 @@ const MODE_THRESHOLDS: Record<Mode, ModeThresholds> = {
   },
 };
 
+// Pesos por modo: health + return = 100 (score máximo teórico = 100)
+// DEFENSIVE: prioriza saúde/estabilidade, penaliza risco fortemente
+// NORMAL: balanceado
+// AGGRESSIVE: prioriza retorno, tolera mais risco
+const MODE_WEIGHTS: Record<Mode, ScoreWeights> = {
+  DEFENSIVE:  { health: 60, return: 40, risk: 35 },
+  NORMAL:     { health: 55, return: 45, risk: 25 },
+  AGGRESSIVE: { health: 45, return: 55, risk: 15 },
+};
+
 export class ScoreService {
   private weights: ScoreWeights;
 
@@ -45,24 +55,26 @@ export class ScoreService {
     };
   }
 
-  calculateScore(pool: Pool, metrics?: PoolWithMetrics['metrics']): Score {
+  calculateScore(pool: Pool, metrics?: PoolWithMetrics['metrics'], mode: Mode = 'NORMAL'): Score {
     try {
-      const breakdown = this.calculateBreakdown(pool, metrics);
-      
-      // Calculate component scores
-      const healthScore = this.calculateHealthScore(breakdown.health);
-      const returnScore = this.calculateReturnScore(breakdown.return);
-      const riskPenalty = this.calculateRiskPenalty(breakdown.risk);
-      
+      // Pesos ajustados por modo: DEFENSIVE=estabilidade, AGGRESSIVE=retorno
+      const modeWeights = MODE_WEIGHTS[mode];
+      const breakdown = this.calculateBreakdown(pool, metrics, mode);
+
+      // Calculate component scores usando pesos do modo
+      const healthScore = this.calculateHealthScore(breakdown.health, modeWeights.health);
+      const returnScore = this.calculateReturnScore(breakdown.return, modeWeights.return);
+      const riskPenalty = this.calculateRiskPenalty(breakdown.risk, modeWeights.risk);
+
       // Total score
       const total = Math.max(0, Math.min(100, healthScore + returnScore - riskPenalty));
-      
+
       // Determine recommended mode
       const recommendedMode = this.determineMode(pool, metrics, total);
-      
+
       // Avaliar risco via RiskService (Fase 4) + flags de domínio locais
       const riskAssessment = riskService.assessPool(pool);
-      const suspectFlags = this.checkSuspect(pool, metrics, breakdown);
+      const suspectFlags = this.checkSuspect(pool, metrics, breakdown, mode);
       const isSuspect = riskAssessment.level === 'HIGH' || riskAssessment.level === 'CRITICAL' || suspectFlags.isSuspect;
       // Preferir razão de domínio quando disponível; fallback para summary do risk service
       const suspectReason = suspectFlags.suspectReason ?? (riskAssessment.factors.length > 0 ? riskAssessment.summary : undefined);
@@ -79,7 +91,7 @@ export class ScoreService {
       };
     } catch (error) {
       logService.error('SCORE', 'Failed to calculate score', { pool: pool.externalId, error });
-      
+
       return {
         total: 0,
         health: 0,
@@ -93,7 +105,7 @@ export class ScoreService {
     }
   }
 
-  private calculateBreakdown(pool: Pool, metrics?: PoolWithMetrics['metrics']): ScoreBreakdown {
+  private calculateBreakdown(pool: Pool, metrics?: PoolWithMetrics['metrics'], mode: Mode = 'NORMAL'): ScoreBreakdown {
     // Use pool.volatilityAnn for volatility penalty (if available from enrichment)
     const volatility24h = metrics?.volatility24h ?? (pool.volatilityAnn ? pool.volatilityAnn * 100 : undefined);
 
@@ -115,8 +127,8 @@ export class ScoreService {
         aprEstimate: pool.apr || this.estimateApr(pool),
       },
       risk: {
-        // Volatility penalty (uses real volatilityAnn when available)
-        volatilityPenalty: this.calculateVolatilityPenalty(volatility24h),
+        // Volatility penalty — sensibilidade depende do perfil de risco
+        volatilityPenalty: this.calculateVolatilityPenalty(volatility24h, mode),
         // Liquidity drop penalty (from TVL snapshots in MemoryStore)
         liquidityDropPenalty: this.calculateLiquidityDropPenalty(pool),
         // Inconsistency between sources (set by consensus when multiple providers)
@@ -127,50 +139,55 @@ export class ScoreService {
     };
   }
 
-  private calculateHealthScore(health: ScoreBreakdown['health']): number {
-    const maxHealth = this.weights.health;
-    
+  private calculateHealthScore(health: ScoreBreakdown['health'], maxHealth?: number): number {
+    const effectiveMax = maxHealth ?? this.weights.health;
+
     // Weight distribution within health
     const liquidityWeight = 0.4;
     const ageWeight = 0.2;
     const consistencyWeight = 0.4;
-    
-    return maxHealth * (
+
+    return effectiveMax * (
       (health.liquidityStability / 100) * liquidityWeight +
       (health.ageScore / 100) * ageWeight +
       (health.volumeConsistency / 100) * consistencyWeight
     );
   }
 
-  private calculateReturnScore(returnData: ScoreBreakdown['return']): number {
-    const maxReturn = this.weights.return;
-    
+  private calculateReturnScore(returnData: ScoreBreakdown['return'], maxReturn?: number): number {
+    const effectiveMax = maxReturn ?? this.weights.return;
+
     // Weight distribution
     const volumeTvlWeight = 0.3;
     const feeWeight = 0.3;
     const aprWeight = 0.4;
-    
-    // Normalize APR (cap at 100% for scoring — APR already in % form)
-    const normalizedApr = Math.min(returnData.aprEstimate, 100);
-    
-    return maxReturn * (
+
+    // Normalização logarítmica de APR: 10%→52, 50%→77, 100%→87, 200%→100
+    // Evita que APR 500% e APR 100% deem o mesmo score (era: cap linear em 100)
+    const aprNorm = Math.max(returnData.aprEstimate, 0.1);
+    const normalizedApr = Math.min(
+      (Math.log10(aprNorm) / Math.log10(200)) * 100,
+      100
+    );
+
+    return effectiveMax * (
       (returnData.volumeTvlRatio / 100) * volumeTvlWeight +
       (returnData.feeEfficiency / 100) * feeWeight +
-      (normalizedApr / 100) * aprWeight
+      (Math.max(0, normalizedApr) / 100) * aprWeight
     );
   }
 
-  private calculateRiskPenalty(risk: ScoreBreakdown['risk']): number {
-    const maxPenalty = this.weights.risk;
-    
+  private calculateRiskPenalty(risk: ScoreBreakdown['risk'], maxPenalty?: number): number {
+    const effectiveMax = maxPenalty ?? this.weights.risk;
+
     // Sum all penalties (capped at max)
-    const totalPenalty = 
+    const totalPenalty =
       risk.volatilityPenalty +
       risk.liquidityDropPenalty +
       risk.inconsistencyPenalty +
       risk.spreadPenalty;
-    
-    return Math.min(totalPenalty, maxPenalty);
+
+    return Math.min(totalPenalty, effectiveMax);
   }
 
   private normalizeLiquidity(tvl: number): number {
@@ -181,7 +198,8 @@ export class ScoreService {
     if (tvl >= 500000) return 75;     // $500k+ = good
     if (tvl >= 250000) return 65;     // $250k+ = adequate
     if (tvl >= 100000) return 50;     // $100k+ = minimum viable
-    return 25;
+    if (tvl > 0) return 20;           // pequena mas existe
+    return 0;                          // sem liquidez = zero
   }
 
   private calculateVolumeConsistency(pool: Pool): number {
@@ -223,15 +241,15 @@ export class ScoreService {
       if (feeRatio >= 2) return 40;
       return 25;
     }
-    
+
     // Estimate from fee tier if available
     // feeTier is in decimal form: 0.003 = 0.3%
-    if (pool.feeTier && pool.volume24h > 0) {
+    if (pool.feeTier && pool.volume24h > 0 && pool.tvl > 0) {
       const dailyFees = pool.volume24h * pool.feeTier;
       const annualizedApr = (dailyFees * 365) / pool.tvl * 100;
       return Math.min(100, annualizedApr);
     }
-    
+
     // Last resort: use pool.apr to derive fee efficiency
     if (pool.apr && pool.apr > 0) {
       return Math.min(100, pool.apr);
@@ -246,7 +264,7 @@ export class ScoreService {
    * Score: 0-100 (100 = very mature/established pool)
    */
   private estimateAgeScore(pool: Pool): number {
-    let score = 35; // baseline for any pool that passed filters
+    let score = 10; // baseline conservador — pools precisam provar maturidade
 
     // High TVL signals established pool
     if (pool.tvl >= 10_000_000) score += 25;
@@ -280,14 +298,35 @@ export class ScoreService {
     return Math.round(annualizedApr * 10) / 10;
   }
 
-  private calculateVolatilityPenalty(volatility?: number): number {
-    if (!volatility) return 2; // Minimal penalty for unknown data — not pool's fault
-    
-    // Higher volatility = higher penalty
+  private calculateVolatilityPenalty(volatility?: number, mode: Mode = 'NORMAL'): number {
+    if (!volatility) {
+      // Sem dados: DEFENSIVE assume o pior, AGGRESSIVE tolera
+      return mode === 'DEFENSIVE' ? 8 : mode === 'AGGRESSIVE' ? 0 : 2;
+    }
+
+    if (mode === 'DEFENSIVE') {
+      // Muito sensível a volatilidade — ranges conservadores precisam de baixa vol
+      if (volatility >= 25) return 32;
+      if (volatility >= 15) return 25;
+      if (volatility >= 10) return 18;
+      if (volatility >= 5)  return 10;
+      return 3;
+    }
+
+    if (mode === 'AGGRESSIVE') {
+      // Tolerante a volatilidade — pode usar ranges mais largos
+      if (volatility >= 60) return 12;
+      if (volatility >= 40) return 8;
+      if (volatility >= 30) return 5;
+      if (volatility >= 20) return 2;
+      return 0;
+    }
+
+    // NORMAL (comportamento anterior calibrado)
     if (volatility >= 30) return 25;
     if (volatility >= 20) return 20;
     if (volatility >= 10) return 12;
-    if (volatility >= 5) return 5;
+    if (volatility >= 5)  return 5;
     return 0;
   }
 
@@ -307,17 +346,17 @@ export class ScoreService {
 
   private determineMode(pool: Pool, metrics: PoolWithMetrics['metrics'] | undefined, score: number): Mode {
     const volatility = metrics?.volatility24h || 10;
-    
-    // High score + LOW volatility = safe for aggressive narrow ranges
-    if (score >= 70 && volatility <= MODE_THRESHOLDS.NORMAL.volatilityMax) {
+
+    // AGGRESSIVE: score alto + vol MUITO baixa (≤5%) = range estreito seguro
+    if (score >= 70 && volatility <= MODE_THRESHOLDS.DEFENSIVE.volatilityMax) {
       return 'AGGRESSIVE';
     }
 
-    // Good score + medium volatility = normal ranges
-    if (score >= 50 && volatility <= MODE_THRESHOLDS.AGGRESSIVE.volatilityMax) {
+    // NORMAL: score médio + vol controlada (≤15%)
+    if (score >= 50 && volatility <= MODE_THRESHOLDS.NORMAL.volatilityMax) {
       return 'NORMAL';
     }
-    
+
     // Default to defensive
     return 'DEFENSIVE';
   }
@@ -325,33 +364,38 @@ export class ScoreService {
   private checkSuspect(
     pool: Pool,
     metrics: PoolWithMetrics['metrics'] | undefined,
-    breakdown: ScoreBreakdown
+    breakdown: ScoreBreakdown,
+    mode: Mode = 'NORMAL'
   ): { isSuspect: boolean; suspectReason?: string } {
     const reasons: string[] = [];
-    
-    // Check for suspicious patterns
-    if (pool.tvl < config.thresholds.minLiquidity) {
+
+    // Thresholds de liquidez e volume variam por perfil de risco
+    const modeThresholds = MODE_THRESHOLDS[mode];
+    const minLiquidity = Math.max(config.thresholds.minLiquidity, modeThresholds.minLiquidity);
+    const minVolume = Math.max(config.thresholds.minVolume24h, modeThresholds.minVolume);
+
+    if (pool.tvl < minLiquidity) {
       reasons.push('TVL below minimum threshold');
     }
-    
-    if (pool.volume24h < config.thresholds.minVolume24h) {
+
+    if (pool.volume24h < minVolume) {
       reasons.push('Volume below minimum threshold');
     }
-    
+
     // Extremely high APR is suspicious
     if (pool.apr && pool.apr > 500) {
       reasons.push('Unusually high APR');
     }
-    
+
     // Volume much higher than TVL is suspicious
     if (pool.volume24h > pool.tvl * 10) {
       reasons.push('Volume/TVL ratio too high');
     }
-    
+
     if (breakdown.risk.inconsistencyPenalty > 15) {
       reasons.push('High data inconsistency between sources');
     }
-    
+
     return {
       isSuspect: reasons.length > 0,
       suspectReason: reasons.length > 0 ? reasons.join('; ') : undefined,

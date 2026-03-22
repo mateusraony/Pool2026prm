@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Brain, TrendingUp, TrendingDown, AlertTriangle, Clock, Target, Filter, ArrowRight, ExternalLink } from 'lucide-react';
 import { fetchRecommendations, Recommendation } from '../api/client';
+import { GlossaryTooltip } from '../components/common/GlossaryTooltip';
 import { format } from 'date-fns';
 import clsx from 'clsx';
 
@@ -68,7 +69,9 @@ function RecommendationCard({ rec, index }: { rec: Recommendation; index: number
             <div className="stat-value text-primary-400">{rec.probability}%</div>
           </div>
           <div className="stat-card">
-            <div className="stat-label">Retorno Est. (7d)</div>
+            <div className="stat-label">
+              <GlossaryTooltip term="estimatedReturn" />
+            </div>
             <div className={clsx('stat-value', isPositive ? 'text-success-400' : 'text-danger-400')}>
               {isPositive ? '+' : ''}{(rec.estimatedGainPercent ?? 0).toFixed(2)}%
             </div>

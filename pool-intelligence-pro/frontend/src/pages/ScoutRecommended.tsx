@@ -47,6 +47,17 @@ export default function ScoutRecommended() {
     return poolsData.map((rec) => legacyPoolToViewPool({ pool: rec.pool, score: rec.score }));
   }, [poolsData]);
 
+  // Mapa de pool id → estimatedGainPercent da recomendação original
+  const gainByPoolId = useMemo(() => {
+    if (!poolsData || poolsData.length === 0) return new Map<string, number>();
+    return new Map(
+      poolsData.map((rec) => [
+        rec.pool.externalId || rec.pool.poolAddress,
+        rec.estimatedGainPercent,
+      ])
+    );
+  }, [poolsData]);
+
   const lastFetched = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
   const error = fetchError ? (fetchError instanceof Error ? fetchError.message : 'Erro ao buscar pools') : null;
 
@@ -284,23 +295,37 @@ export default function ScoutRecommended() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {pools.map((pool, index) => (
-            <PoolCard
-              key={pool.id}
-              pool={pool}
-              capitalSuggested={{
-                percent: Math.min(config.maxPerPool, Math.max(1, Math.ceil(5 - index * 0.5))),
-                usdt: Math.min(config.maxPerPool, Math.max(1, Math.ceil(5 - index * 0.5))) *
-                      ((config.totalBanca ?? 0) / 100),
-              }}
-              onViewDetails={() => navigate(`/pools/${pool.chain}/${pool.poolAddress}`)}
-              onFavorite={() => handleFavorite(pool)}
-              onMonitor={() => handleMonitor(pool)}
-              className={cn(
-                index === 0 && 'ring-2 ring-primary/50'
-              )}
-            />
-          ))}
+          {pools.map((pool, index) => {
+            const gainPercent = gainByPoolId.get(pool.id);
+            return (
+              <div key={pool.id} className="flex flex-col gap-1">
+                <PoolCard
+                  pool={pool}
+                  capitalSuggested={{
+                    percent: Math.min(config.maxPerPool, Math.max(1, Math.ceil(5 - index * 0.5))),
+                    usdt: Math.min(config.maxPerPool, Math.max(1, Math.ceil(5 - index * 0.5))) *
+                          ((config.totalBanca ?? 0) / 100),
+                  }}
+                  onViewDetails={() => navigate(`/pools/${pool.chain}/${pool.poolAddress}`)}
+                  onFavorite={() => handleFavorite(pool)}
+                  onMonitor={() => handleMonitor(pool)}
+                  className={cn(
+                    index === 0 && 'ring-2 ring-primary/50'
+                  )}
+                />
+                {/* Retorno estimado da recomendação (já deduz IL) */}
+                {gainPercent !== undefined && (
+                  <div className="flex items-center gap-1 text-xs px-1">
+                    <span className="text-muted-foreground">Ret. 7d:</span>
+                    <span className={gainPercent >= 0 ? 'text-green-600 dark:text-green-400 font-medium' : 'text-red-500 dark:text-red-400 font-medium'}>
+                      {gainPercent >= 0 ? '+' : ''}{gainPercent.toFixed(2)}%
+                    </span>
+                    <span className="text-muted-foreground text-[10px]">(após IL)</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </MainLayout>
