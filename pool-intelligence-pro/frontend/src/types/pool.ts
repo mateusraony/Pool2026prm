@@ -45,6 +45,8 @@ export interface Pool {
   poolAddress?: string;
   chain?: string;
   protocol?: string;
+  // Modo recomendado pelo score (DEFENSIVE / NORMAL / AGGRESSIVE)
+  recommendedMode?: string;
   // Confiança dos dados — propagado do UnifiedPool
   dataConfidence?: {
     price?: { method: 'observed' | 'estimated_stable' | 'estimated_tvl' | 'unavailable'; confidence: 'high' | 'medium' | 'low' };

@@ -84,9 +84,24 @@ export function PoolCard({
               {pool.score}
             </span>
           </div>
-          <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-display">
-            Score IA
-          </span>
+          <div className="flex items-center justify-end gap-1 mt-0.5">
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-display">
+              Score IA
+            </span>
+            {pool.recommendedMode && (() => {
+              const modeBadgeConfig: Record<string, { label: string; emoji: string; className: string }> = {
+                DEFENSIVE: { label: 'Def', emoji: '🛡️', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
+                NORMAL:    { label: 'Nor', emoji: '⚖️', className: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300' },
+                AGGRESSIVE:{ label: 'Agr', emoji: '🎯', className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
+              };
+              const modeCfg = modeBadgeConfig[pool.recommendedMode as string] ?? modeBadgeConfig.NORMAL;
+              return (
+                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${modeCfg.className}`}>
+                  {modeCfg.emoji} {modeCfg.label}
+                </span>
+              );
+            })()}
+          </div>
         </div>
       </div>
 
