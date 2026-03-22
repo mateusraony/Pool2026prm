@@ -141,15 +141,19 @@ export class RecommendationService {
 
     // Deduzir IL semanal esperado
     // IL ≈ 0.5 × σ² × (7/365) × fatorConcentracao
-    // σ = volatilidade anualizada do pool (decimal); fallback 0.50 se ausente
-    const volAnn = pool.volatilityAnn ?? 0.50;
+    // σ = volatilidade anualizada do pool (decimal); fallback 0.35 se ausente
+    // 0.35 = 35% ao ano, conservador para crypto genérico (BTC/ETH ficam em 0.50-0.80)
+    // Evita penalizar demais pools estáveis ou pares com baixa vol real
+    const volAnn = pool.volatilityAnn ?? 0.35;
     const sigmaWeekly = volAnn * Math.sqrt(7 / 365);
 
     // Range width implícito por modo (baseado em z-score × vol × sqrt(T))
+    // DEFENSIVE = range largo → menos concentração → menos IL
+    // AGGRESSIVE = range estreito → mais concentração → mais IL
     const rangeWidthByMode: Record<Mode, number> = {
-      DEFENSIVE: 0.10,   // range mais largo → menos concentração
-      NORMAL: 0.15,
-      AGGRESSIVE: 0.22,  // range estreito → alta concentração
+      DEFENSIVE: 0.22,   // range largo → baixa concentração → menos IL (concentrationFactor ≈ 0.68)
+      NORMAL: 0.15,      // baseline (concentrationFactor = 1.0)
+      AGGRESSIVE: 0.08,  // range estreito → alta concentração → mais IL (concentrationFactor ≈ 1.875)
     };
     const rangeWidth = rangeWidthByMode[mode];
     // fatorConcentracao: range estreito amplifica IL (cap em 4x)
@@ -159,8 +163,10 @@ export class RecommendationService {
     const weeklyIL = 0.5 * sigmaWeekly * sigmaWeekly * concentrationFactor * 100;
 
     // Retorno líquido = fees ajustadas - IL esperado
-    const confidenceFactor = score.total / 100;
-    const netReturn = (grossAdjusted * confidenceFactor) - weeklyIL;
+    // confidenceFactor NÃO é aplicado nos fees: o score já representa qualidade da pool;
+    // o retorno financeiro deve refletir o que você REALMENTE ganharia/perderia na posição.
+    // O score/probabilidade é a dimensão de confiança — não deve distorcer o cálculo de P&L.
+    const netReturn = grossAdjusted - weeklyIL;
 
     // Arredondar com 2 casas — pode ser negativo (informação real para o usuário)
     const gainPercent = Math.round(netReturn * 100) / 100;
