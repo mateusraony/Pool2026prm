@@ -415,6 +415,8 @@ router.get('/pools-liquidity/:chain/:address', async (req, res) => {
 
 // POST /api/monte-carlo — Monte Carlo simulation
 router.post('/monte-carlo', validate(monteCarloSchema), async (req, res) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
   try {
     const { chain, address, capital = 10000, horizonDays = 30, scenarios = 1000, mode = 'NORMAL' } = req.body;
 
@@ -451,6 +453,7 @@ router.post('/monte-carlo', validate(monteCarloSchema), async (req, res) => {
       mode,
     });
 
+    clearTimeout(timeout);
     res.json({
       success: true,
       data: {
@@ -463,6 +466,11 @@ router.post('/monte-carlo', validate(monteCarloSchema), async (req, res) => {
       timestamp: new Date(),
     });
   } catch (error) {
+    clearTimeout(timeout);
+    if (controller.signal.aborted) {
+      res.status(503).json({ success: false, error: 'Cálculo excedeu tempo limite (8s)' });
+      return;
+    }
     logService.error('SYSTEM', 'POST /monte-carlo failed', { error });
     res.status(500).json({ success: false, error: 'Internal error' });
   }
@@ -470,6 +478,8 @@ router.post('/monte-carlo', validate(monteCarloSchema), async (req, res) => {
 
 // POST /api/backtest — backtest a range strategy
 router.post('/backtest', validate(backtestSchema), async (req, res) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
   try {
     const { chain, address, capital = 10000, periodDays = 30, mode = 'NORMAL', transactionCostPct } = req.body;
 
@@ -518,6 +528,7 @@ router.post('/backtest', validate(backtestSchema), async (req, res) => {
       transactionCostPct,
     });
 
+    clearTimeout(timeout);
     res.json({
       success: true,
       data: {
@@ -529,6 +540,11 @@ router.post('/backtest', validate(backtestSchema), async (req, res) => {
       timestamp: new Date(),
     });
   } catch (error) {
+    clearTimeout(timeout);
+    if (controller.signal.aborted) {
+      res.status(503).json({ success: false, error: 'Cálculo excedeu tempo limite (8s)' });
+      return;
+    }
     logService.error('SYSTEM', 'POST /backtest failed', { error });
     res.status(500).json({ success: false, error: 'Internal error' });
   }

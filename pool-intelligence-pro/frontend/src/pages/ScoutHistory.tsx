@@ -11,7 +11,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { fetchHistory, deleteHistoryEntry, type PositionHistoryEntry } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -29,10 +29,10 @@ export default function ScoutHistory() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['history'],
-    // Busca até 200 registros e pagina client-side (PAGE_SIZE=50)
-    queryFn: () => fetchHistory({ limit: 200 }),
+  const { data: historyData, isLoading } = useQuery({
+    queryKey: ['history', page],
+    queryFn: () => fetchHistory({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE }),
+    placeholderData: keepPreviousData,
     staleTime: 30_000,
   });
 
@@ -45,9 +45,9 @@ export default function ScoutHistory() {
     onError: () => toast.error('Erro ao remover registro'),
   });
 
-  const history = data?.data || [];
-  const totalPages = Math.ceil(history.length / PAGE_SIZE);
-  const pagedHistory = history.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const history = historyData?.data ?? [];
+  const total = historyData?.total ?? 0;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
     <MainLayout
@@ -58,7 +58,7 @@ export default function ScoutHistory() {
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
-      ) : history.length === 0 ? (
+      ) : total === 0 ? (
         <div className="glass-card p-12 text-center">
           <Calendar className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
           <h3 className="text-xl font-semibold mb-2">Nenhum registro</h3>
@@ -73,7 +73,7 @@ export default function ScoutHistory() {
             <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-border" />
 
             <div className="space-y-6">
-              {pagedHistory.map((entry, index) => (
+              {history.map((entry, index) => (
                 <HistoryCard
                   key={entry.id}
                   entry={entry}
@@ -87,7 +87,7 @@ export default function ScoutHistory() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-4">
               <span className="text-sm text-muted-foreground">
-                Pagina {page} de {totalPages} · {history.length} itens
+                Pagina {page} de {totalPages} · {total} itens
               </span>
               <div className="flex gap-2">
                 <Button

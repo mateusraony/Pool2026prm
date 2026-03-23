@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { logService } from '../services/log.service.js';
+import { memoryStore } from '../services/memory-store.service.js';
 import {
   getWatchlist, addToWatchlist, removeFromWatchlist,
 } from '../jobs/index.js';
@@ -8,6 +9,7 @@ import {
   watchlistSchema, favoriteSchema, noteSchema, noteQuerySchema,
 } from './validation.js';
 import { getPrisma } from './prisma.js';
+import { requireAdminKey } from './middleware/admin-auth.js';
 
 const router = Router();
 
@@ -54,7 +56,20 @@ router.delete('/watchlist/:poolId', validatePoolIdParam, async (req, res) => {
 router.get('/favorites', async (req, res) => {
   try {
     const favorites = await getPrisma().favorite.findMany({ orderBy: { addedAt: 'desc' } });
-    res.json({ success: true, data: favorites });
+    // Enrich with live data (tvl, apr, score) from memory store when available
+    const enriched = favorites.map(fav => {
+      const poolId = `${fav.chain}_${fav.poolAddress}`;
+      const livePool = memoryStore.getPool(poolId);
+      const liveScore = memoryStore.getScore(poolId);
+      return {
+        ...fav,
+        tvl: livePool?.tvl ?? null,
+        apr: livePool?.apr ?? null,
+        score: liveScore?.total ?? null,
+        feeTier: livePool?.feeTier ?? null,
+      };
+    });
+    res.json({ success: true, data: enriched });
   } catch (error) {
     logService.warn('SYSTEM', 'GET /favorites - DB unavailable, returning empty', { error });
     res.json({ success: true, data: [], note: 'Database não configurada ou tabela não existe' });
@@ -132,7 +147,7 @@ router.delete('/notes/:id', validateIdParam, async (req, res) => {
 // LOGS
 // ============================================
 
-router.get('/logs', async (req, res) => {
+router.get('/logs', requireAdminKey, async (req, res) => {
   const { level, component, limit } = req.query;
   const logs = logService.getRecentLogs(
     (() => { const p = parseInt(limit as string, 10); return (!Number.isNaN(p) && p > 0) ? Math.min(p, 1000) : 100; })(),

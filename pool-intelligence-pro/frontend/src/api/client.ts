@@ -367,6 +367,11 @@ export interface FavoritePool {
   token1Symbol: string;
   protocol: string;
   addedAt: string;
+  // Live data enriched by backend from memory store (null = not yet loaded)
+  tvl: number | null;
+  apr: number | null;
+  score: number | null;
+  feeTier: number | null;
 }
 
 export interface PoolNote {

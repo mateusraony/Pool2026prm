@@ -160,8 +160,10 @@ function transformPool(raw: GraphQLPool, chain: string): Pool {
     volume24h = last24.reduce((s, h) => s + parseFloat(h.volumeUSD), 0);
     fees24h = last24.reduce((s, h) => s + parseFloat(h.feesUSD), 0);
   } else {
-    volume24h = parseFloat(raw.volumeUSD) || 0;
-    fees24h = parseFloat(raw.feesUSD) || 0;
+    // raw.volumeUSD é volume cumulativo total desde a criação da pool, não 24h
+    // Sem dados horários, não temos volume24h confiável → usar 0
+    volume24h = 0;
+    fees24h = 0;
   }
 
   const poolType: PoolType = calcService.inferPoolType({

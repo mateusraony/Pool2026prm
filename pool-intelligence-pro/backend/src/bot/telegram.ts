@@ -109,8 +109,11 @@ class TelegramBotService {
     }
 
     try {
-      logService.info('SYSTEM', `Sending Telegram message to chatId ${this.chatId.slice(0, 3)}***`);
-      await this.bot.sendMessage(this.chatId, message, { parse_mode: 'HTML' });
+      const parts = this.splitMessage(message);
+      logService.info('SYSTEM', `Sending Telegram message to chatId ${this.chatId.slice(0, 3)}*** (${parts.length} part(s))`);
+      for (const part of parts) {
+        await this.bot.sendMessage(this.chatId, part, { parse_mode: 'HTML' });
+      }
       logService.info('SYSTEM', 'Telegram message sent successfully');
       return { sent: true };
     } catch (error: any) {
@@ -213,6 +216,25 @@ class TelegramBotService {
       '<i>' + formatDateTz(new Date(), config.reportTimezone) + '</i>';
 
     return this.sendMessage(message);
+  }
+
+  /**
+   * Divide uma mensagem em partes de no máximo maxLen caracteres,
+   * quebrando preferencialmente em quebras de linha para preservar legibilidade HTML.
+   */
+  private splitMessage(text: string, maxLen = 4095): string[] {
+    if (text.length <= maxLen) return [text];
+    const parts: string[] = [];
+    let remaining = text;
+    while (remaining.length > maxLen) {
+      // Tenta quebrar na última quebra de linha antes do limite
+      let splitAt = remaining.lastIndexOf('\n', maxLen);
+      if (splitAt <= 0) splitAt = maxLen;
+      parts.push(remaining.slice(0, splitAt));
+      remaining = remaining.slice(splitAt).replace(/^\n/, '');
+    }
+    if (remaining.length > 0) parts.push(remaining);
+    return parts;
   }
 
   /** Escape HTML entities for safe Telegram message rendering */

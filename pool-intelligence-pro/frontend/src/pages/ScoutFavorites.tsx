@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Star, Eye, RefreshCw, Trash2, Loader2 } from 'lucide-react';
+import { Star, Eye, RefreshCw, Trash2, Loader2, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { fetchFavorites, removeFavorite, type FavoritePool } from '@/api/client';
 import { networkColors, dexLogos } from '@/data/constants';
@@ -72,11 +72,35 @@ export default function ScoutFavorites() {
                         {fav.chain}
                       </span>
                     </div>
+                    {/* Live metrics row */}
+                    {(fav.tvl !== null || fav.apr !== null || fav.score !== null) && (
+                      <div className="flex items-center gap-3 mt-1.5">
+                        {fav.tvl !== null && (
+                          <span className="text-xs text-muted-foreground">
+                            TVL <span className="font-medium text-foreground">${fav.tvl >= 1e6 ? (fav.tvl / 1e6).toFixed(1) + 'M' : fav.tvl >= 1e3 ? (fav.tvl / 1e3).toFixed(0) + 'K' : fav.tvl.toFixed(0)}</span>
+                          </span>
+                        )}
+                        {fav.apr !== null && (
+                          <span className="text-xs text-muted-foreground">
+                            APR <span className="font-medium text-success-500">{fav.apr.toFixed(1)}%</span>
+                          </span>
+                        )}
+                        {fav.score !== null && (
+                          <span className="text-xs text-muted-foreground">
+                            Score <span className="font-medium text-primary">{fav.score.toFixed(0)}</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => fav.poolAddress ? navigate(`/pools/${fav.chain}/${fav.poolAddress}`) : undefined} disabled={!fav.poolAddress}>
+                  <Button variant="ghost" size="sm" onClick={() => fav.poolAddress ? navigate(`/pools/${fav.chain}/${fav.poolAddress}`) : undefined} disabled={!fav.poolAddress} title="Ver detalhes">
                     <Eye className="h-4 w-4" />
+                  </Button>
+                  <Button variant="default" size="sm" onClick={() => fav.poolAddress ? navigate(`/simulation/${fav.chain}/${fav.poolAddress}`) : undefined} disabled={!fav.poolAddress} title="Simular range" className="gap-1">
+                    <TrendingUp className="h-4 w-4" />
+                    <span className="hidden sm:inline">Simular</span>
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => { if (window.confirm('Remover dos favoritos?')) removeMutation.mutate(fav.poolId); }}
                     disabled={removeMutation.isPending}>

@@ -102,7 +102,7 @@ export default function App() {
           <Route path="pools" element={<LazyPage><PoolsPage /></LazyPage>} />
           <Route path="token-analyzer" element={<LazyPage><TokenAnalyzerPage /></LazyPage>} />
           <Route path="radar" element={<LazyPage><RadarPage /></LazyPage>} />
-          <Route path="simulation" element={<LazyPage><SimulationPage /></LazyPage>} />
+          <Route path="simulation" element={<Navigate to="/pools" replace />} />
           <Route path="simulation/:chain/:address" element={<LazyPage><SimulationPage /></LazyPage>} />
           <Route path="alerts" element={<LazyPage><AlertsPage /></LazyPage>} />
           <Route path="compare" element={<LazyPage><PoolComparePage /></LazyPage>} />
