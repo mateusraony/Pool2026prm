@@ -277,6 +277,23 @@ export async function fetchRecommendations(mode?: string, limit?: number): Promi
   return data.data || [];
 }
 
+export interface PoolMetricsPoint {
+  timestamp: number;
+  tvl: number;
+  apr: number;
+  score: number | null;
+  volume24h: number;
+}
+
+export async function fetchPoolMetricsHistory(chain: string, address: string): Promise<PoolMetricsPoint[]> {
+  try {
+    const { data } = await api.get(`/pools/${chain}/${address}/metrics-history`);
+    return data.data || [];
+  } catch {
+    return [];
+  }
+}
+
 // ============================================
 // UNIFIED POOL (Pool Intelligence)
 // ============================================

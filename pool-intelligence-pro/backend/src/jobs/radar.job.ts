@@ -2,6 +2,7 @@ import { getPoolsWithFallback } from '../adapters/index.js';
 import { scoreService } from '../services/score.service.js';
 import { logService } from '../services/log.service.js';
 import { config } from '../config/index.js';
+import { memoryStore } from '../services/memory-store.service.js';
 import { Pool, Score } from '../types/index.js';
 
 interface RadarResult {
@@ -63,6 +64,15 @@ async function scanChain(chain: string): Promise<RadarResult> {
     try {
       const score = scoreService.calculateScore(pool);
       scored.push({ pool, score });
+      // Record metrics snapshot for performance history
+      const poolId = `${pool.chain}_${pool.poolAddress || pool.externalId}`;
+      memoryStore.recordMetrics(
+        poolId,
+        pool.tvl,
+        pool.apr ?? 0,
+        score?.total ?? null,
+        pool.volume24h ?? 0,
+      );
     } catch (error) {
       logService.warn('RADAR', 'Failed to score pool', { 
         pool: pool.externalId, 

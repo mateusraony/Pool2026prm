@@ -195,6 +195,29 @@ class MemoryStore {
     };
   }
 
+  // ─── Pool Metrics History (in-memory buffer, máx 48 snapshots por pool) ───────
+  private readonly METRICS_HISTORY_MAX = 48; // 48 snapshots → 2 dias em intervalos de 1h
+  private metricsHistory: Map<string, Array<{
+    timestamp: number;
+    tvl: number;
+    apr: number;
+    score: number | null;
+    volume24h: number;
+  }>> = new Map();
+
+  recordMetrics(poolId: string, tvl: number, apr: number, score: number | null, volume24h: number): void {
+    let history = this.metricsHistory.get(poolId) ?? [];
+    history.push({ timestamp: Date.now(), tvl, apr, score, volume24h });
+    if (history.length > this.METRICS_HISTORY_MAX) {
+      history = history.slice(history.length - this.METRICS_HISTORY_MAX);
+    }
+    this.metricsHistory.set(poolId, history);
+  }
+
+  getMetricsHistory(poolId: string): Array<{ timestamp: number; tvl: number; apr: number; score: number | null; volume24h: number }> {
+    return this.metricsHistory.get(poolId) ?? [];
+  }
+
   // ─── TVL History (liquidity drop detection) ──────────────────────────────
 
   /** Record a TVL snapshot for a pool (called during radar/watchlist jobs) */

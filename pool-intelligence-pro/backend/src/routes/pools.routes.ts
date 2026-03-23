@@ -340,6 +340,14 @@ router.get('/pools-detail/:chain/:address', async (req, res) => {
   }
 });
 
+// GET /api/pools/:chain/:address/metrics-history — histórico de métricas (in-memory)
+router.get('/pools/:chain/:address/metrics-history', (req, res) => {
+  const { chain, address } = req.params;
+  const poolId = `${chain}_${address}`;
+  const history = memoryStore.getMetricsHistory(poolId);
+  res.json({ success: true, data: history, count: history.length });
+});
+
 // GET /api/pools-liquidity/:chain/:address — liquidity distribution data
 router.get('/pools-liquidity/:chain/:address', async (req, res) => {
   try {
