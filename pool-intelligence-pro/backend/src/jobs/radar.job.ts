@@ -64,8 +64,9 @@ async function scanChain(chain: string): Promise<RadarResult> {
     try {
       const score = scoreService.calculateScore(pool);
       scored.push({ pool, score });
-      // Record metrics snapshot for performance history
-      const poolId = `${pool.chain}_${pool.poolAddress || pool.externalId}`;
+      const rawAddr = pool.poolAddress || pool.externalId || '';
+      const addrPart = (rawAddr.includes(':') ? rawAddr.split(':').pop() : rawAddr) ?? '';
+      const poolId = `${pool.chain}_${addrPart.toLowerCase()}`;
       memoryStore.recordMetrics(
         poolId,
         pool.tvl,

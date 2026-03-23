@@ -19,7 +19,7 @@ export function PoolMetricsChart({ chain, address }: Props) {
   if (history.length < 2) {
     return (
       <div className="h-40 flex items-center justify-center text-muted-foreground text-sm rounded-lg border border-dark-700">
-        <span>Historico disponivel apos 2+ atualizacoes do radar</span>
+        <span>Histórico disponível após 2+ atualizações do radar</span>
       </div>
     );
   }
@@ -27,13 +27,13 @@ export function PoolMetricsChart({ chain, address }: Props) {
   const formatted = history.map(p => ({
     time: new Date(p.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
     TVL: Math.round(p.tvl / 1000), // em K$
-    APR: parseFloat(p.apr.toFixed(1)),
-    Score: p.score != null ? parseFloat(p.score.toFixed(1)) : null,
+    APR: Math.round(p.apr * 10) / 10,
+    Score: p.score != null ? Math.round(p.score * 10) / 10 : null,
   }));
 
   return (
     <div className="space-y-1">
-      <div className="text-xs text-muted-foreground px-1">Historico (ultimas {history.length}h)</div>
+      <div className="text-xs text-muted-foreground px-1">Histórico ({history.length} snapshots)</div>
       <ResponsiveContainer width="100%" height={160}>
         <LineChart data={formatted} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
           <XAxis dataKey="time" tick={{ fontSize: 10 }} interval="preserveStartEnd" />

@@ -310,7 +310,7 @@ export default function ScoutPoolDetail() {
       {/* Pool Metrics History */}
       {chain && address && (
         <div className="glass-card p-4 mb-6">
-          <h3 className="font-semibold mb-3 text-sm">Historico de Performance</h3>
+          <h3 className="font-semibold mb-3 text-sm">Histórico de Performance</h3>
           <PoolMetricsChart chain={chain} address={address} />
         </div>
       )}

@@ -289,7 +289,8 @@ export async function fetchPoolMetricsHistory(chain: string, address: string): P
   try {
     const { data } = await api.get(`/pools/${chain}/${address}/metrics-history`);
     return data.data || [];
-  } catch {
+  } catch (err) {
+    if (import.meta.env.DEV) console.error('[metrics-history]', err);
     return [];
   }
 }

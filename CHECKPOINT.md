@@ -3,10 +3,46 @@
 ## Status Atual
 **Branch:** `claude/review-audit-checkpoint-ZFYUM`
 **Data:** 2026-03-23 UTC
-**Fase:** ETAPAS 1–17 ✅ + ROADMAP Fases 1–6 ✅ + 7 Auditorias ✅ + **MELHORIAS.md Etapas 1–6 ✅ TODAS CONCLUÍDAS** + Auditoria P1/P2/P3 (30 itens) ✅
+**Fase:** ETAPAS 1–17 ✅ + ROADMAP Fases 1–6 ✅ + 7 Auditorias ✅ + **MELHORIAS.md Etapas 1–6 ✅ TODAS CONCLUÍDAS** + Auditoria Profunda (Oitava) ✅
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-23 — MELHORIAS.md 100% concluído (Etapas 1-6). Últimos commits: ScoutFavorites TVL/APR/Score (5629f07), Fase 3 auditoria 7 itens (da57a6a), ESLint+Docker+gitignore (9726098), PoolMetricsChart história in-memory (ce0f477). 362 testes passando. Próximo: nova auditoria /audit-review."`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-23 — Auditoria Profunda Oitava concluída (todas as melhorias aplicadas). Últimos commits: PoolMetricsChart in-memory (ce0f477), audit fixes (normalização address, catch, externalId, acentos, eslint dep). 264 testes backend. Próximo: ETAPA 12 Mobile-First + Performance (plano em .claude/plans/)."`
+
+---
+
+## Auditoria Profunda — 2026-03-23 21:51 (Oitava)
+
+### Stage 1 — TypeScript
+| Verificação    | Resultado | Detalhes           |
+|----------------|-----------|--------------------|
+| tsc backend    | ✅        | 0 erros            |
+| tsc frontend   | ✅        | 0 erros            |
+
+### Stage 2 — Testes e Build
+| Verificação        | Resultado | Detalhes                              |
+|--------------------|-----------|---------------------------------------|
+| vitest backend     | ✅        | 264/264 (12 arquivos)                 |
+| build frontend     | ✅        | Vite 8.85s, exit 0                    |
+
+### Stage 3 — Revisão (Agentes A, B, C, E)
+
+| # | Agente | Achado | Severidade | Status |
+|---|--------|--------|------------|--------|
+| 1 | B | address sem `.toLowerCase()` em `/metrics-history` | IMPORTANTE | ✅ Corrigido |
+| 2 | A/B | `recordMetrics` usava `externalId` com prefixo `chain:` → mismatch de chave | IMPORTANTE | ✅ Corrigido |
+| 3 | B | `/metrics-history` route sem try/catch | IMPORTANTE | ✅ Corrigido |
+| 4 | B | `fetchPoolMetricsHistory` com `catch {}` vazio | IMPORTANTE | ✅ Corrigido |
+| 5 | B/E | 3 strings PT sem acento em arquivos novos (PoolMetricsChart, ScoutPoolDetail) | AVISO | ✅ Corrigido |
+| 6 | A | `eslint` ausente dos devDependencies (script `lint` falharia) | AVISO | ✅ Corrigido |
+| 7 | A | ESLint config mínima (só `no-console`) | AVISO | Aceito — intencional |
+| 8 | A | `AbortController` ineficaz em monte-carlo (síncrono) | AVISO | Pré-existente |
+| 9 | A | `metricsHistory` não limpa em `evictStale()` | AVISO | Pré-existente |
+| 10 | E | 20 strings PT sem acento (pré-existentes em 9 arquivos) | AVISO | Pré-existente |
+| 11 | E | 12x `error: any` em produção (pré-existentes) | AVISO | Pré-existente |
+| 12 | C | `slice()` → `splice()` para mutação in-place em metricsHistory | MINOR | ✅ Corrigido (sessão anterior) |
+| 13 | C | `parseFloat(x.toFixed(1))` anti-pattern → `Math.round(x*10)/10` | MINOR | ✅ Corrigido (sessão anterior) |
+
+**Veredicto: ✅ APROVADO** — 6 problemas IMPORTANTES corrigidos, 0 CRÍTICOS encontrados.
 
 ---
 
