@@ -3,10 +3,10 @@
 ## Status Atual
 **Branch:** `claude/review-audit-checkpoint-ZFYUM`
 **Data:** 2026-03-23 UTC
-**Fase:** ETAPAS 1–17 ✅ + ROADMAP Fases 1–6 ✅ + 7 Blocos Auditoria ✅ + Gap A/B ✅ + Segunda Auditoria 57 fixes ✅ + Terceira Auditoria 7 fixes ✅ + Quarta Auditoria UX ✅ + Quinta Auditoria 16 bugs ✅ + Sexta Auditoria 6 itens ✅ + **Sétima Auditoria — Segurança/Perf/Deploy: 8 itens ✅**
+**Fase:** ETAPAS 1–17 ✅ + ROADMAP Fases 1–6 ✅ + 7 Auditorias ✅ + **MELHORIAS.md Etapas 1–6 ✅ TODAS CONCLUÍDAS** + Auditoria P1/P2/P3 (30 itens) ✅
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-23 — Sétima auditoria: CORS WebSocket restritivo, DexScreener paralelo, DefiLlama healthCheck leve, guard rangeLower=0 em calcIL, admin-auth middleware, botão Simular em Favoritos, DEPLOY.md, render.yaml com prisma migrate + vars ADMIN_SECRET/APP_URL/CORS_ORIGIN. 264 backend + 98 frontend = 362 testes passando. Commit: a116468."`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-23 — MELHORIAS.md 100% concluído (Etapas 1-6). Últimos commits: ScoutFavorites TVL/APR/Score (5629f07), Fase 3 auditoria 7 itens (da57a6a), ESLint+Docker+gitignore (9726098), PoolMetricsChart história in-memory (ce0f477). 362 testes passando. Próximo: nova auditoria /audit-review."`
 
 ---
 
@@ -50,6 +50,34 @@
 ---
 
 ## O QUE FOI FEITO
+
+### MELHORIAS.md Etapas 3–6 ✅ (2026-03-23)
+
+**Metodologia:** auditoria prévia de status real + 2 agentes paralelos. Skills: `dispatching-parallel-agents`.
+
+**Etapas 3 e 4** — já estavam implementadas (verificadas por auditoria):
+- Etapa 3 (Qualidade): MemoryStore para estado, ESM sem require(), react-error-boundary, 264 testes backend
+- Etapa 4 (UX): Skeleton/shimmer, axios interceptor com toast, PWA sw.js+manifest, theme toggle, WebSocket real-time
+
+**Etapa 5 — Infra/DevOps (commit `9726098`):**
+- `eslint.config.js` + `.prettierrc` + script `lint` no frontend
+- `docker-compose.yml` + `Dockerfile.dev` para dev local (postgres:15 + node:20)
+- `.gitignore` atualizado com `backend/dist/`, `frontend/dist/`, `.env`
+
+**Etapa 6 — Features (commit `ce0f477`):**
+- `PoolMetricsChart.tsx` — gráfico Recharts (APR/Score/TVL) com fallback gracioso
+- `memoryStore.recordMetrics()` + `getMetricsHistory()` — buffer in-memory 48 snapshots/pool
+- `GET /api/pools/:chain/:address/metrics-history` — novo endpoint
+- ScoutPoolDetail: seção "Histórico de Performance" integrada
+
+**Auditoria P1/P2/P3 (30 itens, commits `a116468` → `da57a6a`):**
+- P1 (7 itens): WebSocket CORS, calcIL guard, ALERT_FIRED duplicado, /simulation redirect, ScoutFavorites Simular, DexScreener paralelo, DefiLlama healthCheck
+- P2 (11 itens): RSI/MACD removidos, forceRender, validatePool, getBestClass NaN, chartData, capital min=0, Zod /notes, N+1 ranges, refetch staleTime, ScoutHistory, AbortController
+- P3 (7 itens): Telegram splitMessage, Pools loading star, quick tokens highlight, VerdictPanel explícito, PoolCompare CL/AMM badge, ScoutHistory server pagination, AbortController 8s monte-carlo/backtest
+
+**ScoutFavorites TVL/APR/Score (commit `5629f07`):**
+- `GET /favorites` enriquece com tvl/apr/score/feeTier do memoryStore
+- UI mostra métricas ao vivo abaixo do nome da pool
 
 ### Sexta Auditoria — Alinhamento Frontend + UX (6 itens) ✅ (2026-03-22)
 

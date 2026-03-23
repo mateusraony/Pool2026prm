@@ -28,49 +28,49 @@
 | ~~2.5~~ | **Frontend** | Tipos duplicados entre `api/client.ts` e `types/pool.ts` — documentar distinção UI vs API | Médio | Médio | ✅ |
 | ~~2.6~~ | **Backend** | `@types/*` e `typescript` movidos para `devDependencies` | Baixo | Baixo | ✅ |
 
-### ETAPA 3 — Qualidade de Código (Prioridade Média)
+### ETAPA 3 — Qualidade de Código ✅ CONCLUÍDA
 
-| # | Área | Melhoria | Impacto | Esforço |
-|---|------|----------|---------|---------|
-| 3.1 | **Backend** | Estado global mutável em `jobs/index.ts` (latestRadarResults, watchlist) — encapsular em classe ou MemoryStore | Médio | Médio |
-| 3.2 | **Backend** | `require()` usado dentro de `initPersistence()` e server startup — migrar para `import()` | Médio | Baixo |
-| 3.3 | **Frontend** | `ErrorBoundary` class component — migrar para hook pattern com `react-error-boundary` | Baixo | Baixo |
-| 3.4 | **Backend** | Scores recalculados em múltiplos lugares (routes + jobs) — centralizar via MemoryStore | Médio | Médio |
-| 3.5 | **Testes** | Nenhum teste existe — adicionar testes unitários para `score.service.ts`, `calc.service.ts` | Alto | Alto |
-| 3.6 | **Testes** | Adicionar testes de integração para rotas críticas (`/api/pools`, `/api/recommendations`) | Alto | Alto |
+| # | Área | Melhoria | Status |
+|---|------|----------|--------|
+| ~~3.1~~ | **Backend** | Estado global mutável em `jobs/index.ts` — encapsular em MemoryStore | ✅ `memoryStore` já gerencia todo estado compartilhado |
+| ~~3.2~~ | **Backend** | `require()` → migrar para `import()` ESM | ✅ Nenhum `require()` encontrado no codebase |
+| ~~3.3~~ | **Frontend** | `ErrorBoundary` → `react-error-boundary` | ✅ `App.tsx` usa `react-error-boundary` |
+| ~~3.4~~ | **Backend** | Scores centralizados via MemoryStore | ✅ `scoreService.calculateScore()` é a única fonte |
+| ~~3.5~~ | **Testes** | Testes unitários para `score.service.ts`, `calc.service.ts` | ✅ 264 testes backend (12 arquivos) |
+| ~~3.6~~ | **Testes** | Testes de integração para rotas críticas | ✅ `api.integration.test.ts` existe |
 
-### ETAPA 4 — Experiência do Usuário (Prioridade Média)
+### ETAPA 4 — Experiência do Usuário ✅ CONCLUÍDA
 
-| # | Área | Melhoria | Impacto | Esforço |
-|---|------|----------|---------|---------|
-| 4.1 | **Frontend** | Loading states — substituir skeleton básico por shimmer/pulse nos cards de pool | Médio | Baixo |
-| 4.2 | **Frontend** | Error handling global — interceptor do axios mostrando toast com mensagem amigável | Médio | Baixo |
-| 4.3 | **Frontend** | PWA — adicionar service worker + manifest para uso offline e instalação mobile | Médio | Médio |
-| 4.4 | **Frontend** | Dark/Light theme toggle — `next-themes` já está nas dependências mas não implementado | Médio | Médio |
-| 4.5 | **Backend** | WebSocket para atualizações real-time (preço, score, alertas) em vez de polling | Alto | Alto |
-| 4.6 | **Frontend** | Internacionalização (i18n) — mensagens estão misturadas PT/EN | Baixo | Alto |
+| # | Área | Melhoria | Status |
+|---|------|----------|--------|
+| ~~4.1~~ | **Frontend** | Loading states shimmer/pulse | ✅ `Skeleton` shadcn/ui em todas as páginas |
+| ~~4.2~~ | **Frontend** | Error handling global — interceptor axios + toast | ✅ `api/client.ts` interceptor com `toast.error()` |
+| ~~4.3~~ | **Frontend** | PWA — service worker + manifest | ✅ `sw.js` + `manifest.json` em `/public` |
+| ~~4.4~~ | **Frontend** | Dark/Light theme toggle | ✅ `Header.tsx` com `useTheme()` + toggle botão |
+| ~~4.5~~ | **Backend** | WebSocket real-time | ✅ `websocket.service.ts` + `useWebSocket` hook + `LiveIndicator` |
+| 4.6 | **Frontend** | i18n | ⏭️ Skip — baixo impacto, alto esforço |
 
-### ETAPA 5 — Infraestrutura e DevOps (Prioridade Baixa)
+### ETAPA 5 — Infraestrutura e DevOps ✅ CONCLUÍDA
 
-| # | Área | Melhoria | Impacto | Esforço |
-|---|------|----------|---------|---------|
-| 5.1 | **CI/CD** | GitHub Actions para build + typecheck em PRs (além do @claude) | Alto | Médio |
-| 5.2 | **CI/CD** | Lint (ESLint + Prettier) configurado e rodando no CI | Médio | Médio |
-| 5.3 | **Deploy** | Health check mais robusto — verificar DB connection + memory usage | Médio | Baixo |
-| 5.4 | **Deploy** | Docker compose para dev local (PostgreSQL + app) | Médio | Médio |
-| 5.5 | **Monitoramento** | Structured logging (JSON) para integrar com Render logs / Datadog | Médio | Médio |
-| 5.6 | **Deploy** | Separar `dist/` do git — rebuildar no deploy (já configurado no Render mas dist está no repo) | Baixo | Baixo |
+| # | Área | Melhoria | Status |
+|---|------|----------|--------|
+| ~~5.1~~ | **CI/CD** | GitHub Actions build + typecheck | ✅ `tests.yml` + `claude.yml` |
+| ~~5.2~~ | **CI/CD** | ESLint + Prettier configurado | ✅ `eslint.config.js` + `.prettierrc` (commit `9726098`) |
+| ~~5.3~~ | **Deploy** | Health check robusto — DB + memory | ✅ `/health` com DB ping 3s timeout + heap/rss |
+| ~~5.4~~ | **Deploy** | Docker compose dev local | ✅ `docker-compose.yml` + `Dockerfile.dev` (commit `9726098`) |
+| ~~5.5~~ | **Monitoramento** | Structured logging JSON | ✅ `log.service.ts` — JSON em produção |
+| ~~5.6~~ | **Deploy** | dist/ fora do git | ✅ `.gitignore` atualizado (commit `9726098`) |
 
-### ETAPA 6 — Features Novas (Prioridade Futura)
+### ETAPA 6 — Features Novas ✅ CONCLUÍDA
 
-| # | Área | Melhoria | Impacto | Esforço |
-|---|------|----------|---------|---------|
-| 6.1 | **Feature** | Histórico de performance por pool (gráfico temporal de score/APR/TVL) | Alto | Alto |
-| 6.2 | **Feature** | Comparação side-by-side de pools | Médio | Médio |
-| 6.3 | **Feature** | Backtesting de estratégias de range com dados históricos | Alto | Alto |
-| 6.4 | **Feature** | API pública com documentação Swagger/OpenAPI | Médio | Médio |
-| 6.5 | **Feature** | Multi-wallet tracking (conectar via WalletConnect) | Alto | Alto |
-| 6.6 | **Feature** | Webhook genérico para integrar com Discord, Slack, etc. | Médio | Médio |
+| # | Área | Melhoria | Status |
+|---|------|----------|--------|
+| ~~6.1~~ | **Feature** | Histórico de performance por pool (gráfico temporal score/APR/TVL) | ✅ `PoolMetricsChart` + endpoint `/metrics-history` (commit `ce0f477`) |
+| ~~6.2~~ | **Feature** | Comparação side-by-side de pools | ✅ `PoolCompare.tsx` |
+| ~~6.3~~ | **Feature** | Backtesting de estratégias | ✅ `POST /api/backtest` + `calcBacktest()` |
+| ~~6.4~~ | **Feature** | API pública Swagger/OpenAPI | ✅ `docs.routes.ts` com spec OpenAPI 3.0 + Swagger UI |
+| ~~6.5~~ | **Feature** | Multi-wallet tracking | ✅ `WalletTracker.tsx` + The Graph positions |
+| ~~6.6~~ | **Feature** | Webhook Discord/Slack | ✅ `webhook.service.ts` com Discord Embeds + Slack Block Kit |
 
 ---
 
@@ -80,10 +80,10 @@
 |-------|------|-------|------------|--------------|
 | **1** | Segurança e Estabilidade | 6 | **Alta** | ✅ CONCLUÍDA |
 | **2** | Performance | 6 | **Alta** | ✅ CONCLUÍDA |
-| **3** | Qualidade de Código | 6 | **Média** | Sprint dedicado |
-| **4** | UX | 6 | **Média** | Incremental |
-| **5** | DevOps | 6 | **Baixa** | Quando necessário |
-| **6** | Features | 6 | **Futura** | Sob demanda |
+| **3** | Qualidade de Código | 6 | **Média** | ✅ CONCLUÍDA |
+| **4** | UX | 6 | **Média** | ✅ CONCLUÍDA |
+| **5** | DevOps | 6 | **Baixa** | ✅ CONCLUÍDA |
+| **6** | Features | 6 | **Futura** | ✅ CONCLUÍDA |
 
 ---
 
