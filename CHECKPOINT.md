@@ -2,15 +2,26 @@
 
 ## Status Atual
 **Branch:** `claude/review-audit-checkpoint-ZFYUM`
-**Data:** 2026-03-22 UTC
-**Fase:** ETAPAS 1–17 ✅ + ROADMAP Fases 1–6 ✅ + 7 Blocos Auditoria ✅ + Gap A/B ✅ + Segunda Auditoria 57 fixes ✅ + Terceira Auditoria 7 fixes ✅ + Quarta Auditoria UX ✅ + Quinta Auditoria 16 bugs ✅ + **Sexta Auditoria — Alinhamento Frontend + UX: 6 itens ✅**
+**Data:** 2026-03-23 UTC
+**Fase:** ETAPAS 1–17 ✅ + ROADMAP Fases 1–6 ✅ + 7 Blocos Auditoria ✅ + Gap A/B ✅ + Segunda Auditoria 57 fixes ✅ + Terceira Auditoria 7 fixes ✅ + Quarta Auditoria UX ✅ + Quinta Auditoria 16 bugs ✅ + Sexta Auditoria 6 itens ✅ + **Sétima Auditoria — Segurança/Perf/Deploy: 8 itens ✅**
 
 ## Para Continuar
-**Frase:** `"Continuar do CHECKPOINT 2026-03-22 — Sexta auditoria: alinhamento frontend/backend + melhorias UX. volatilityAnn fallback 0.3→0.50, tipo Recommendation completo, tooltip IL, badge modo, gainPercent em ScoutRecommended, 6 testes estimateGains. 264 testes passando. REGRA #0 gravada (verificação independente + skills). Commits: 576feb8, 6906027, 85fea8e, 4ca8595, e12859b."`
+**Frase:** `"Continuar do CHECKPOINT 2026-03-23 — Sétima auditoria: CORS WebSocket restritivo, DexScreener paralelo, DefiLlama healthCheck leve, guard rangeLower=0 em calcIL, admin-auth middleware, botão Simular em Favoritos, DEPLOY.md, render.yaml com prisma migrate + vars ADMIN_SECRET/APP_URL/CORS_ORIGIN. 264 backend + 98 frontend = 362 testes passando. Commit: a116468."`
 
 ---
 
-## Auditoria Pré-Commit — 2026-03-22 11:25
+## Auditoria Pré-Commit — 2026-03-23 10:37 (Sétima)
+
+| Verificação        | Resultado | Detalhes                                                                  |
+|--------------------|-----------|---------------------------------------------------------------------------|
+| tsc backend        | ✅        | 0 erros                                                                   |
+| tsc frontend       | ✅        | 0 erros                                                                   |
+| vitest backend     | ✅        | 264/264 passando (12 arquivos)                                            |
+| vitest frontend    | ✅        | 98/98 passando (7 arquivos)                                               |
+| commit             | ✅        | a116468 — 14 arquivos, 176 ins / 89 del                                  |
+| push               | ✅        | origin/claude/review-audit-checkpoint-ZFYUM                               |
+
+## Auditoria Pré-Commit — 2026-03-22 11:25 (Sexta)
 
 | Verificação        | Resultado | Detalhes                                                                 |
 |--------------------|-----------|--------------------------------------------------------------------------|
