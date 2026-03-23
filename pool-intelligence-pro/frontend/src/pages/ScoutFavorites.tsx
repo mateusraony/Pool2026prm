@@ -72,6 +72,26 @@ export default function ScoutFavorites() {
                         {fav.chain}
                       </span>
                     </div>
+                    {/* Live metrics row */}
+                    {(fav.tvl !== null || fav.apr !== null || fav.score !== null) && (
+                      <div className="flex items-center gap-3 mt-1.5">
+                        {fav.tvl !== null && (
+                          <span className="text-xs text-muted-foreground">
+                            TVL <span className="font-medium text-foreground">${fav.tvl >= 1e6 ? (fav.tvl / 1e6).toFixed(1) + 'M' : fav.tvl >= 1e3 ? (fav.tvl / 1e3).toFixed(0) + 'K' : fav.tvl.toFixed(0)}</span>
+                          </span>
+                        )}
+                        {fav.apr !== null && (
+                          <span className="text-xs text-muted-foreground">
+                            APR <span className="font-medium text-success-500">{fav.apr.toFixed(1)}%</span>
+                          </span>
+                        )}
+                        {fav.score !== null && (
+                          <span className="text-xs text-muted-foreground">
+                            Score <span className="font-medium text-primary">{fav.score.toFixed(0)}</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-2">

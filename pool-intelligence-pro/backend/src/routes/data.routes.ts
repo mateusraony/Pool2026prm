@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { logService } from '../services/log.service.js';
+import { memoryStore } from '../services/memory-store.service.js';
 import {
   getWatchlist, addToWatchlist, removeFromWatchlist,
 } from '../jobs/index.js';
@@ -55,7 +56,20 @@ router.delete('/watchlist/:poolId', validatePoolIdParam, async (req, res) => {
 router.get('/favorites', async (req, res) => {
   try {
     const favorites = await getPrisma().favorite.findMany({ orderBy: { addedAt: 'desc' } });
-    res.json({ success: true, data: favorites });
+    // Enrich with live data (tvl, apr, score) from memory store when available
+    const enriched = favorites.map(fav => {
+      const poolId = `${fav.chain}_${fav.poolAddress}`;
+      const livePool = memoryStore.getPool(poolId);
+      const liveScore = memoryStore.getScore(poolId);
+      return {
+        ...fav,
+        tvl: livePool?.tvl ?? null,
+        apr: livePool?.apr ?? null,
+        score: liveScore?.total ?? null,
+        feeTier: livePool?.feeTier ?? null,
+      };
+    });
+    res.json({ success: true, data: enriched });
   } catch (error) {
     logService.warn('SYSTEM', 'GET /favorites - DB unavailable, returning empty', { error });
     res.json({ success: true, data: [], note: 'Database não configurada ou tabela não existe' });
