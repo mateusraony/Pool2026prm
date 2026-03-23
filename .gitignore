@@ -1,2 +1,8 @@
 node_modules/
 .claude/skills/ui-ux-pro-max/scripts/__pycache__/
+
+# Build outputs
+pool-intelligence-pro/backend/dist/
+pool-intelligence-pro/frontend/dist/
+*.env.local
+.env

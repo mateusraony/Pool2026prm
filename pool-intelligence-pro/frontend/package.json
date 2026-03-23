@@ -7,6 +7,7 @@
     "build": "vite build",
     "typecheck": "tsc",
     "build:full": "tsc && vite build",
+    "lint": "eslint src",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
