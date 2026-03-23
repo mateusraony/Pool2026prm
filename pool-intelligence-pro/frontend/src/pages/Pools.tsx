@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  ChevronUp, ChevronDown, ChevronsUpDown, Star, StarOff,
+  ChevronUp, ChevronDown, ChevronsUpDown, Star, StarOff, Loader2,
   RefreshCw, Filter, Search, Shield, Zap, BarChart2, AlertTriangle, ExternalLink,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -69,8 +69,8 @@ function SortHeader({ label, sortKey, current, dir, onSort }: {
 // POOL ROW
 // ============================================================
 
-function PoolRow({ pool, isFav, onToggleFav, onClick }: {
-  pool: UnifiedPool; isFav: boolean;
+function PoolRow({ pool, isFav, isLoadingFav, onToggleFav, onClick }: {
+  pool: UnifiedPool; isFav: boolean; isLoadingFav?: boolean;
   onToggleFav: (pool: UnifiedPool) => void;
   onClick: (pool: UnifiedPool) => void;
 }) {
@@ -101,9 +101,13 @@ function PoolRow({ pool, isFav, onToggleFav, onClick }: {
         <div className="flex items-center gap-2">
           <button
             onClick={e => { e.stopPropagation(); onToggleFav(pool); }}
-            className="flex-shrink-0 text-dark-500 hover:text-yellow-400 transition-colors"
+            disabled={isLoadingFav}
+            className="flex-shrink-0 text-dark-500 hover:text-yellow-400 transition-colors disabled:opacity-50"
           >
-            {isFav ? <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" /> : <StarOff className="w-3.5 h-3.5" />}
+            {isLoadingFav
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : isFav ? <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" /> : <StarOff className="w-3.5 h-3.5" />
+            }
           </button>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 font-medium text-sm">
@@ -170,8 +174,8 @@ function PoolRow({ pool, isFav, onToggleFav, onClick }: {
 // POOL MOBILE CARD (12.9)
 // ============================================================
 
-function PoolMobileCard({ pool, isFav, onToggleFav, onClick }: {
-  pool: UnifiedPool; isFav: boolean;
+function PoolMobileCard({ pool, isFav, isLoadingFav, onToggleFav, onClick }: {
+  pool: UnifiedPool; isFav: boolean; isLoadingFav?: boolean;
   onToggleFav: (pool: UnifiedPool) => void;
   onClick: (pool: UnifiedPool) => void;
 }) {
@@ -190,9 +194,13 @@ function PoolMobileCard({ pool, isFav, onToggleFav, onClick }: {
         <div className="flex items-center gap-2 min-w-0">
           <button
             onClick={e => { e.stopPropagation(); onToggleFav(pool); }}
-            className="flex-shrink-0 text-dark-500 hover:text-yellow-400"
+            disabled={isLoadingFav}
+            className="flex-shrink-0 text-dark-500 hover:text-yellow-400 disabled:opacity-50"
           >
-            {isFav ? <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" /> : <StarOff className="w-4 h-4" />}
+            {isLoadingFav
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : isFav ? <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" /> : <StarOff className="w-4 h-4" />
+            }
           </button>
           <div className="min-w-0">
             <p className="font-semibold text-sm truncate">
@@ -323,6 +331,7 @@ export default function PoolsPage() {
   const [minTVL, setMinTVL] = useState('');
   const [minHealth, setMinHealth] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [pendingFavId, setPendingFavId] = useState<string | null>(null);
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['unified-pools', chainFilter, bluechipOnly, poolTypeFilter, minTVL, minHealth],
@@ -357,6 +366,7 @@ export default function PoolsPage() {
 
   const handleToggleFav = useCallback(async (pool: UnifiedPool) => {
     if (!pool?.id) return;
+    setPendingFavId(pool.id);
     try {
       if (favSet.has(pool.id)) {
         await removeFavorite(pool.id);
@@ -373,6 +383,8 @@ export default function PoolsPage() {
       await queryClient.invalidateQueries({ queryKey: ['favorites'] });
     } catch (e) {
       console.error('Toggle favorite error:', e);
+    } finally {
+      setPendingFavId(null);
     }
   }, [favSet, queryClient]);
 
@@ -611,6 +623,7 @@ export default function PoolsPage() {
               key={pool.id}
               pool={pool}
               isFav={favSet.has(pool.id)}
+              isLoadingFav={pendingFavId === pool.id}
               onToggleFav={handleToggleFav}
               onClick={handlePoolClick}
             />
@@ -669,6 +682,7 @@ export default function PoolsPage() {
                     key={pool.id}
                     pool={pool}
                     isFav={favSet.has(pool.id)}
+                    isLoadingFav={pendingFavId === pool.id}
                     onToggleFav={handleToggleFav}
                     onClick={handlePoolClick}
                   />

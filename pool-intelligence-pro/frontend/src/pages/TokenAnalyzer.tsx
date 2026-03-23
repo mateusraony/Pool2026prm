@@ -152,6 +152,7 @@ function VerdictPanel({ pools, token }: { pools: UnifiedPool[]; token: string })
     verdictText = `Liquidez moderada (${fmt(totalTVL)}). Pools existem mas volume pode ser inconsistente.`;
     verdictIcon = <TrendingDown className="w-5 h-5 text-yellow-400" />;
   } else if (avgHealth >= 60 && bluechipPools.length > 0) {
+    verdict = 'good';
     verdictText = `✅ Excelente liquidez com ${pools.length} pools. Média de health score ${avgHealth.toFixed(0)}.`;
     verdictIcon = <CheckCircle className="w-5 h-5 text-green-400" />;
   } else if (avgHealth >= 45) {
@@ -345,7 +346,12 @@ export default function TokenAnalyzerPage() {
             <button
               key={t}
               onClick={() => { setTokenInput(t); setSearchedToken(t); setSearchParams({ token: t }); }}
-              className="px-2 py-1 text-xs rounded bg-dark-700 hover:bg-dark-600 transition-colors"
+              className={clsx(
+                'px-2 py-1 text-xs rounded transition-colors',
+                searchedToken === t
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-dark-700 hover:bg-dark-600'
+              )}
             >
               {t}
             </button>

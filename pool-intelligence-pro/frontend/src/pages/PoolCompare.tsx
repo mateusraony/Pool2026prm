@@ -236,11 +236,16 @@ export default function PoolCompare() {
             style={{ gridTemplateColumns: `180px repeat(${pools.length}, 1fr)` }}
           >
             <div className="p-3" />
-            {pools.map((pool) => (
+            {pools.map((pool) => {
+              const isConcentrated = pool.dex.toLowerCase().includes('v3') || pool.dex.toLowerCase().includes('algebra');
+              return (
               <div key={pool.id} className="p-3 text-center">
                 <div className="flex items-center justify-center gap-2 mb-1">
                   <span>{dexLogos[pool.dex] || '🔵'}</span>
                   <span className="font-display font-semibold text-sm">{pool.pair}</span>
+                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                    {isConcentrated ? 'CL' : 'AMM'}
+                  </Badge>
                 </div>
                 <div className="flex items-center justify-center gap-1.5">
                   <span className="text-xs text-muted-foreground">{pool.dex}</span>
@@ -259,7 +264,8 @@ export default function PoolCompare() {
                   </Button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Score section */}
