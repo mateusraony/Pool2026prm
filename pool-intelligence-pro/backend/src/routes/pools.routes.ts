@@ -340,6 +340,20 @@ router.get('/pools-detail/:chain/:address', async (req, res) => {
   }
 });
 
+// GET /api/pools/:chain/:address/metrics-history — histórico de métricas (in-memory)
+router.get('/pools/:chain/:address/metrics-history', (req, res) => {
+  try {
+    const { chain, address } = req.params;
+    const normalizedAddress = address?.toLowerCase();
+    const poolId = `${chain}_${normalizedAddress}`;
+    const history = memoryStore.getMetricsHistory(poolId);
+    res.json({ success: true, data: history, count: history.length });
+  } catch (error) {
+    logService.error('POOLS', 'GET /metrics-history failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
 // GET /api/pools-liquidity/:chain/:address — liquidity distribution data
 router.get('/pools-liquidity/:chain/:address', async (req, res) => {
   try {

@@ -7,6 +7,7 @@
     "build": "vite build",
     "typecheck": "tsc",
     "build:full": "tsc && vite build",
+    "lint": "eslint src",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -84,6 +85,7 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
     "vite": "^6.2.7",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.0",
+    "eslint": "^9.0.0"
   }
 }

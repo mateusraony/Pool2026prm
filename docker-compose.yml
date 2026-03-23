@@ -1,0 +1,43 @@
+# Docker Compose para desenvolvimento local
+# Uso: docker compose up -d
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: pool2026_db
+    environment:
+      POSTGRES_USER: pool2026
+      POSTGRES_PASSWORD: pool2026_dev
+      POSTGRES_DB: pool2026prm
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U pool2026']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: ./pool-intelligence-pro/backend
+      dockerfile: Dockerfile.dev
+    container_name: pool2026_app
+    ports:
+      - '3000:3000'
+    environment:
+      DATABASE_URL: postgresql://pool2026:pool2026_dev@postgres:5432/pool2026prm
+      NODE_ENV: development
+      PORT: 3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./pool-intelligence-pro/backend/src:/app/src
+      - ./pool-intelligence-pro/frontend:/app/../frontend
+    command: npm run dev
+
+volumes:
+  postgres_data:

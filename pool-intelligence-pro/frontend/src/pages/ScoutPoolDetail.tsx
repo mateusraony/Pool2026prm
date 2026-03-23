@@ -30,6 +30,7 @@ import {
 import { cn, formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
 import { fetchPoolDetail, addFavorite, fetchOhlcv, API_BASE_URL } from '@/api/client';
+import { PoolMetricsChart } from '@/components/charts/PoolMetricsChart';
 import { unifiedPoolToViewPool } from '@/data/adapters';
 import { networkColors, dexLogos } from '@/data/constants';
 import { usePoolWebSocket } from '@/hooks/usePoolWebSocket';
@@ -305,6 +306,14 @@ export default function ScoutPoolDetail() {
         <StatCard label="Risco" value={riskLabels[pool.risk]} icon={<Shield className="h-5 w-5" />}
           variant={pool.risk === 'low' ? 'success' : pool.risk === 'medium' ? 'warning' : 'danger'} />
       </div>
+
+      {/* Pool Metrics History */}
+      {chain && address && (
+        <div className="glass-card p-4 mb-6">
+          <h3 className="font-semibold mb-3 text-sm">Histórico de Performance</h3>
+          <PoolMetricsChart chain={chain} address={address} />
+        </div>
+      )}
 
       {/* Range Tabs */}
       <Tabs value={selectedRange} onValueChange={(v) => setSelectedRange(v as typeof selectedRange)} className="mb-6">
