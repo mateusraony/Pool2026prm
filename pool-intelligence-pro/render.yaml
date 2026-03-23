@@ -23,7 +23,8 @@ services:
     region: oregon
     plan: free
     rootDir: pool-intelligence-pro/backend
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
+    preDeployCommand: npx prisma migrate deploy
     startCommand: npm start
     envVars:
       - key: NODE_ENV
@@ -35,6 +36,12 @@ services:
           name: pool-intelligence-db
           property: connectionString
       - key: RENDER_EXTERNAL_URL
+        sync: false
+      - key: APP_URL
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: ADMIN_SECRET
         sync: false
       - key: TELEGRAM_BOT_TOKEN
         sync: false
@@ -56,6 +63,9 @@ services:
 databases:
   - name: pool-intelligence-db
     region: oregon
+    # AÇÃO NECESSÁRIA: Fazer upgrade para plan: starter ($7/mês) no dashboard do Render
+    # O plan free expira em 90 dias e deleta todos os dados automaticamente
+    # plan: free  ← mudar para starter no dashboard, não aqui (requer billing)
     plan: free
     databaseName: poolintel
     user: poolintel

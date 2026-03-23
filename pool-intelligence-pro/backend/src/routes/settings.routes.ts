@@ -10,6 +10,7 @@ import {
   validate, telegramConfigSchema, riskConfigSchema,
   notificationSettingsSchema, telegramTestRecsSchema,
 } from './validation.js';
+import { requireAdminKey } from './middleware/admin-auth.js';
 
 const router = Router();
 
@@ -50,7 +51,7 @@ router.get('/settings', async (req, res) => {
 });
 
 // Update Telegram Bot Token and/or Chat ID at runtime
-router.put('/settings/telegram', validate(telegramConfigSchema), async (req, res) => {
+router.put('/settings/telegram', requireAdminKey, validate(telegramConfigSchema), async (req, res) => {
   try {
     const { chatId, botToken } = req.body;
     let botName: string | undefined;
@@ -90,7 +91,7 @@ router.put('/settings/telegram', validate(telegramConfigSchema), async (req, res
 });
 
 // Save risk config (persisted to DB, validated with Zod)
-router.put('/settings/risk-config', validate(riskConfigSchema), async (req, res) => {
+router.put('/settings/risk-config', requireAdminKey, validate(riskConfigSchema), async (req, res) => {
   try {
     persistService.setRiskConfig(req.body);
     res.json({

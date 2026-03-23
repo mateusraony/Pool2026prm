@@ -8,6 +8,7 @@ import {
   watchlistSchema, favoriteSchema, noteSchema, noteQuerySchema,
 } from './validation.js';
 import { getPrisma } from './prisma.js';
+import { requireAdminKey } from './middleware/admin-auth.js';
 
 const router = Router();
 
@@ -132,7 +133,7 @@ router.delete('/notes/:id', validateIdParam, async (req, res) => {
 // LOGS
 // ============================================
 
-router.get('/logs', async (req, res) => {
+router.get('/logs', requireAdminKey, async (req, res) => {
   const { level, component, limit } = req.query;
   const logs = logService.getRecentLogs(
     (() => { const p = parseInt(limit as string, 10); return (!Number.isNaN(p) && p > 0) ? Math.min(p, 1000) : 100; })(),

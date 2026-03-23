@@ -330,11 +330,12 @@ export class DefiLlamaAdapter extends BaseAdapter {
   
   async healthCheck(): Promise<boolean> {
     try {
-      const response = await axios.get(BASE_URL + '/pools', {
-        timeout: 10000,
-        params: { limit: 1 },
-      });
-      return response.status === 200;
+      // Verificação leve: buscar preço de um token conhecido em vez de baixar todos os pools
+      const response = await fetch(
+        'https://coins.llama.fi/prices/current/ethereum:0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+        { signal: AbortSignal.timeout(5000) }
+      );
+      return response.ok;
     } catch {
       return false;
     }

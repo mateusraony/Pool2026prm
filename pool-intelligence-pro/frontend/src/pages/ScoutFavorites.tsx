@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Star, Eye, RefreshCw, Trash2, Loader2 } from 'lucide-react';
+import { Star, Eye, RefreshCw, Trash2, Loader2, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { fetchFavorites, removeFavorite, type FavoritePool } from '@/api/client';
 import { networkColors, dexLogos } from '@/data/constants';
@@ -75,8 +75,12 @@ export default function ScoutFavorites() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => fav.poolAddress ? navigate(`/pools/${fav.chain}/${fav.poolAddress}`) : undefined} disabled={!fav.poolAddress}>
+                  <Button variant="ghost" size="sm" onClick={() => fav.poolAddress ? navigate(`/pools/${fav.chain}/${fav.poolAddress}`) : undefined} disabled={!fav.poolAddress} title="Ver detalhes">
                     <Eye className="h-4 w-4" />
+                  </Button>
+                  <Button variant="default" size="sm" onClick={() => fav.poolAddress ? navigate(`/simulation/${fav.chain}/${fav.poolAddress}`) : undefined} disabled={!fav.poolAddress} title="Simular range" className="gap-1">
+                    <TrendingUp className="h-4 w-4" />
+                    <span className="hidden sm:inline">Simular</span>
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => { if (window.confirm('Remover dos favoritos?')) removeMutation.mutate(fav.poolId); }}
                     disabled={removeMutation.isPending}>

@@ -78,12 +78,12 @@ export class DexScreenerAdapter extends BaseAdapter {
       optimism:  ['ETH', 'USDC', 'USDT', 'WBTC', 'OP', 'WETH'],
     };
     const searchTerms = chainTerms[chain] ?? ['ETH', 'USDC', 'USDT', 'WBTC'];
-    const allPools: Pool[] = [];
     const seen = new Set<string>();
-    
-    for (const term of searchTerms) {
-      try {
-        const response = await fetchWithRetry(
+
+    // Paraleliza todas as buscas simultaneamente em vez de sequencial
+    const results = await Promise.all(
+      searchTerms.map(term =>
+        fetchWithRetry(
           this.name,
           async () => {
             const res = await axios.get(BASE_URL + '/dex/search', {
@@ -92,27 +92,25 @@ export class DexScreenerAdapter extends BaseAdapter {
             });
             return res.data;
           }
-        );
-        
-        const pairs: DexScreenerPair[] = response.pairs || [];
-        
-        for (const pair of pairs) {
-          if (
-            pair.chainId === chain &&
-            !seen.has(pair.pairAddress) &&
-            pair.liquidity?.usd >= config.thresholds.minLiquidity
-          ) {
-            seen.add(pair.pairAddress);
-            allPools.push(this.mapToPool(pair));
-          }
+        ).catch(() => ({ pairs: [] }))
+      )
+    );
+
+    const allPools: Pool[] = [];
+    for (const response of results) {
+      const pairs: DexScreenerPair[] = response.pairs || [];
+      for (const pair of pairs) {
+        if (
+          pair.chainId === chain &&
+          !seen.has(pair.pairAddress) &&
+          pair.liquidity?.usd >= config.thresholds.minLiquidity
+        ) {
+          seen.add(pair.pairAddress);
+          allPools.push(this.mapToPool(pair));
         }
-      } catch {
-        // Continue with other search terms
       }
-      
-      if (allPools.length >= limit) break;
     }
-    
+
     return allPools
       .sort((a, b) => b.tvl - a.tvl)
       .slice(0, limit);

@@ -9,7 +9,7 @@ import { telegramBot } from '../bot/telegram.js';
 import { getAllProvidersHealth } from '../adapters/index.js';
 import { logService } from '../services/log.service.js';
 import { config } from '../config/index.js';
-import { Pool, Score, Recommendation, UnifiedPool, AlertEvent } from '../types/index.js';
+import { Pool, Score, Recommendation, UnifiedPool } from '../types/index.js';
 import { memoryStore } from '../services/memory-store.service.js';
 import { poolIntelligenceService } from '../services/pool-intelligence.service.js';
 import { metricsService } from '../services/metrics.service.js';
@@ -300,15 +300,6 @@ export function initializeJobs() {
     wsService.broadcastPoolsUpdated(count);
     for (const pool of pools) {
       wsService.broadcastPoolUpdate(pool);
-    }
-  });
-
-  // ALERT_FIRED: encaminha alerta para Telegram se habilitado
-  eventBus.on('ALERT_FIRED', async (event) => {
-    const alertEvent = event.payload as AlertEvent;
-    const settings = notificationSettingsService.getSettings();
-    if (telegramBot.isEnabled() && settings.notifications.priceAlerts) {
-      await telegramBot.sendAlert(alertEvent);
     }
   });
 

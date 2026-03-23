@@ -1416,6 +1416,15 @@ export function calcIL(params: ILParams): ILResult {
     return { ilPercent: 0, ilUsd: 0, outOfRange: false };
   }
 
+  // Guard: rangeLower=0 causaria bSqrt=0 e divisão por zero no bloco CL fora de range.
+  // Tratar como pool V2 (range infinito) — IL calculado pela fórmula padrão sem ajuste CL.
+  if (rangeLower === 0 && poolType === 'CL') {
+    const sqrtK = Math.sqrt(currentPrice / entryPrice);
+    const ratio = currentPrice / entryPrice;
+    const ilFrac = (2 * sqrtK) / (1 + ratio) - 1;
+    return { ilPercent: Math.round(ilFrac * 10000) / 100, ilUsd: 0, outOfRange: false };
+  }
+
   const priceRatio = currentPrice / entryPrice;
   const outOfRange = currentPrice < rangeLower || currentPrice > rangeUpper;
 

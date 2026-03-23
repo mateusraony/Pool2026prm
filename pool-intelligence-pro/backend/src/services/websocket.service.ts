@@ -9,6 +9,7 @@ import type { Server as HttpServer } from 'http';
 import { logService } from './log.service.js';
 import type { UnifiedPool } from '../types/index.js';
 import { rangeMonitorService } from './range.service.js';
+import { config } from '../config/index.js';
 
 type WsEvent = 'pools:updated' | 'score:updated' | 'price:updated' | 'system:status' | 'pool:updated';
 
@@ -17,10 +18,22 @@ class WebSocketService {
   private poolBroadcastThrottle = new Map<string, number>(); // poolKey → timestamp ms
 
   init(httpServer: HttpServer) {
+    const wsOrigin: string | string[] | boolean = (() => {
+      if (config.nodeEnv === 'production') {
+        const allowedOrigins = [
+          process.env.RENDER_EXTERNAL_URL,
+          process.env.APP_URL,
+          process.env.CORS_ORIGIN,
+        ].filter(Boolean) as string[];
+        return allowedOrigins.length > 0 ? allowedOrigins : false;
+      }
+      return true;
+    })();
+
     this.io = new Server(httpServer, {
       path: '/ws',
       cors: {
-        origin: '*',
+        origin: wsOrigin,
         methods: ['GET', 'POST'],
       },
       transports: ['websocket', 'polling'],
