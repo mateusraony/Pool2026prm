@@ -172,7 +172,7 @@ function validatePool(pool: any, source: string): string[] {
   if (!pool.token0 && !pool.baseToken) warnings.push(`[${source}] missing token0 info`);
   if (!pool.token1 && !pool.quoteToken) warnings.push(`[${source}] missing token1 info`);
   if (warnings.length > 0) {
-    console.warn('Pool validation warnings:', warnings);
+    if (import.meta.env.DEV) console.warn('Pool validation warnings:', warnings);
   }
   return warnings;
 }
@@ -426,7 +426,7 @@ export async function fetchTokens(): Promise<string[]> {
     const tokens = data?.data;
     return Array.isArray(tokens) ? tokens : [];
   } catch (e) {
-    console.error('fetchTokens error:', e);
+    if (import.meta.env.DEV) console.error('fetchTokens error:', e);
     return [];
   }
 }
@@ -453,7 +453,7 @@ export async function fetchPoolDetail(chain: string, address: string, params?: {
     }
     return result;
   } catch (e) {
-    console.error('fetchPoolDetail error:', e);
+    if (import.meta.env.DEV) console.error('fetchPoolDetail error:', e);
     return null;
   }
 }
@@ -478,7 +478,7 @@ export async function calcRange(params: {
     const { data } = await api.post('/range-calc', params);
     return data?.data || null;
   } catch (e) {
-    console.error('calcRange error:', e);
+    if (import.meta.env.DEV) console.error('calcRange error:', e);
     return null;
   }
 }
