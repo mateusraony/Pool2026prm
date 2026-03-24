@@ -1,9 +1,33 @@
 # CHECKPOINT - Pool Intelligence Pro
 
+## Auditoria Pré-Commit — 2026-03-24 20:10
+
+| Verificação        | Resultado | Detalhes                                                        |
+|--------------------|-----------|-----------------------------------------------------------------|
+| tsc backend        | ✅        | 0 erros                                                         |
+| tsc frontend       | ✅        | 0 erros                                                         |
+| vitest             | ✅        | 264/264 passando (12 arquivos)                                  |
+| build              | ✅        | exit 0 (Vite 11s + tsc backend)                                 |
+| verification       | ✅        | Evidências reais confirmadas; DB push skipped esperado          |
+| code-review        | ✅        | Diff = package-lock.json apenas; eslint em package.json ✅      |
+| simplify           | ✅        | Nenhum código de aplicação alterado                             |
+| português          | ⚠️        | 20 ocorrências pré-existentes (já catalogadas na Auditoria 8ª) |
+| antipatterns       | ⚠️        | `catch (error: any)` em persist.service.ts + telegram.ts (pré) |
+| conformidade       | ✅        | 5 commits alinhados com CHECKPOINT                              |
+
+**Veredicto: ⚠️ APROVADO COM AVISOS**
+
+**Próximas ações:**
+- AVISO: Substituir `catch (error: any)` por `catch (error: unknown)` em `persist.service.ts:73,78,93,105,111,124` e `bot/telegram.ts:93,119` — não urgente
+- AVISO: Tipar resposta de `defillama.adapter.ts:110,111` com `unknown` + type guard em vez de `as any` — não urgente
+- (Todos os avisos são pré-existentes, não introduzidos neste commit)
+
+---
+
 ## Status Atual
 **Branch:** `claude/review-audit-checkpoint-ZFYUM`
-**Data:** 2026-03-23 UTC
-**Fase:** ETAPAS 1–17 ✅ + ROADMAP Fases 1–6 ✅ + 7 Auditorias ✅ + **MELHORIAS.md Etapas 1–6 ✅ TODAS CONCLUÍDAS** + Auditoria Profunda (Oitava) ✅
+**Data:** 2026-03-24 UTC
+**Fase:** ETAPAS 1–17 ✅ + ROADMAP Fases 1–6 ✅ + 7 Auditorias ✅ + **MELHORIAS.md Etapas 1–6 ✅ TODAS CONCLUÍDAS** + Auditoria Profunda (Oitava) ✅ + package-lock.json corrigido ✅
 
 ## Para Continuar
 **Frase:** `"Continuar do CHECKPOINT 2026-03-23 — Auditoria Profunda Oitava concluída (todas as melhorias aplicadas). Últimos commits: PoolMetricsChart in-memory (ce0f477), audit fixes (normalização address, catch, externalId, acentos, eslint dep). 264 testes backend. Próximo: ETAPA 12 Mobile-First + Performance (plano em .claude/plans/)."`
