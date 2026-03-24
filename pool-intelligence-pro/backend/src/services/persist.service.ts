@@ -11,6 +11,11 @@ import { getPrisma } from '../routes/prisma.js';
 import type { PrismaClient } from '@prisma/client';
 import { logService } from './log.service.js';
 
+function getErrorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  return String(e);
+}
+
 export interface PersistedData {
   telegram: {
     botToken: string;
@@ -70,13 +75,13 @@ class PersistService {
           this.cache[row.key] = row.value;
         }
         logService.info('SYSTEM', `Loaded ${rows.length} config entries from database`);
-      } catch (error: any) {
-        logService.warn('SYSTEM', 'Failed to load config from AppConfig table', { error: error?.message });
+      } catch (error: unknown) {
+        logService.warn('SYSTEM', 'Failed to load config from AppConfig table', { error: getErrorMessage(error) });
       }
 
       this._ready = true;
-    } catch (error: any) {
-      logService.warn('SYSTEM', 'Database not available for persistence: ' + (error?.message || 'unknown'), {});
+    } catch (error: unknown) {
+      logService.warn('SYSTEM', 'Database not available for persistence: ' + getErrorMessage(error), {});
       this.prisma = null;
     }
   }
@@ -90,7 +95,7 @@ class PersistService {
     try {
       // Quick check: try a simple query
       await this.prisma.$queryRawUnsafe(`SELECT 1 FROM "AppConfig" LIMIT 1`);
-    } catch (error: any) {
+    } catch (_error: unknown) {
       // Table doesn't exist - create it
       logService.info('SYSTEM', 'Creating AppConfig table...');
       try {
@@ -102,8 +107,8 @@ class PersistService {
           )
         `);
         logService.info('SYSTEM', 'AppConfig table created');
-      } catch (createErr: any) {
-        logService.error('SYSTEM', 'Failed to create AppConfig table: ' + createErr?.message);
+      } catch (createErr: unknown) {
+        logService.error('SYSTEM', 'Failed to create AppConfig table: ' + getErrorMessage(createErr));
       }
     }
   }
@@ -121,9 +126,9 @@ class PersistService {
         jsonStr,
       );
       logService.info('SYSTEM', `Config "${key}" saved to database`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logService.error('SYSTEM', `Failed to persist config key "${key}" to DB`, {
-        error: String(error),
+        error: getErrorMessage(error),
         key,
       });
     }

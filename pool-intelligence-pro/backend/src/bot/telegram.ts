@@ -5,6 +5,11 @@ import { formatDateTz } from '../services/time.service.js';
 import { persistService } from '../services/persist.service.js';
 import { AlertEvent, Recommendation } from '../types/index.js';
 
+function getErrorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  return String(e);
+}
+
 class TelegramBotService {
   private bot: TelegramBot | null = null;
   private chatId: string = '';
@@ -90,9 +95,11 @@ class TelegramBotService {
       this.persist();
       logService.info('SYSTEM', `Telegram bot validated: @${me.username}`);
       return { ok: true, botName: me.username };
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Do NOT clear the existing working bot — keep previous state intact
-      const msg = error?.response?.body?.description || error?.message || 'Token invalido';
+      const errAsObj = error as Record<string, unknown> | null | undefined;
+      const respBody = (errAsObj?.response as Record<string, unknown> | undefined)?.body as Record<string, unknown> | undefined;
+      const msg = (respBody?.description as string | undefined) || getErrorMessage(error) || 'Token invalido';
       logService.error('SYSTEM', 'Telegram bot token validation failed', { error: msg });
       return { ok: false, error: msg };
     }
@@ -116,13 +123,16 @@ class TelegramBotService {
       }
       logService.info('SYSTEM', 'Telegram message sent successfully');
       return { sent: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Extract error from different formats (node-telegram-bot-api uses response.body)
-      const telegramError = error?.response?.body?.description
-        || error?.response?.description
-        || error?.message
+      const errAsObj = error as Record<string, unknown> | null | undefined;
+      const resp = errAsObj?.response as Record<string, unknown> | undefined;
+      const respBody = resp?.body as Record<string, unknown> | undefined;
+      const telegramError = (respBody?.description as string | undefined)
+        || (resp?.description as string | undefined)
+        || getErrorMessage(error)
         || 'Erro desconhecido';
-      const statusCode = error?.response?.statusCode || error?.response?.body?.error_code || '';
+      const statusCode = (resp?.statusCode as string | number | undefined) || (respBody?.error_code as string | number | undefined) || '';
       logService.error('SYSTEM', `Failed to send Telegram message: [${statusCode}] ${telegramError}`, {
         chatId: this.chatId,
         statusCode,

@@ -24,7 +24,9 @@ services:
     plan: free
     rootDir: pool-intelligence-pro/backend
     buildCommand: npm ci && npm run build
-    preDeployCommand: npx prisma migrate deploy
+    # DIRECT_URL é usado pelo Prisma para migrations (conexão direta, sem PgBouncer).
+    # Se não estiver configurada, fallback para DATABASE_URL (pode funcionar com session pooler).
+    preDeployCommand: export DIRECT_URL=${DIRECT_URL:-$DATABASE_URL} && npx prisma migrate deploy
     startCommand: npm start
     envVars:
       - key: NODE_ENV
@@ -32,9 +34,12 @@ services:
       - key: PORT
         value: 10000
       - key: DATABASE_URL
-        fromDatabase:
-          name: pool-intelligence-db
-          property: connectionString
+        sync: false
+      # DIRECT_URL: URL de conexão direta ao PostgreSQL (sem PgBouncer) para migrations.
+      # Supabase: Settings > Database > Connection string > URI (porta 5432, sem pooler)
+      # Formato: postgresql://postgres:[senha]@db.[ref].supabase.co:5432/postgres?sslmode=require
+      - key: DIRECT_URL
+        sync: false
       - key: RENDER_EXTERNAL_URL
         sync: false
       - key: APP_URL

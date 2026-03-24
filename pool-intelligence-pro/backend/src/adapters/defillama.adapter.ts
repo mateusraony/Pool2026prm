@@ -26,6 +26,13 @@ interface DefiLlamaPool {
   volumeUsd7d?: number;
 }
 
+interface DefillamaPrice {
+  price?: number;
+  symbol?: string;
+  decimals?: number;
+  confidence?: number;
+}
+
 export class DefiLlamaAdapter extends BaseAdapter {
   name = 'defillama';
   
@@ -107,8 +114,9 @@ export class DefiLlamaAdapter extends BaseAdapter {
       const prices = new Map<string, number>();
       for (const [key, val] of Object.entries(res.data?.coins || {})) {
         const addr = key.split(':')[1]?.toLowerCase();
-        if (addr && (val as any).price) {
-          prices.set(addr, (val as any).price);
+        const coin = val as DefillamaPrice;
+        if (addr && typeof coin.price === 'number') {
+          prices.set(addr, coin.price);
         }
       }
       return prices;
