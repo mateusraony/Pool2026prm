@@ -41,7 +41,8 @@ api.interceptors.response.use(undefined, async (error: AxiosError) => {
   const isRetryable =
     !error.response || // network error (backend sleeping)
     error.response.status === 502 || // bad gateway (waking up)
-    error.response.status === 503 || // service unavailable
+    // 503 só é retentável se não vier com corpo de erro (cold-start do Render, não erro de negócio)
+    (error.response.status === 503 && !(error.response.data as any)?.error) ||
     error.code === 'ECONNABORTED'; // timeout
 
   if (isRetryable && retryCount < 2) {
