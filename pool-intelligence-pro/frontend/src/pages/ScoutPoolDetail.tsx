@@ -11,6 +11,7 @@ import { HodlVsLp } from '@/components/common/HodlVsLp';
 import { ConfBadge } from '@/components/common/ConfBadge';
 import { AIInsightsCard } from '@/components/AIInsightsCard';
 import { TokenCorrelation } from '@/components/common/TokenCorrelation';
+import { DeepAnalysisPanel } from '@/components/common/DeepAnalysisPanel';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -363,6 +364,13 @@ export default function ScoutPoolDetail() {
       {chain && address && (
         <div className="mb-6">
           <TokenCorrelation chain={chain} address={address} />
+        </div>
+      )}
+
+      {/* Deep Analysis — Indicadores Técnicos */}
+      {chain && address && (
+        <div className="mb-6">
+          <DeepAnalysisPanel chain={chain} address={address} />
         </div>
       )}
 
