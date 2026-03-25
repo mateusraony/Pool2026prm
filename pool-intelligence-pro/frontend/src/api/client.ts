@@ -1112,4 +1112,70 @@ export async function fetchMarketConditions(): Promise<MarketConditions | null> 
   }
 }
 
+// ============================================================
+// DEEP ANALYSIS — Technical Indicators
+// ============================================================
+
+export interface DeepAnalysisData {
+  rsi: {
+    value: number;
+    signal: 'oversold' | 'neutral' | 'overbought';
+    periods: number;
+  };
+  macd: {
+    macdLine: number;
+    signalLine: number;
+    histogram: number;
+    signal: 'bullish' | 'neutral' | 'bearish';
+    crossover: 'bullish_cross' | 'bearish_cross' | 'none';
+  };
+  bollinger: {
+    upper: number;
+    middle: number;
+    lower: number;
+    bandwidth: number;
+    percentB: number;
+    signal: string;
+  };
+  volumeProfile: {
+    avgVolume: number;
+    currentVolume: number;
+    volumeTrend: number;
+    volumeTvlRatio: number;
+    isAbnormal: boolean;
+  };
+  momentum: {
+    score: number;
+    label: 'Strong Sell' | 'Sell' | 'Neutral' | 'Buy' | 'Strong Buy';
+    components: {
+      rsiSignal: number;
+      macdSignal: number;
+      bollingerSignal: number;
+      volumeSignal: number;
+    };
+  };
+  meta: {
+    chain: string;
+    address: string;
+    timeframe: string;
+    candlesUsed: number;
+    calculatedAt: string;
+  };
+}
+
+export async function fetchDeepAnalysis(
+  chain: string,
+  address: string,
+  timeframe: 'hour' | 'day' = 'hour'
+): Promise<DeepAnalysisData | null> {
+  try {
+    const { data } = await api.get(`/pools/${chain}/${address.toLowerCase()}/deep-analysis`, {
+      params: { timeframe },
+    });
+    return data.success ? data.data : null;
+  } catch {
+    return null;
+  }
+}
+
 export { api as apiClient };
