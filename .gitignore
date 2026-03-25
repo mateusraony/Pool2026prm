@@ -6,3 +6,4 @@ pool-intelligence-pro/backend/dist/
 pool-intelligence-pro/frontend/dist/
 *.env.local
 .env
+.superpowers/
