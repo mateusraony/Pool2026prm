@@ -16,6 +16,7 @@ import { metricsService } from '../services/metrics.service.js';
 import { wsService } from '../services/websocket.service.js';
 import { eventBus } from '../services/event-bus.service.js';
 import { isTimeMatch, todayStringTz } from '../services/time.service.js';
+import { runDeepAnalysisJob } from './deep-analysis.job.js';
 
 // ============================================
 // JOB STATE MANAGER — encapsula todo estado mutável
@@ -334,6 +335,20 @@ export function initializeJobs() {
   // DAILY_REPORT: dispara relatório de portfólio via range monitor
   eventBus.on('DAILY_REPORT', async () => {
     await rangeMonitorService.sendPortfolioReport();
+  });
+
+  // Deep Analysis: every 10 min (pre-populate cache for favorites/recommendations)
+  cron.schedule('*/10 * * * *', async () => {
+    const start = Date.now();
+    let success = true;
+    try {
+      await runDeepAnalysisJob();
+    } catch (error) {
+      success = false;
+      logService.error('SYSTEM', 'Deep analysis job failed', { error });
+    } finally {
+      metricsService.recordJob('deepAnalysis', Date.now() - start, success);
+    }
   });
 
   cron.schedule('*/15 * * * *', radarJobRunner);       // Radar: every 15 min

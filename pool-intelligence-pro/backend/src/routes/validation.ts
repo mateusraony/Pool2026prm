@@ -174,6 +174,10 @@ export const noteQuerySchema = z.object({
   poolId: z.string().max(200).optional(),
 });
 
+export const deepAnalysisQuerySchema = z.object({
+  timeframe: z.enum(['hour', 'day']).optional().default('hour'),
+});
+
 // ============================================
 // MIDDLEWARE
 // ============================================

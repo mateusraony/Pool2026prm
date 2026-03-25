@@ -20,7 +20,8 @@ import {
 import { Pool, UnifiedPool } from '../types/index.js';
 import { rangeMonitorService } from '../services/range.service.js';
 import { priceHistoryService } from '../services/price-history.service.js';
-import { validate, rangeCalcSchema, monteCarloSchema, backtestSchema, lvrSchema, autoCompoundSchema } from './validation.js';
+import { validate, rangeCalcSchema, monteCarloSchema, backtestSchema, lvrSchema, autoCompoundSchema, deepAnalysisQuerySchema } from './validation.js';
+import { computeDeepAnalysis } from '../services/technical-indicators.service.js';
 import { getPrisma } from './prisma.js';
 
 const router = Router();
@@ -938,6 +939,53 @@ router.post('/range-benchmark', (req, res) => {
     res.json({ success: true, data: result, timestamp: new Date() });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Benchmark calculation failed' });
+  }
+});
+
+// GET /api/pools/:chain/:address/deep-analysis — Indicadores técnicos reais
+router.get('/pools/:chain/:address/deep-analysis', async (req, res) => {
+  try {
+    const { chain, address } = req.params;
+    const parsed = deepAnalysisQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: 'Invalid query params' });
+    }
+    const { timeframe } = parsed.data;
+    const normalizedAddress = address.toLowerCase();
+
+    // Cache key
+    const cacheKey = `deep_analysis_${chain}_${normalizedAddress}_${timeframe}`;
+    const cached = cacheService.get<import('../services/technical-indicators.service.js').DeepAnalysis>(cacheKey);
+    if (cached.data && !cached.isStale) {
+      return res.json({ success: true, data: cached.data, fromCache: true, timestamp: new Date() });
+    }
+
+    // Fetch OHLCV
+    const limit = timeframe === 'hour' ? 168 : 90;
+    const ohlcv = await priceHistoryService.getOhlcv(chain, normalizedAddress, timeframe, limit);
+    if (!ohlcv || ohlcv.candles.length < 15) {
+      return res.status(404).json({ success: false, error: 'Insufficient OHLCV data for analysis' });
+    }
+
+    // Get TVL from MemoryStore
+    const poolId = `${chain}_${normalizedAddress}`;
+    const pool = memoryStore.getPool(poolId);
+    const tvl = pool?.tvlUSD ?? 0;
+
+    // Compute
+    const analysis = computeDeepAnalysis(ohlcv.candles, tvl, chain, normalizedAddress, timeframe);
+    if (!analysis) {
+      return res.status(422).json({ success: false, error: 'Could not compute analysis (insufficient data)' });
+    }
+
+    // Cache (hour=5min, day=15min)
+    const ttl = timeframe === 'hour' ? 300 : 900;
+    cacheService.set(cacheKey, analysis, ttl);
+
+    res.json({ success: true, data: analysis, fromCache: false, timestamp: new Date() });
+  } catch (error: unknown) {
+    logService.error('SYSTEM', 'GET /pools/:chain/:address/deep-analysis failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
   }
 });
 
