@@ -38,6 +38,36 @@ export interface VolumeProfileResult {
   isAbnormal: boolean;    // > 2x avg
 }
 
+export interface VwapResult {
+  value: number;
+  deviation: number;     // % distance from current price to VWAP
+  signal: 'above' | 'at' | 'below';
+}
+
+export interface SmaResult {
+  values: { period: number; value: number }[];
+  trend: 'bullish' | 'bearish' | 'neutral';
+  goldenCross: boolean;
+  deathCross: boolean;
+}
+
+export interface SupportResistanceResult {
+  supports: number[];
+  resistances: number[];
+  nearestSupport: number | null;
+  nearestResistance: number | null;
+  distanceToSupport: number;
+  distanceToResistance: number;
+}
+
+export interface TrendResult {
+  direction: 'strong_up' | 'up' | 'sideways' | 'down' | 'strong_down';
+  strength: number;      // 0-100
+  priceChange: number;
+  higherHighs: boolean;
+  higherLows: boolean;
+}
+
 export interface MomentumResult {
   score: number;          // -100 to +100
   label: 'Strong Sell' | 'Sell' | 'Neutral' | 'Buy' | 'Strong Buy';
@@ -46,6 +76,8 @@ export interface MomentumResult {
     macdSignal: number;
     bollingerSignal: number;
     volumeSignal: number;
+    trendSignal: number;
+    smaSignal: number;
   };
 }
 
@@ -55,6 +87,10 @@ export interface DeepAnalysis {
   bollinger: BollingerResult;
   volumeProfile: VolumeProfileResult;
   momentum: MomentumResult;
+  vwap: VwapResult | null;
+  sma: SmaResult | null;
+  supportResistance: SupportResistanceResult | null;
+  trend: TrendResult;
   meta: {
     chain: string;
     address: string;
@@ -274,6 +310,194 @@ export function calcVolumeProfile(
   return { avgVolume, currentVolume, volumeTrend, volumeTvlRatio, isAbnormal };
 }
 
+// --- VWAP ---
+
+export function calcVwap(candles: OhlcvCandle[]): VwapResult | null {
+  if (candles.length === 0) return null;
+
+  let cumulativeTPV = 0;
+  let cumulativeVolume = 0;
+
+  for (const c of candles) {
+    const tp = (c.high + c.low + c.close) / 3;
+    cumulativeTPV += tp * c.volume;
+    cumulativeVolume += c.volume;
+  }
+
+  if (cumulativeVolume === 0) return null;
+
+  const vwap = cumulativeTPV / cumulativeVolume;
+  const lastClose = candles[candles.length - 1].close;
+  const deviation = ((lastClose - vwap) / vwap) * 100;
+
+  let signal: VwapResult['signal'];
+  if (deviation > 0.5) signal = 'above';
+  else if (deviation < -0.5) signal = 'below';
+  else signal = 'at';
+
+  return { value: vwap, deviation, signal };
+}
+
+// --- SMA ---
+
+export function calcSma(candles: OhlcvCandle[], periods: number[] = [7, 25, 99]): SmaResult | null {
+  const maxPeriod = Math.max(...periods);
+  if (candles.length < maxPeriod) return null;
+
+  const closes = candles.map(c => c.close);
+
+  const values = periods.map(period => {
+    const slice = closes.slice(-period);
+    const avg = slice.reduce((a, b) => a + b, 0) / period;
+    return { period, value: avg };
+  });
+
+  // Sort periods ascending for comparison
+  const sorted = [...periods].sort((a, b) => a - b);
+
+  // Trend: check if SMAs are aligned (shortest > middle > longest)
+  const smaMap = new Map(values.map(v => [v.period, v.value]));
+  let bullish = true;
+  let bearish = true;
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const shorter = smaMap.get(sorted[i])!;
+    const longer = smaMap.get(sorted[i + 1])!;
+    if (shorter <= longer) bullish = false;
+    if (shorter >= longer) bearish = false;
+  }
+
+  const trend: SmaResult['trend'] = bullish ? 'bullish' : bearish ? 'bearish' : 'neutral';
+
+  // Golden/Death cross: compare short vs long SMA for current and previous candle
+  let goldenCross = false;
+  let deathCross = false;
+
+  const shortPeriod = sorted[0];
+  const longPeriod = sorted[sorted.length - 1];
+
+  if (candles.length > maxPeriod) {
+    // Current SMAs
+    const currentShort = smaMap.get(shortPeriod)!;
+    const currentLong = smaMap.get(longPeriod)!;
+
+    // Previous SMAs (shift by 1 candle)
+    const prevCloses = closes.slice(0, -1);
+    const prevShort = prevCloses.slice(-shortPeriod).reduce((a, b) => a + b, 0) / shortPeriod;
+    const prevLong = prevCloses.slice(-longPeriod).reduce((a, b) => a + b, 0) / longPeriod;
+
+    if (prevShort <= prevLong && currentShort > currentLong) goldenCross = true;
+    if (prevShort >= prevLong && currentShort < currentLong) deathCross = true;
+  }
+
+  return { values, trend, goldenCross, deathCross };
+}
+
+// --- Support / Resistance ---
+
+export function calcSupportResistance(candles: OhlcvCandle[], levels: number = 3): SupportResistanceResult | null {
+  if (candles.length < 3) return null;
+
+  const rawSupports: number[] = [];
+  const rawResistances: number[] = [];
+
+  // Find local minima and maxima
+  for (let i = 1; i < candles.length - 1; i++) {
+    if (candles[i].low < candles[i - 1].low && candles[i].low < candles[i + 1].low) {
+      rawSupports.push(candles[i].low);
+    }
+    if (candles[i].high > candles[i - 1].high && candles[i].high > candles[i + 1].high) {
+      rawResistances.push(candles[i].high);
+    }
+  }
+
+  // Cluster nearby levels (within 0.5% of each other)
+  function clusterLevels(arr: number[]): number[] {
+    if (arr.length === 0) return [];
+    const sorted = [...arr].sort((a, b) => a - b);
+    const clusters: number[][] = [[sorted[0]]];
+
+    for (let i = 1; i < sorted.length; i++) {
+      const lastCluster = clusters[clusters.length - 1];
+      const clusterAvg = lastCluster.reduce((a, b) => a + b, 0) / lastCluster.length;
+      if (Math.abs(sorted[i] - clusterAvg) / clusterAvg <= 0.005) {
+        lastCluster.push(sorted[i]);
+      } else {
+        clusters.push([sorted[i]]);
+      }
+    }
+
+    return clusters.map(c => c.reduce((a, b) => a + b, 0) / c.length);
+  }
+
+  const clusteredSupports = clusterLevels(rawSupports);
+  const clusteredResistances = clusterLevels(rawResistances);
+
+  // Sort supports descending, resistances ascending; take top `levels`
+  const supports = clusteredSupports.sort((a, b) => b - a).slice(0, levels);
+  const resistances = clusteredResistances.sort((a, b) => a - b).slice(0, levels);
+
+  const lastClose = candles[candles.length - 1].close;
+
+  // Nearest support = highest support below current price
+  const supportsBelow = supports.filter(s => s < lastClose);
+  const nearestSupport = supportsBelow.length > 0 ? Math.max(...supportsBelow) : null;
+
+  // Nearest resistance = lowest resistance above current price
+  const resistancesAbove = resistances.filter(r => r > lastClose);
+  const nearestResistance = resistancesAbove.length > 0 ? Math.min(...resistancesAbove) : null;
+
+  const distanceToSupport = nearestSupport !== null
+    ? ((lastClose - nearestSupport) / lastClose) * 100
+    : 0;
+  const distanceToResistance = nearestResistance !== null
+    ? ((nearestResistance - lastClose) / lastClose) * 100
+    : 0;
+
+  return { supports, resistances, nearestSupport, nearestResistance, distanceToSupport, distanceToResistance };
+}
+
+// --- Trend ---
+
+export function calcTrend(
+  candles: OhlcvCandle[],
+  sma?: SmaResult | null,
+  macd?: MacdResult | null,
+): TrendResult {
+  const firstClose = candles[0].close;
+  const lastClose = candles[candles.length - 1].close;
+  const priceChange = firstClose !== 0 ? ((lastClose - firstClose) / firstClose) * 100 : 0;
+
+  // Check higher highs / higher lows on last 5+ candles
+  let higherHighs = false;
+  let higherLows = false;
+  const checkCount = Math.min(candles.length, 5);
+  if (checkCount >= 2) {
+    const tail = candles.slice(-checkCount);
+    higherHighs = tail.every((c, i) => i === 0 || c.high > tail[i - 1].high);
+    higherLows = tail.every((c, i) => i === 0 || c.low > tail[i - 1].low);
+  }
+
+  // Strength calculation
+  let strength = Math.min(Math.abs(priceChange) * 2, 50); // base: up to 50 from price change
+  if (sma) {
+    if (sma.trend === 'bullish' || sma.trend === 'bearish') strength += 25;
+  }
+  if (macd) {
+    if (macd.signal === 'bullish' || macd.signal === 'bearish') strength += 25;
+    if (macd.crossover === 'bullish_cross' || macd.crossover === 'bearish_cross') strength += 15;
+  }
+  strength = Math.min(strength, 100);
+
+  let direction: TrendResult['direction'];
+  if (priceChange > 5 && strength > 60) direction = 'strong_up';
+  else if (priceChange > 1) direction = 'up';
+  else if (priceChange < -5 && strength > 60) direction = 'strong_down';
+  else if (priceChange < -1) direction = 'down';
+  else direction = 'sideways';
+
+  return { direction, strength, priceChange, higherHighs, higherLows };
+}
+
 // --- Momentum Score ---
 
 export function calcMomentum(
@@ -281,6 +505,8 @@ export function calcMomentum(
   macd: MacdResult | null,
   bollinger: BollingerResult | null,
   volume: VolumeProfileResult | null,
+  trend?: TrendResult | null,
+  sma?: SmaResult | null,
 ): MomentumResult {
   // RSI signal: oversold = +1 (buy), overbought = -1 (sell)
   let rsiSignal = 0;
@@ -311,8 +537,24 @@ export function calcMomentum(
     }
   }
 
-  // Weighted composite: RSI 30%, MACD 30%, Bollinger 25%, Volume 15%
-  const rawScore = (rsiSignal * 30 + macdSignal * 30 + bollingerSignal * 25 + volumeSignal * 15);
+  // Trend signal (new, defaults to 0 for backward compat)
+  let trendSignal = 0;
+  if (trend) {
+    if (trend.direction === 'strong_up' || trend.direction === 'up') trendSignal = 1;
+    else if (trend.direction === 'strong_down' || trend.direction === 'down') trendSignal = -1;
+  }
+
+  // SMA signal (new, defaults to 0 for backward compat)
+  let smaSignal = 0;
+  if (sma) {
+    if (sma.goldenCross) smaSignal = 1;
+    else if (sma.deathCross) smaSignal = -1;
+    else if (sma.trend === 'bullish') smaSignal = 0.5;
+    else if (sma.trend === 'bearish') smaSignal = -0.5;
+  }
+
+  // Weighted composite: RSI 20%, MACD 20%, Bollinger 15%, Volume 15%, Trend 20%, SMA 10%
+  const rawScore = (rsiSignal * 20 + macdSignal * 20 + bollingerSignal * 15 + volumeSignal * 15 + trendSignal * 20 + smaSignal * 10);
   const score = Math.max(-100, Math.min(100, rawScore));
 
   let label: MomentumResult['label'];
@@ -325,7 +567,7 @@ export function calcMomentum(
   return {
     score,
     label,
-    components: { rsiSignal, macdSignal, bollingerSignal, volumeSignal },
+    components: { rsiSignal, macdSignal, bollingerSignal, volumeSignal, trendSignal, smaSignal },
   };
 }
 
@@ -344,9 +586,18 @@ export function computeDeepAnalysis(
   // Minimum: need RSI + volume to be useful
   if (!rsi || !volume) return null;
 
+  // Tier 2: MACD (26+), Bollinger (20+), SMA (99+), VWAP, S/R
   const macd = calcMacd(candles);
   const bollinger = calcBollinger(candles);
-  const momentum = calcMomentum(rsi, macd, bollinger, volume);
+  const vwap = calcVwap(candles);
+  const sma = calcSma(candles);
+  const supportResistance = calcSupportResistance(candles);
+
+  // Trend uses SMA + MACD for richer signal
+  const trend = calcTrend(candles, sma, macd);
+
+  // Momentum now uses all signals
+  const momentum = calcMomentum(rsi, macd, bollinger, volume, trend, sma);
 
   // Default values for when indicators couldn't be calculated
   const defaultMacd: MacdResult = {
@@ -364,6 +615,10 @@ export function computeDeepAnalysis(
     bollinger: bollinger ?? defaultBollinger,
     volumeProfile: volume,
     momentum,
+    vwap,
+    sma,
+    supportResistance,
+    trend,
     meta: {
       chain,
       address,

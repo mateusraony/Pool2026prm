@@ -1152,7 +1152,35 @@ export interface DeepAnalysisData {
       macdSignal: number;
       bollingerSignal: number;
       volumeSignal: number;
+      trendSignal: number;
+      smaSignal: number;
     };
+  };
+  vwap: {
+    value: number;
+    deviation: number;
+    signal: 'above' | 'at' | 'below';
+  } | null;
+  sma: {
+    values: { period: number; value: number }[];
+    trend: 'bullish' | 'bearish' | 'neutral';
+    goldenCross: boolean;
+    deathCross: boolean;
+  } | null;
+  supportResistance: {
+    supports: number[];
+    resistances: number[];
+    nearestSupport: number | null;
+    nearestResistance: number | null;
+    distanceToSupport: number;
+    distanceToResistance: number;
+  } | null;
+  trend: {
+    direction: 'strong_up' | 'up' | 'sideways' | 'down' | 'strong_down';
+    strength: number;
+    priceChange: number;
+    higherHighs: boolean;
+    higherLows: boolean;
   };
   meta: {
     chain: string;
