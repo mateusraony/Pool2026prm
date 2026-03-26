@@ -65,6 +65,7 @@ export function IndicatorBar({
 
 interface SignalBadgeProps {
   signal: string;
+  variant?: 'bullish' | 'bearish' | 'neutral';
   className?: string;
 }
 
@@ -79,8 +80,12 @@ const signalStyles: Record<string, { bg: string; text: string; label: string }> 
   none: { bg: 'bg-muted', text: 'text-muted-foreground', label: 'Nenhum' },
 };
 
-export function SignalBadge({ signal, className }: SignalBadgeProps) {
-  const style = signalStyles[signal] ?? signalStyles.neutral;
+export function SignalBadge({ signal, variant, className }: SignalBadgeProps) {
+  const variantStyle = variant ? signalStyles[variant] : undefined;
+  const signalStyle = signalStyles[signal];
+  const style = variantStyle
+    ? { ...variantStyle, label: signalStyle?.label ?? signal }
+    : signalStyle ?? signalStyles.neutral;
   return (
     <span
       className={cn(
@@ -310,12 +315,148 @@ const momentumLabels: Record<string, string> = {
   'Strong Buy': 'Compra Forte',
 };
 
+// --- VwapSection ---
+
+export function VwapSection({ vwap }: { vwap: { value: number; deviation: number; signal: string } }) {
+  const variant = vwap.signal === 'above' ? 'bullish' : vwap.signal === 'below' ? 'bearish' : 'neutral';
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold">VWAP</h4>
+        <SignalBadge signal={vwap.signal} variant={variant} />
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-center">
+        <div className="rounded-lg bg-secondary/50 p-2">
+          <p className="text-xs text-muted-foreground">VWAP</p>
+          <p className="font-mono text-sm">{vwap.value.toFixed(4)}</p>
+        </div>
+        <div className="rounded-lg bg-secondary/50 p-2">
+          <p className="text-xs text-muted-foreground">Desvio</p>
+          <p className={cn('font-mono text-sm', vwap.deviation >= 0 ? 'text-green-500' : 'text-red-500')}>
+            {vwap.deviation >= 0 ? '+' : ''}{vwap.deviation.toFixed(2)}%
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- SmaSection ---
+
+export function SmaSection({ sma }: { sma: { values: { period: number; value: number }[]; trend: string; goldenCross: boolean; deathCross: boolean } }) {
+  const variant = sma.trend === 'bullish' ? 'bullish' : sma.trend === 'bearish' ? 'bearish' : 'neutral';
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold">SMA</h4>
+        <SignalBadge signal={sma.trend} variant={variant} />
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        {sma.values.map(v => (
+          <div key={v.period} className="rounded-lg bg-secondary/50 p-2">
+            <p className="text-xs text-muted-foreground">SMA {v.period}</p>
+            <p className="font-mono text-sm">{v.value.toFixed(4)}</p>
+          </div>
+        ))}
+      </div>
+      {sma.goldenCross && (
+        <p className="text-xs font-medium text-green-500">Golden Cross detectado</p>
+      )}
+      {sma.deathCross && (
+        <p className="text-xs font-medium text-red-500">Death Cross detectado</p>
+      )}
+    </div>
+  );
+}
+
+// --- SupportResistanceSection ---
+
+export function SupportResistanceSection({ sr }: { sr: { supports: number[]; resistances: number[]; nearestSupport: number | null; nearestResistance: number | null; distanceToSupport: number; distanceToResistance: number } }) {
+  return (
+    <div className="space-y-2">
+      <h4 className="text-sm font-semibold">Suporte e Resistencia</h4>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">Suportes</p>
+          {sr.supports.length > 0 ? sr.supports.map((s, i) => (
+            <div key={i} className="flex justify-between text-xs">
+              <span className="text-green-500">S{i + 1}</span>
+              <span className="font-mono">{s.toFixed(4)}</span>
+            </div>
+          )) : <p className="text-xs text-muted-foreground">Nenhum encontrado</p>}
+        </div>
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">Resistencias</p>
+          {sr.resistances.length > 0 ? sr.resistances.map((r, i) => (
+            <div key={i} className="flex justify-between text-xs">
+              <span className="text-red-500">R{i + 1}</span>
+              <span className="font-mono">{r.toFixed(4)}</span>
+            </div>
+          )) : <p className="text-xs text-muted-foreground">Nenhum encontrado</p>}
+        </div>
+      </div>
+      {sr.nearestSupport !== null && (
+        <div className="flex justify-between text-xs">
+          <span className="text-muted-foreground">Distancia ao suporte</span>
+          <span className="font-mono text-green-500">{sr.distanceToSupport.toFixed(2)}%</span>
+        </div>
+      )}
+      {sr.nearestResistance !== null && (
+        <div className="flex justify-between text-xs">
+          <span className="text-muted-foreground">Distancia a resistencia</span>
+          <span className="font-mono text-red-500">{sr.distanceToResistance.toFixed(2)}%</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- TrendSection ---
+
+export function TrendSection({ trend }: { trend: { direction: string; strength: number; priceChange: number; higherHighs: boolean; higherLows: boolean } }) {
+  const dirLabels: Record<string, string> = {
+    strong_up: 'Forte Alta', up: 'Alta', sideways: 'Lateral', down: 'Baixa', strong_down: 'Forte Baixa',
+  };
+  const variant = trend.direction.includes('up') ? 'bullish' : trend.direction.includes('down') ? 'bearish' : 'neutral';
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold">Tendencia</h4>
+        <SignalBadge signal={dirLabels[trend.direction] || trend.direction} variant={variant} />
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="rounded-lg bg-secondary/50 p-2">
+          <p className="text-xs text-muted-foreground">Variacao</p>
+          <p className={cn('font-mono text-sm', trend.priceChange >= 0 ? 'text-green-500' : 'text-red-500')}>
+            {trend.priceChange >= 0 ? '+' : ''}{trend.priceChange.toFixed(2)}%
+          </p>
+        </div>
+        <div className="rounded-lg bg-secondary/50 p-2">
+          <p className="text-xs text-muted-foreground">Forca</p>
+          <p className="font-mono text-sm">{trend.strength}/100</p>
+        </div>
+        <div className="rounded-lg bg-secondary/50 p-2">
+          <p className="text-xs text-muted-foreground">Padrao</p>
+          <p className="font-mono text-xs">
+            {trend.higherHighs && trend.higherLows ? 'HH + HL' : trend.higherHighs ? 'HH' : trend.higherLows ? 'HL' : '\u2014'}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- MomentumSection ---
+
 export function MomentumSection({ momentum }: MomentumSectionProps) {
   const componentLabels: { key: keyof typeof momentum.components; label: string }[] = [
     { key: 'rsiSignal', label: 'RSI' },
     { key: 'macdSignal', label: 'MACD' },
     { key: 'bollingerSignal', label: 'Bollinger' },
     { key: 'volumeSignal', label: 'Volume' },
+    { key: 'trendSignal', label: 'Trend' },
+    { key: 'smaSignal', label: 'SMA' },
   ];
 
   return (
@@ -354,7 +495,7 @@ export function MomentumSection({ momentum }: MomentumSectionProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
         {componentLabels.map(({ key, label }) => {
           const val = momentum.components[key];
           return (

@@ -9,6 +9,10 @@ import {
   MacdSection,
   BollingerSection,
   VolumeSection,
+  VwapSection,
+  SmaSection,
+  SupportResistanceSection,
+  TrendSection,
 } from '@/components/common/TechnicalSection';
 import { ChevronDown, ChevronUp, RefreshCw, Clock, AlertCircle, BarChart3 } from 'lucide-react';
 
@@ -141,6 +145,30 @@ export function DeepAnalysisPanel({ chain, address, className }: DeepAnalysisPan
           <BollingerSection bollinger={data.bollinger} />
           <div className="border-t border-border/20" />
           <VolumeSection volumeProfile={data.volumeProfile} />
+          {data.trend && (
+            <>
+              <div className="border-t border-border/20" />
+              <TrendSection trend={data.trend} />
+            </>
+          )}
+          {data.vwap && (
+            <>
+              <div className="border-t border-border/20" />
+              <VwapSection vwap={data.vwap} />
+            </>
+          )}
+          {data.sma && (
+            <>
+              <div className="border-t border-border/20" />
+              <SmaSection sma={data.sma} />
+            </>
+          )}
+          {data.supportResistance && (
+            <>
+              <div className="border-t border-border/20" />
+              <SupportResistanceSection sr={data.supportResistance} />
+            </>
+          )}
         </div>
       )}
 
