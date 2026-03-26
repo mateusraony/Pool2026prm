@@ -29,7 +29,7 @@ export function useDeepAnalysis(
     enabled: enabled && !!chain && !!address,
     staleTime: timeframe === 'hour' ? 300_000 : 900_000,
     refetchInterval: timeframe === 'hour' ? 600_000 : 1_800_000,
-    retry: 1,
+    retry: 2,
   });
 
   return { data, isLoading, error: error as Error | null, refetch };

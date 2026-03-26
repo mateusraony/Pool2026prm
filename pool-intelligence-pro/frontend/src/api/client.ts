@@ -753,6 +753,11 @@ export async function deleteNote(id: string): Promise<void> {
   await api.delete(`/notes/${id}`);
 }
 
+export async function updateNote(id: string, text: string, tags?: string[]): Promise<PoolNote> {
+  const { data } = await api.put(`/notes/${id}`, { text, tags });
+  return data.data;
+}
+
 export async function fetchWatchlist(): Promise<{ poolId: string; chain: string; address: string }[]> {
   const { data } = await api.get('/watchlist');
   return data.data || [];
@@ -1201,8 +1206,14 @@ export async function fetchDeepAnalysis(
       params: { timeframe },
     });
     return data.success ? data.data : null;
-  } catch {
-    return null;
+  } catch (err: unknown) {
+    // 404 = insufficient data → return null (not an error, just no data)
+    if (err && typeof err === 'object' && 'response' in err) {
+      const axiosErr = err as { response?: { status?: number } };
+      if (axiosErr.response?.status === 404) return null;
+    }
+    // Other errors (500, network) → throw so React Query can retry
+    throw err;
   }
 }
 

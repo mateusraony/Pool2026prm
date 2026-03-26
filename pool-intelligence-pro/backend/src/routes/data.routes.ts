@@ -132,6 +132,26 @@ router.post('/notes', validate(noteSchema), async (req, res) => {
   }
 });
 
+router.put('/notes/:id', validateIdParam, async (req, res) => {
+  try {
+    const { text, tags } = req.body;
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+      return res.status(400).json({ success: false, error: 'Text is required' });
+    }
+    const note = await getPrisma().note.update({
+      where: { id: req.params.id },
+      data: {
+        text: text.trim(),
+        ...(tags !== undefined ? { tags } : {}),
+      },
+    });
+    res.json({ success: true, data: note });
+  } catch (error) {
+    logService.error('SYSTEM', 'PUT /notes/:id failed', { error });
+    res.status(500).json({ success: false, error: 'Internal error' });
+  }
+});
+
 router.delete('/notes/:id', validateIdParam, async (req, res) => {
   try {
     await getPrisma().note.delete({ where: { id: req.params.id } });

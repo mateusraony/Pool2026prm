@@ -44,8 +44,30 @@ export function DeepAnalysisPanel({ chain, address, className }: DeepAnalysisPan
     );
   }
 
-  // Estado de erro ou dados insuficientes
-  if (error || (data === null && !isLoading)) {
+  // Estado de erro (API falhou)
+  if (error) {
+    return (
+      <div className={cn('glass-card p-5', className)}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold flex items-center gap-1.5">
+            <BarChart3 className="h-4 w-4 text-primary" />
+            Analise Tecnica
+          </h3>
+          <Button variant="ghost" size="sm" onClick={() => refetch()} className="h-7 px-2 text-xs">
+            <RefreshCw className="h-3 w-3 mr-1" />
+            Tentar novamente
+          </Button>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <AlertCircle className="h-4 w-4 text-destructive" />
+          <span>Erro ao carregar analise tecnica. Clique para tentar novamente.</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Dados insuficientes (API retornou null)
+  if (data === null && !isLoading) {
     return (
       <div className={cn('glass-card p-5', className)}>
         <div className="flex items-center justify-between mb-3">
