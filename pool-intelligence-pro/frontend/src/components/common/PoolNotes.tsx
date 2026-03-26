@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { fetchNotes, createNote, deleteNote, type PoolNote } from '@/api/client';
-import { MessageSquarePlus, Trash2, Loader2, StickyNote, Tag } from 'lucide-react';
+import { fetchNotes, createNote, deleteNote, updateNote, type PoolNote } from '@/api/client';
+import { MessageSquarePlus, Trash2, Loader2, StickyNote, Tag, Pencil } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -24,6 +24,9 @@ export function PoolNotes({ poolId, className }: PoolNotesProps) {
   const [text, setText] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isAdding, setIsAdding] = useState(false);
+  const [editingNote, setEditingNote] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const [editTags, setEditTags] = useState<string[]>([]);
 
   const { data: notes = [], isLoading } = useQuery({
     queryKey: ['pool-notes', poolId],
@@ -52,10 +55,40 @@ export function PoolNotes({ poolId, className }: PoolNotesProps) {
     onError: () => toast.error('Erro ao remover nota'),
   });
 
+  const editMutation = useMutation({
+    mutationFn: () => updateNote(editingNote!, editText.trim(), editTags),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pool-notes', poolId] });
+      setEditingNote(null);
+      setEditText('');
+      setEditTags([]);
+      toast.success('Nota atualizada');
+    },
+    onError: () => toast.error('Erro ao atualizar nota'),
+  });
+
   const toggleTag = (tag: string) => {
     setSelectedTags(prev =>
       prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
     );
+  };
+
+  const startEdit = (note: PoolNote) => {
+    setEditingNote(note.id);
+    setEditText(note.text);
+    setEditTags(note.tags || []);
+  };
+
+  const toggleEditTag = (tag: string) => {
+    setEditTags(prev =>
+      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+    );
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editText.trim()) return;
+    editMutation.mutate();
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -140,34 +173,84 @@ export function PoolNotes({ poolId, className }: PoolNotesProps) {
         <div className="space-y-3">
           {notes.map((note: PoolNote) => (
             <div key={note.id} className="group p-3 rounded-lg bg-secondary/20 border border-border/30 hover:border-border/60 transition-colors">
-              <div className="flex items-start justify-between">
-                <p className="text-sm whitespace-pre-wrap flex-1">{note.text}</p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity ml-2 h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                  onClick={() => deleteMutation.mutate(note.id)}
-                  disabled={deleteMutation.isPending}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-              <div className="flex items-center gap-2 mt-2">
-                {note.tags?.map(tag => (
-                  <Badge key={tag} variant="outline" className="text-[10px] px-1.5 py-0">
-                    {tag}
-                  </Badge>
-                ))}
-                <span className="text-[10px] text-muted-foreground ml-auto font-mono">
-                  {(() => {
-                    try {
-                      return formatDistanceToNow(new Date(note.createdAt), { addSuffix: true, locale: ptBR });
-                    } catch {
-                      return note.createdAt;
-                    }
-                  })()}
-                </span>
-              </div>
+              {editingNote === note.id ? (
+                <form onSubmit={handleEditSubmit} className="space-y-3">
+                  <textarea
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    className="w-full min-h-[60px] bg-transparent border border-border/50 rounded-md p-2 outline-none resize-none text-sm placeholder:text-muted-foreground"
+                    autoFocus
+                  />
+                  <div className="flex flex-wrap gap-1.5">
+                    {SUGGESTED_TAGS.map(tag => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => toggleEditTag(tag)}
+                        className={cn(
+                          'px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors',
+                          editTags.includes(tag)
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-secondary/80 text-muted-foreground hover:bg-secondary'
+                        )}
+                      >
+                        <Tag className="h-2.5 w-2.5 inline mr-0.5" />
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setEditingNote(null)}>
+                      Cancelar
+                    </Button>
+                    <Button type="submit" size="sm" disabled={!editText.trim() || editMutation.isPending}>
+                      {editMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                      Salvar
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <div className="flex items-start justify-between">
+                    <p className="text-sm whitespace-pre-wrap flex-1">{note.text}</p>
+                    <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
+                        onClick={() => startEdit(note)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => deleteMutation.mutate(note.id)}
+                        disabled={deleteMutation.isPending}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    {note.tags?.map(tag => (
+                      <Badge key={tag} variant="outline" className="text-[10px] px-1.5 py-0">
+                        {tag}
+                      </Badge>
+                    ))}
+                    <span className="text-[10px] text-muted-foreground ml-auto font-mono">
+                      {(() => {
+                        try {
+                          return formatDistanceToNow(new Date(note.createdAt), { addSuffix: true, locale: ptBR });
+                        } catch {
+                          return note.createdAt;
+                        }
+                      })()}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           ))}
         </div>
