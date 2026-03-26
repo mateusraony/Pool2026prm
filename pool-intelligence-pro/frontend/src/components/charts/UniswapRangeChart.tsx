@@ -1,0 +1,457 @@
+import { useState, useRef, useMemo, useEffect, useCallback, useId } from 'react';
+import { cn } from '@/lib/utils';
+
+/* ──────────────────────────────────────────────
+   Types
+   ────────────────────────────────────────────── */
+
+interface PricePoint {
+  timestamp: number;
+  price: number;
+}
+
+interface LiquidityTick {
+  price: number;
+  liquidity: number;
+}
+
+export interface UniswapRangeChartProps {
+  /** Price history (close prices over time) */
+  priceHistory?: PricePoint[];
+  currentPrice: number;
+  rangeLower: number;
+  rangeUpper: number;
+  /** Callback when user drags range handles */
+  onRangeChange?: (lower: number, upper: number) => void;
+  /** Real liquidity distribution from API */
+  liquidityData?: LiquidityTick[];
+  /** Chart body height in px (default 300) */
+  height?: number;
+  /** Accent color (default #FF37C7) */
+  accentColor?: string;
+  className?: string;
+}
+
+/* ──────────────────────────────────────────────
+   Constants
+   ────────────────────────────────────────────── */
+
+const PAD_TOP = 12;
+const PAD_BOTTOM = 12;
+const SCROLLBAR_W = 16;
+const HANDLE_R = 6;
+const TIME_AXIS_H = 22;
+
+/* ──────────────────────────────────────────────
+   Helpers
+   ────────────────────────────────────────────── */
+
+function clamp(v: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+function formatPrice(p: number): string {
+  if (p >= 1000) return `$${(p / 1000).toFixed(1)}K`;
+  if (p >= 1) return `$${p.toFixed(2)}`;
+  if (p >= 0.0001) return `$${p.toFixed(6)}`;
+  return `$${p.toExponential(2)}`;
+}
+
+function formatDate(ts: number): string {
+  const d = new Date(ts);
+  return d.toLocaleDateString('pt-BR', { month: 'short', day: 'numeric' });
+}
+
+function generateLiquidity(currentPrice: number, pMin: number, pMax: number, count = 20): LiquidityTick[] {
+  const ticks: LiquidityTick[] = [];
+  const step = (pMax - pMin) / count;
+  for (let i = 0; i <= count; i++) {
+    const price = pMin + i * step;
+    const dist = Math.abs(price - currentPrice) / currentPrice;
+    const liq = Math.max(5, Math.exp(-dist * dist * 6) * 100 + Math.abs(Math.sin(price * 12345.6789)) * 15);
+    ticks.push({ price, liquidity: liq });
+  }
+  return ticks;
+}
+
+/* ──────────────────────────────────────────────
+   Component
+   ────────────────────────────────────────────── */
+
+export function UniswapRangeChart({
+  priceHistory = [],
+  currentPrice,
+  rangeLower,
+  rangeUpper,
+  onRangeChange,
+  liquidityData,
+  height = 300,
+  accentColor = '#FF37C7',
+  className,
+}: UniswapRangeChartProps) {
+  const uid = useId().replace(/:/g, '');
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(700);
+  const [drag, setDrag] = useState<'min' | 'max' | 'range' | null>(null);
+  const dragRef = useRef({ startY: 0, startLower: 0, startUpper: 0 });
+
+  // ── Responsive width ──
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w && w > 0) setWidth(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // ── Layout ──
+  const chartW = width * 0.84;
+  const liqX = chartW;
+  const liqW = width - chartW - SCROLLBAR_W;
+  const scrollX = width - SCROLLBAR_W;
+  const bodyH = height;
+
+  // ── Price scale ──
+  const { pMin, pMax } = useMemo(() => {
+    const prices = priceHistory.map((p) => p.price);
+    if (prices.length === 0) {
+      const spread = currentPrice * 0.3;
+      return { pMin: currentPrice - spread, pMax: currentPrice + spread };
+    }
+    const lo = Math.min(...prices, rangeLower, currentPrice);
+    const hi = Math.max(...prices, rangeUpper, currentPrice);
+    const pad = (hi - lo) * 0.08;
+    return { pMin: lo - pad, pMax: hi + pad };
+  }, [priceHistory, rangeLower, rangeUpper, currentPrice]);
+
+  const priceToY = useCallback(
+    (p: number) => PAD_TOP + ((pMax - p) / (pMax - pMin)) * (bodyH - PAD_TOP - PAD_BOTTOM),
+    [pMin, pMax, bodyH],
+  );
+
+  const yToPrice = useCallback(
+    (y: number) => pMax - ((y - PAD_TOP) / (bodyH - PAD_TOP - PAD_BOTTOM)) * (pMax - pMin),
+    [pMin, pMax, bodyH],
+  );
+
+  // ── Time scale ──
+  const { tMin, tMax } = useMemo(() => {
+    if (priceHistory.length === 0) return { tMin: 0, tMax: 1 };
+    return { tMin: priceHistory[0].timestamp, tMax: priceHistory[priceHistory.length - 1].timestamp };
+  }, [priceHistory]);
+
+  const timeToX = useCallback(
+    (t: number) => ((t - tMin) / (tMax - tMin || 1)) * chartW,
+    [tMin, tMax, chartW],
+  );
+
+  // ── Price path ──
+  const pricePath = useMemo(() => {
+    if (priceHistory.length < 2) return '';
+    return priceHistory
+      .map((p, i) => `${i === 0 ? 'M' : 'L'}${timeToX(p.timestamp).toFixed(1)},${priceToY(p.price).toFixed(1)}`)
+      .join('');
+  }, [priceHistory, timeToX, priceToY]);
+
+  // ── Liquidity bars ──
+  const liqBars = useMemo(() => {
+    const data = liquidityData && liquidityData.length > 0 ? liquidityData : generateLiquidity(currentPrice, pMin, pMax);
+    const maxLiq = Math.max(...data.map((d) => d.liquidity), 1);
+    const barCount = data.length;
+    const barH = barCount > 0 ? Math.max(4, (bodyH - PAD_TOP - PAD_BOTTOM) / barCount - 1) : 10;
+
+    return data.map((d) => {
+      const y = priceToY(d.price) - barH / 2;
+      const w = (d.liquidity / maxLiq) * liqW;
+      const inRange = d.price >= rangeLower && d.price <= rangeUpper;
+      return { y, w, barH, inRange };
+    });
+  }, [liquidityData, currentPrice, pMin, pMax, rangeLower, rangeUpper, priceToY, bodyH, liqW]);
+
+  // ── Range positions ──
+  const rangeTopY = priceToY(rangeUpper);
+  const rangeBotY = priceToY(rangeLower);
+  const rangeH = rangeBotY - rangeTopY;
+  const curY = priceToY(currentPrice);
+  const centerY = (rangeTopY + rangeBotY) / 2;
+
+  // ── Time labels ──
+  const timeLabels = useMemo(() => {
+    if (priceHistory.length < 4) return [];
+    const count = Math.min(5, Math.floor(chartW / 120));
+    const labels: { x: number; text: string }[] = [];
+    for (let i = 1; i <= count; i++) {
+      const idx = Math.floor((i / (count + 1)) * (priceHistory.length - 1));
+      const p = priceHistory[idx];
+      labels.push({ x: timeToX(p.timestamp), text: formatDate(p.timestamp) });
+    }
+    return labels;
+  }, [priceHistory, chartW, timeToX]);
+
+  // ── Drag handlers ──
+  const startDrag = useCallback(
+    (type: 'min' | 'max' | 'range', e: React.MouseEvent | React.TouchEvent) => {
+      if (!onRangeChange) return;
+      e.preventDefault();
+      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+      dragRef.current = { startY: clientY, startLower: rangeLower, startUpper: rangeUpper };
+      setDrag(type);
+    },
+    [onRangeChange, rangeLower, rangeUpper],
+  );
+
+  useEffect(() => {
+    if (!drag || !onRangeChange) return;
+
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+      const dy = clientY - dragRef.current.startY;
+      // Y is inverted (up = higher price)
+      const dp = -(dy / (bodyH - PAD_TOP - PAD_BOTTOM)) * (pMax - pMin);
+      const minSpread = (pMax - pMin) * 0.02;
+
+      if (drag === 'max') {
+        const newUpper = clamp(dragRef.current.startUpper + dp, dragRef.current.startLower + minSpread, pMax);
+        onRangeChange(dragRef.current.startLower, newUpper);
+      } else if (drag === 'min') {
+        const newLower = clamp(dragRef.current.startLower + dp, pMin, dragRef.current.startUpper - minSpread);
+        onRangeChange(newLower, dragRef.current.startUpper);
+      } else {
+        // range drag
+        const span = dragRef.current.startUpper - dragRef.current.startLower;
+        let newLower = dragRef.current.startLower + dp;
+        let newUpper = dragRef.current.startUpper + dp;
+        if (newLower < pMin) { newLower = pMin; newUpper = pMin + span; }
+        if (newUpper > pMax) { newUpper = pMax; newLower = pMax - span; }
+        onRangeChange(newLower, newUpper);
+      }
+    };
+
+    const onUp = () => setDrag(null);
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchmove', onMove);
+    window.addEventListener('touchend', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onUp);
+    };
+  }, [drag, onRangeChange, bodyH, pMax, pMin]);
+
+  // ── Render ──
+  const hasPriceData = pricePath.length > 0;
+  const maskId = `rm-${uid}`;
+  const interactive = !!onRangeChange;
+
+  return (
+    <div ref={containerRef} className={cn('select-none', className)}>
+      <svg width="100%" height={bodyH} style={{ touchAction: 'manipulation' }}>
+        {/* ── Defs ── */}
+        <defs>
+          <mask id={maskId}>
+            <rect x={0} y={rangeTopY} width={chartW} height={rangeH} fill="white" />
+          </mask>
+        </defs>
+
+        {/* ── Price line (base — dimmed) ── */}
+        {hasPriceData && (
+          <path d={pricePath} fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth={2} />
+        )}
+
+        {/* ── Price line (active — accent in-range) ── */}
+        {hasPriceData && (
+          <path d={pricePath} fill="none" stroke={accentColor} strokeWidth={2} mask={`url(#${maskId})`} />
+        )}
+
+        {/* ── Liquidity bars ── */}
+        {liqBars.map((b, i) => (
+          <rect
+            key={i}
+            x={liqX + liqW - b.w}
+            y={b.y}
+            width={b.w}
+            height={b.barH}
+            rx={1}
+            fill={b.inRange ? accentColor : '#FFFFFF'}
+            opacity={b.inRange ? 0.5 : 0.15}
+          />
+        ))}
+
+        {/* ── Range area overlay ── */}
+        <rect x={0} y={rangeTopY} width={width} height={rangeH} fill={accentColor} opacity={0.15} style={{ pointerEvents: 'none' }} />
+
+        {/* ── Interactive range bg (for drag-move) ── */}
+        {interactive && (
+          <rect
+            x={0}
+            y={rangeTopY}
+            width={chartW}
+            height={rangeH}
+            fill="transparent"
+            cursor="move"
+            onMouseDown={(e) => startDrag('range', e)}
+            onTouchStart={(e) => startDrag('range', e)}
+          />
+        )}
+
+        {/* ── Min/Max boundary lines ── */}
+        <line x1={0} x2={width} y1={rangeTopY} y2={rangeTopY} stroke={accentColor} strokeWidth={2} opacity={0.1} />
+        <line x1={0} x2={width} y1={rangeBotY} y2={rangeBotY} stroke={accentColor} strokeWidth={2} opacity={0.1} />
+
+        {/* ── Invisible drag targets for min/max ── */}
+        {interactive && (
+          <>
+            <line
+              x1={0} x2={width} y1={rangeTopY} y2={rangeTopY}
+              stroke="transparent" strokeWidth={24} cursor="ns-resize"
+              onMouseDown={(e) => startDrag('max', e)}
+              onTouchStart={(e) => startDrag('max', e)}
+            />
+            <line
+              x1={0} x2={width} y1={rangeBotY} y2={rangeBotY}
+              stroke="transparent" strokeWidth={24} cursor="ns-resize"
+              onMouseDown={(e) => startDrag('min', e)}
+              onTouchStart={(e) => startDrag('min', e)}
+            />
+          </>
+        )}
+
+        {/* ── Scrollbar track ── */}
+        <rect x={scrollX} y={0} width={SCROLLBAR_W} height={bodyH} fill="rgba(255,255,255,0.08)" rx={4} />
+
+        {/* ── Scrollbar thumb (range indicator) ── */}
+        <rect
+          x={scrollX}
+          y={rangeTopY}
+          width={SCROLLBAR_W}
+          height={rangeH}
+          fill={accentColor}
+          rx={8}
+          opacity={0.85}
+          cursor={interactive ? 'move' : 'default'}
+          onMouseDown={interactive ? (e) => startDrag('range', e) : undefined}
+          onTouchStart={interactive ? (e) => startDrag('range', e) : undefined}
+        />
+
+        {/* ── Max handle (top circle) ── */}
+        <circle
+          cx={scrollX + SCROLLBAR_W / 2}
+          cy={rangeTopY + HANDLE_R + 2}
+          r={HANDLE_R}
+          fill="white"
+          stroke="rgba(0,0,0,0.12)"
+          strokeWidth={1}
+          cursor={interactive ? 'ns-resize' : 'default'}
+          style={{ filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.15))' }}
+          onMouseDown={interactive ? (e) => startDrag('max', e) : undefined}
+          onTouchStart={interactive ? (e) => startDrag('max', e) : undefined}
+        />
+
+        {/* ── Min handle (bottom circle) ── */}
+        <circle
+          cx={scrollX + SCROLLBAR_W / 2}
+          cy={rangeBotY - HANDLE_R - 2}
+          r={HANDLE_R}
+          fill="white"
+          stroke="rgba(0,0,0,0.12)"
+          strokeWidth={1}
+          cursor={interactive ? 'ns-resize' : 'default'}
+          style={{ filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.15))' }}
+          onMouseDown={interactive ? (e) => startDrag('min', e) : undefined}
+          onTouchStart={interactive ? (e) => startDrag('min', e) : undefined}
+        />
+
+        {/* ── Center grip handle ── */}
+        <rect
+          x={scrollX + 2}
+          y={centerY - 3}
+          width={SCROLLBAR_W - 4}
+          height={6}
+          fill="white"
+          stroke="rgba(0,0,0,0.1)"
+          strokeWidth={0.5}
+          rx={2}
+          cursor={interactive ? 'move' : 'default'}
+          style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))' }}
+          onMouseDown={interactive ? (e) => startDrag('range', e) : undefined}
+          onTouchStart={interactive ? (e) => startDrag('range', e) : undefined}
+        />
+        {/* grip lines */}
+        {[-1.25, 0, 1.25].map((off) => (
+          <rect
+            key={off}
+            x={scrollX + SCROLLBAR_W / 2 + off - 0.25}
+            y={centerY - 1.5}
+            width={0.5}
+            height={3}
+            fill="rgba(0,0,0,0.25)"
+            style={{ pointerEvents: 'none' }}
+          />
+        ))}
+
+        {/* ── Current price line ── */}
+        <line
+          x1={0}
+          x2={width - SCROLLBAR_W}
+          y1={curY}
+          y2={curY}
+          stroke="rgba(255,255,255,0.5)"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeDasharray="0,6"
+          opacity={0.7}
+        />
+
+        {/* ── Current price dot ── */}
+        {hasPriceData && <circle cx={chartW} cy={curY} r={4} fill={accentColor} />}
+
+        {/* ── Price labels (right side of scrollbar) ── */}
+        <text x={scrollX - 4} y={rangeTopY - 4} textAnchor="end" style={{ fill: accentColor, fontSize: 10, fontFamily: 'monospace' }}>
+          {formatPrice(rangeUpper)}
+        </text>
+        <text x={scrollX - 4} y={rangeBotY + 12} textAnchor="end" style={{ fill: accentColor, fontSize: 10, fontFamily: 'monospace' }}>
+          {formatPrice(rangeLower)}
+        </text>
+        <text x={4} y={curY - 6} textAnchor="start" style={{ fill: 'rgba(255,255,255,0.65)', fontSize: 10, fontFamily: 'monospace' }}>
+          {formatPrice(currentPrice)}
+        </text>
+      </svg>
+
+      {/* ── Time axis ── */}
+      {timeLabels.length > 0 && (
+        <svg width="100%" height={TIME_AXIS_H}>
+          {timeLabels.map((l, i) => (
+            <text
+              key={i}
+              x={l.x}
+              y={14}
+              textAnchor="middle"
+              style={{ fill: 'rgba(255,255,255,0.5)', fontSize: 11, fontFamily: 'sans-serif' }}
+            >
+              {l.text}
+            </text>
+          ))}
+        </svg>
+      )}
+
+      {/* ── Info bar ── */}
+      <div className="flex items-center justify-between text-[10px] text-muted-foreground mt-1 px-1 font-mono">
+        <span>
+          Range: {formatPrice(rangeLower)} — {formatPrice(rangeUpper)}
+        </span>
+        <span>
+          Largura: {((rangeUpper - rangeLower) / currentPrice * 100).toFixed(1)}%
+        </span>
+        <span>Preco atual: {formatPrice(currentPrice)}</span>
+      </div>
+    </div>
+  );
+}
+
+export default UniswapRangeChart;

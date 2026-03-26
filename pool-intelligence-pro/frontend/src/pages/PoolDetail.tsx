@@ -11,7 +11,9 @@ import {
   fetchPoolDetail, fetchFavorites, addFavorite, removeFavorite,
   fetchNotes, createNote, deleteNote,
   calcRange, UnifiedPool, RangeResult, FeeEstimate, ILRiskResult,
+  fetchOhlcv, fetchLiquidityDistribution,
 } from '../api/client';
+import { UniswapRangeChart } from '@/components/charts/UniswapRangeChart';
 import { feeTierToBps, feeTierToPercent } from '../data/constants';
 
 // ============================================================
@@ -281,6 +283,22 @@ export default function PoolDetailPage() {
     staleTime: 30000,
   });
 
+  // OHLCV price history for UniswapRangeChart
+  const { data: ohlcvData } = useQuery({
+    queryKey: ['ohlcv', chain, address],
+    queryFn: () => fetchOhlcv(chain!, address!, 'hour', 168),
+    enabled: !!chain && !!address,
+    staleTime: 300000,
+  });
+
+  // Liquidity distribution for UniswapRangeChart
+  const { data: liquidityData } = useQuery({
+    queryKey: ['liquidity-dist', chain, address],
+    queryFn: () => fetchLiquidityDistribution(chain!, address!),
+    enabled: !!chain && !!address,
+    staleTime: 300000,
+  });
+
   const toggleFav = useCallback(async () => {
     if (!chain || !address || !data?.pool) return;
     const pool = data.pool;
@@ -517,6 +535,19 @@ export default function PoolDetailPage() {
           {calcLoading && <div className="text-center py-4"><RefreshCw className="w-5 h-5 animate-spin mx-auto text-primary-500" /></div>}
           {selectedRange && pool.price && (
             <RangeDisplay range={selectedRange} price={pool.price} mode={riskMode} />
+          )}
+
+          {/* UniswapRangeChart — visual range + price history */}
+          {selectedRange && pool.price && (
+            <UniswapRangeChart
+              currentPrice={pool.price}
+              rangeLower={selectedRange.lower}
+              rangeUpper={selectedRange.upper}
+              priceHistory={ohlcvData?.candles?.map(c => ({ timestamp: c.timestamp, price: c.close })) ?? []}
+              liquidityData={liquidityData?.bars?.map(b => ({ price: b.price, liquidity: b.liquidity })) ?? undefined}
+              height={260}
+              className="rounded-lg border border-dark-700"
+            />
           )}
 
           {/* IL Risk + Fee Estimate */}
