@@ -153,7 +153,9 @@ export function calcRsi(candles: OhlcvCandle[], periods: number = 14): RsiResult
   }
 
   let rsi: number;
-  if (avgLoss === 0) {
+  if (avgGain === 0 && avgLoss === 0) {
+    rsi = 50; // No movement = neutral
+  } else if (avgLoss === 0) {
     rsi = 100;
   } else if (avgGain === 0) {
     rsi = 0;
@@ -419,7 +421,7 @@ export function calcSupportResistance(candles: OhlcvCandle[], levels: number = 3
     for (let i = 1; i < sorted.length; i++) {
       const lastCluster = clusters[clusters.length - 1];
       const clusterAvg = lastCluster.reduce((a, b) => a + b, 0) / lastCluster.length;
-      if (Math.abs(sorted[i] - clusterAvg) / clusterAvg <= 0.005) {
+      if (clusterAvg === 0 || Math.abs(sorted[i] - clusterAvg) / Math.abs(clusterAvg) <= 0.005) {
         lastCluster.push(sorted[i]);
       } else {
         clusters.push([sorted[i]]);

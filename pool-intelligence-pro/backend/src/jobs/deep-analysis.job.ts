@@ -21,8 +21,8 @@ export async function runDeepAnalysisJob(): Promise<{ analyzed: number; errors: 
     const prisma = getPrisma();
     const favorites = await prisma.favorite.findMany({ select: { poolId: true } });
     for (const f of favorites) poolIds.add(f.poolId);
-  } catch {
-    logService.warn('SYSTEM', 'Could not fetch favorites from DB');
+  } catch (error: unknown) {
+    logService.warn('SYSTEM', 'Could not fetch favorites from DB', { error });
   }
 
   // Top recomendações do MemoryStore
@@ -60,8 +60,9 @@ export async function runDeepAnalysisJob(): Promise<{ analyzed: number; errors: 
         cacheService.set(cacheKey, analysis, 300);
         analyzed++;
       }
-    } catch {
+    } catch (error: unknown) {
       errors++;
+      logService.warn('SYSTEM', 'Deep analysis failed for pool', { poolId, error });
     }
   }
 
