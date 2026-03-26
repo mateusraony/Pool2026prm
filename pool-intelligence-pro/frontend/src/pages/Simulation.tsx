@@ -2,9 +2,10 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TrendingUp, TrendingDown, Clock, Fuel, DollarSign, AlertTriangle, ArrowLeft, ExternalLink, Bell, BellRing, Check } from 'lucide-react';
-import { fetchPool, fetchPools, createRangePosition, fetchRangePositions, deleteRangePosition, calcRange, Pool, Score } from '../api/client';
+import { fetchPool, fetchPools, createRangePosition, fetchRangePositions, deleteRangePosition, calcRange, fetchOhlcv, fetchLiquidityDistribution, Pool, Score } from '../api/client';
 import { feeTierToBps, feeTierToPercent } from '../data/constants';
 import InteractiveChart from '../components/charts/InteractiveChart';
+import { UniswapRangeChart } from '@/components/charts/UniswapRangeChart';
 import clsx from 'clsx';
 
 function formatNum(num: number): string {
@@ -115,6 +116,29 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
     enabled: currentPrice > 0,
     staleTime: 60_000,
   });
+
+  // OHLCV data for UniswapRangeChart price history
+  const { data: ohlcvData } = useQuery({
+    queryKey: ['ohlcv-sim', pool.chain, pool.poolAddress, 'hour'],
+    queryFn: () => fetchOhlcv(pool.chain || '', pool.poolAddress || '', 'hour', 168),
+    enabled: !!(pool.chain && pool.poolAddress),
+    staleTime: 300_000,
+  });
+
+  const { data: liqData } = useQuery({
+    queryKey: ['liquidity-sim', pool.chain, pool.poolAddress],
+    queryFn: () => fetchLiquidityDistribution(pool.chain || '', pool.poolAddress || '', 50),
+    enabled: !!(pool.chain && pool.poolAddress),
+    staleTime: 300_000,
+  });
+
+  const priceHistoryData = useMemo(() => {
+    if (!ohlcvData?.candles) return [];
+    return ohlcvData.candles.map((c: any) => ({ timestamp: c.timestamp * 1000, price: c.close }));
+  }, [ohlcvData]);
+
+  // Color based on current mode
+  const modeChartColor = mode === 'DEFENSIVE' ? '#10b981' : mode === 'AGGRESSIVE' ? '#ef4444' : '#FF37C7';
 
   const metrics = useMemo(() => {
     const rangeWidth = currentPrice > 0 ? ((rangeUpper - rangeLower) / currentPrice) * 100 : 0;
@@ -283,7 +307,21 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
         </div>
       )}
 
-      {/* Interactive Chart */}
+      {/* Uniswap-style Range Chart (primary) */}
+      {!priceUnavailable && (
+        <UniswapRangeChart
+          priceHistory={priceHistoryData}
+          currentPrice={currentPrice}
+          rangeLower={rangeLower}
+          rangeUpper={rangeUpper}
+          onRangeChange={handleRangeChange}
+          liquidityData={liqData?.bars?.map((b: any) => ({ price: b.price, liquidity: b.liquidity }))}
+          height={300}
+          accentColor={modeChartColor}
+        />
+      )}
+
+      {/* Interactive Chart (secondary) */}
       {!priceUnavailable && (
         <InteractiveChart
           currentPrice={currentPrice}

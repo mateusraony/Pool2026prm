@@ -1,8 +1,9 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { RangeChart } from '@/components/common/RangeChart';
+import { UniswapRangeChart } from '@/components/charts/UniswapRangeChart';
 import { StatCard } from '@/components/common/StatCard';
 import { PerformanceCharts } from '@/components/charts/PerformanceCharts';
 import { CandlestickChart, type Timeframe } from '@/components/charts/CandlestickChart';
@@ -30,7 +31,7 @@ import {
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
-import { fetchPoolDetail, addFavorite, fetchOhlcv, API_BASE_URL } from '@/api/client';
+import { fetchPoolDetail, addFavorite, fetchOhlcv, fetchLiquidityDistribution, API_BASE_URL } from '@/api/client';
 import { PoolMetricsChart } from '@/components/charts/PoolMetricsChart';
 import { unifiedPoolToViewPool } from '@/data/adapters';
 import { networkColors, dexLogos } from '@/data/constants';
@@ -135,6 +136,20 @@ export default function ScoutPoolDetail() {
     staleTime: ohlcvTimeframe === 'hour' ? 300000 : 900000,
     retry: 1,
   });
+
+  // Liquidity distribution query for UniswapRangeChart
+  const { data: liqData } = useQuery({
+    queryKey: ['liquidity-distribution', chain, address],
+    queryFn: () => fetchLiquidityDistribution(chain!, address!, 50),
+    enabled: !!(chain && address && pool),
+    staleTime: 300_000,
+  });
+
+  // Price history derived from OHLCV candles for UniswapRangeChart
+  const priceHistory = useMemo(() => {
+    if (!ohlcvData?.candles) return [];
+    return ohlcvData.candles.map((c: any) => ({ timestamp: c.timestamp * 1000, price: c.close }));
+  }, [ohlcvData]);
 
   // Mutation: add to favorites
   const favoriteMutation = useMutation({
@@ -324,7 +339,17 @@ export default function ScoutPoolDetail() {
           <TabsTrigger value="aggressive">Agressivo</TabsTrigger>
         </TabsList>
         <TabsContent value={selectedRange}>
-          <RangeChart pool={pool} selectedRange={selectedRange} />
+          {pool && (
+            <UniswapRangeChart
+              priceHistory={priceHistory}
+              currentPrice={pool.currentPrice || 0}
+              rangeLower={pool.ranges[selectedRange as keyof typeof pool.ranges]?.min || 0}
+              rangeUpper={pool.ranges[selectedRange as keyof typeof pool.ranges]?.max || 0}
+              liquidityData={liqData?.bars?.map((b: any) => ({ price: b.price, liquidity: b.liquidity }))}
+              height={300}
+              accentColor={selectedRange === 'defensive' ? '#10b981' : selectedRange === 'aggressive' ? '#ef4444' : '#FF37C7'}
+            />
+          )}
         </TabsContent>
       </Tabs>
 
