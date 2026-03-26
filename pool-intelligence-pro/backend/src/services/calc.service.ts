@@ -308,7 +308,7 @@ export function calcRangeRecommendation(params: {
 }): RangeResult {
   const { price, volAnn, horizonDays = 7, riskMode, tickSpacing, poolType = 'CL' } = params;
 
-  const zMap: Record<RiskMode, number> = { DEFENSIVE: 0.8, NORMAL: 1.2, AGGRESSIVE: 1.8 };
+  const zMap: Record<RiskMode, number> = { DEFENSIVE: 1.8, NORMAL: 1.2, AGGRESSIVE: 0.8 };
   const z = zMap[riskMode];
 
   let widthPct = clamp(z * volAnn * Math.sqrt(horizonDays / 365), 0.003, 0.45);

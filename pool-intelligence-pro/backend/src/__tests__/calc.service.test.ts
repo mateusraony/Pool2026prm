@@ -151,10 +151,10 @@ describe('calcRangeRecommendation', () => {
     expect(result.horizonDays).toBe(7);
   });
 
-  it('DEFENSIVE range is narrower than AGGRESSIVE', () => {
+  it('DEFENSIVE range is wider than AGGRESSIVE', () => {
     const def = calcRangeRecommendation({ price: 2500, volAnn: 0.5, riskMode: 'DEFENSIVE' });
     const agg = calcRangeRecommendation({ price: 2500, volAnn: 0.5, riskMode: 'AGGRESSIVE' });
-    expect(def.widthPct).toBeLessThan(agg.widthPct);
+    expect(def.widthPct).toBeGreaterThan(agg.widthPct);
   });
 
   it('STABLE pools have capped width', () => {
