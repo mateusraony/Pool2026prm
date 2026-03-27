@@ -64,10 +64,14 @@ function formatDate(ts: number): string {
 
 function generateLiquidity(currentPrice: number, pMin: number, pMax: number, count = 20): LiquidityTick[] {
   const ticks: LiquidityTick[] = [];
-  const step = (pMax - pMin) / count;
+  const safePrice = currentPrice > 0 ? currentPrice : 1;
+  const safePMin = pMin;
+  const safePMax = pMax > pMin ? pMax : pMin + safePrice * 0.3;
+  const step = (safePMax - safePMin) / count;
+  if (step <= 0) return [];
   for (let i = 0; i <= count; i++) {
-    const price = pMin + i * step;
-    const dist = Math.abs(price - currentPrice) / currentPrice;
+    const price = safePMin + i * step;
+    const dist = Math.abs(price - safePrice) / safePrice;
     const liq = Math.max(5, Math.exp(-dist * dist * 6) * 100 + Math.abs(Math.sin(price * 12345.6789)) * 15);
     ticks.push({ price, liquidity: liq });
   }
@@ -82,28 +86,30 @@ function generateSyntheticPriceHistory(
   rangeUpper: number,
   points = 120,
 ): PricePoint[] {
-  if (currentPrice <= 0) return [];
+  const safePrice = currentPrice > 0 ? currentPrice : 1;
   const now = Date.now();
   const span = 7 * 24 * 60 * 60 * 1000; // 7 days
   const step = span / points;
-  const volatility = (rangeUpper - rangeLower) / currentPrice * 0.3;
+  const rangeSpan = rangeUpper > rangeLower ? rangeUpper - rangeLower : safePrice * 0.2;
+  const volatility = rangeSpan / safePrice * 0.3;
   const history: PricePoint[] = [];
 
   // Seed-based deterministic pseudo-random
-  let seed = Math.abs(Math.round(currentPrice * 100000)) % 2147483647;
+  let seed = Math.abs(Math.round(safePrice * 100000)) % 2147483647;
+  if (seed === 0) seed = 42;
   const rand = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
 
-  let price = currentPrice * (1 + (rand() - 0.5) * volatility * 2);
+  let price = safePrice * (1 + (rand() - 0.5) * volatility * 2);
   for (let i = 0; i < points; i++) {
     const t = now - span + i * step;
-    // Random walk with mean reversion toward currentPrice
-    const drift = (currentPrice - price) * 0.02;
-    const shock = (rand() - 0.5) * currentPrice * volatility * 0.15;
-    price = Math.max(currentPrice * 0.5, price + drift + shock);
+    // Random walk with mean reversion toward safePrice
+    const drift = (safePrice - price) * 0.02;
+    const shock = (rand() - 0.5) * safePrice * volatility * 0.15;
+    price = Math.max(safePrice * 0.5, price + drift + shock);
     history.push({ timestamp: t, price });
   }
-  // Ensure last point = currentPrice
-  history.push({ timestamp: now, price: currentPrice });
+  // Ensure last point = safePrice
+  history.push({ timestamp: now, price: safePrice });
   return history;
 }
 
@@ -155,24 +161,33 @@ export function UniswapRangeChart({
 
   // ── Price scale ──
   const { pMin, pMax } = useMemo(() => {
+    const safePrice = currentPrice > 0 ? currentPrice : 1;
     const prices = effectiveHistory.map((p) => p.price);
     if (prices.length === 0) {
-      const spread = currentPrice * 0.3;
-      return { pMin: currentPrice - spread, pMax: currentPrice + spread };
+      const spread = safePrice * 0.3;
+      return { pMin: safePrice - spread, pMax: safePrice + spread };
     }
-    const lo = Math.min(...prices, rangeLower, currentPrice);
-    const hi = Math.max(...prices, rangeUpper, currentPrice);
-    const pad = (hi - lo) * 0.08;
+    const lo = Math.min(...prices, rangeLower, safePrice);
+    const hi = Math.max(...prices, rangeUpper, safePrice);
+    const pad = Math.max((hi - lo) * 0.08, safePrice * 0.001); // minimum padding to prevent pMin===pMax
     return { pMin: lo - pad, pMax: hi + pad };
   }, [effectiveHistory, rangeLower, rangeUpper, currentPrice]);
 
   const priceToY = useCallback(
-    (p: number) => PAD_TOP + ((pMax - p) / (pMax - pMin)) * (bodyH - PAD_TOP - PAD_BOTTOM),
+    (p: number) => {
+      const range = pMax - pMin;
+      if (range <= 0) return bodyH / 2; // fallback center if degenerate scale
+      return PAD_TOP + ((pMax - p) / range) * (bodyH - PAD_TOP - PAD_BOTTOM);
+    },
     [pMin, pMax, bodyH],
   );
 
   const yToPrice = useCallback(
-    (y: number) => pMax - ((y - PAD_TOP) / (bodyH - PAD_TOP - PAD_BOTTOM)) * (pMax - pMin),
+    (y: number) => {
+      const range = pMax - pMin;
+      if (range <= 0) return pMax;
+      return pMax - ((y - PAD_TOP) / (bodyH - PAD_TOP - PAD_BOTTOM)) * range;
+    },
     [pMin, pMax, bodyH],
   );
 
@@ -485,7 +500,7 @@ export function UniswapRangeChart({
           Range: {formatPrice(rangeLower)} — {formatPrice(rangeUpper)}
         </span>
         <span>
-          Largura: {((rangeUpper - rangeLower) / currentPrice * 100).toFixed(1)}%
+          Largura: {(currentPrice > 0 ? (rangeUpper - rangeLower) / currentPrice * 100 : 0).toFixed(1)}%
         </span>
         <span>Preco atual: {formatPrice(currentPrice)}</span>
       </div>
