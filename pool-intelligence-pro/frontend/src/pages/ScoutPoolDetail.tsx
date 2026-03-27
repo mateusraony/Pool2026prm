@@ -342,7 +342,7 @@ export default function ScoutPoolDetail() {
           {pool && (
             <UniswapRangeChart
               priceHistory={priceHistory}
-              currentPrice={pool.currentPrice || 0}
+              currentPrice={pool.currentPrice || pool.price || 1}
               rangeLower={pool.ranges[selectedRange as keyof typeof pool.ranges]?.min || 0}
               rangeUpper={pool.ranges[selectedRange as keyof typeof pool.ranges]?.max || 0}
               liquidityData={liqData?.bars?.map((b: any) => ({ price: b.price, liquidity: b.liquidity }))}

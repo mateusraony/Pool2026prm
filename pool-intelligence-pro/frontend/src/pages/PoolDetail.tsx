@@ -543,7 +543,7 @@ export default function PoolDetailPage() {
               currentPrice={pool.price}
               rangeLower={selectedRange.lower}
               rangeUpper={selectedRange.upper}
-              priceHistory={ohlcvData?.candles?.map(c => ({ timestamp: c.timestamp, price: c.close })) ?? []}
+              priceHistory={ohlcvData?.candles?.map(c => ({ timestamp: c.timestamp < 1e12 ? c.timestamp * 1000 : c.timestamp, price: c.close })) ?? []}
               liquidityData={liquidityData?.bars?.map(b => ({ price: b.price, liquidity: b.liquidity })) ?? undefined}
               height={260}
               className="rounded-lg border border-dark-700"
