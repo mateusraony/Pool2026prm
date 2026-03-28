@@ -186,11 +186,13 @@ export function calcMacd(
   const slowEma = calcEma(closes, slow);
 
   // Align: fastEma starts at index `fast`, slowEma at index `slow`
-  // We need to align them so they correspond to the same candle indices
+  if (fastEma.length === 0 || slowEma.length === 0) return null;
   const offset = slow - fast; // fastEma has `offset` more values at the start
   const macdLine: number[] = [];
   for (let i = 0; i < slowEma.length; i++) {
-    macdLine.push(fastEma[i + offset] - slowEma[i]);
+    if (i + offset < fastEma.length) {
+      macdLine.push(fastEma[i + offset] - slowEma[i]);
+    }
   }
 
   if (macdLine.length === 0) return null;
@@ -384,11 +386,13 @@ export function calcSma(candles: OhlcvCandle[], periods: number[] = [7, 25, 99])
 
     // Previous SMAs (shift by 1 candle)
     const prevCloses = closes.slice(0, -1);
-    const prevShort = prevCloses.slice(-shortPeriod).reduce((a, b) => a + b, 0) / shortPeriod;
-    const prevLong = prevCloses.slice(-longPeriod).reduce((a, b) => a + b, 0) / longPeriod;
+    if (prevCloses.length >= longPeriod) {
+      const prevShort = prevCloses.slice(-shortPeriod).reduce((a, b) => a + b, 0) / shortPeriod;
+      const prevLong = prevCloses.slice(-longPeriod).reduce((a, b) => a + b, 0) / longPeriod;
 
-    if (prevShort <= prevLong && currentShort > currentLong) goldenCross = true;
-    if (prevShort >= prevLong && currentShort < currentLong) deathCross = true;
+      if (prevShort <= prevLong && currentShort > currentLong) goldenCross = true;
+      if (prevShort >= prevLong && currentShort < currentLong) deathCross = true;
+    }
   }
 
   return { values, trend, goldenCross, deathCross };
@@ -421,7 +425,8 @@ export function calcSupportResistance(candles: OhlcvCandle[], levels: number = 3
     for (let i = 1; i < sorted.length; i++) {
       const lastCluster = clusters[clusters.length - 1];
       const clusterAvg = lastCluster.reduce((a, b) => a + b, 0) / lastCluster.length;
-      if (clusterAvg === 0 || Math.abs(sorted[i] - clusterAvg) / Math.abs(clusterAvg) <= 0.005) {
+      const absAvg = Math.abs(clusterAvg);
+      if (absAvg === 0 || (absAvg > 0 && Math.abs(sorted[i] - clusterAvg) / absAvg <= 0.005)) {
         lastCluster.push(sorted[i]);
       } else {
         clusters.push([sorted[i]]);
