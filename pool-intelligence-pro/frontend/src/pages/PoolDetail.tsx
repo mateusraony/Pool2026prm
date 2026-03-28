@@ -74,9 +74,11 @@ function ModeSelector({ value, onChange }: { value: RiskMode; onChange: (m: Risk
 // ============================================================
 
 function RangeDisplay({ range, price, mode }: { range: RangeResult; price: number; mode: RiskMode }) {
-  const distToLower = ((price - range.lower) / price) * 100;
-  const distToUpper = ((range.upper - price) / price) * 100;
-  const pctInRange = (price - range.lower) / (range.upper - range.lower);
+  const safePrice = price > 0 ? price : 1;
+  const distToLower = ((safePrice - range.lower) / safePrice) * 100;
+  const distToUpper = ((range.upper - safePrice) / safePrice) * 100;
+  const rangeWidth = range.upper - range.lower;
+  const pctInRange = rangeWidth > 0 ? (safePrice - range.lower) / rangeWidth : 0.5;
   const barPct = Math.max(5, Math.min(95, pctInRange * 100));
 
   const modeColors: Record<RiskMode, string> = {

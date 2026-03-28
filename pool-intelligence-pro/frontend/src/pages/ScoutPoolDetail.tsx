@@ -108,7 +108,7 @@ export default function ScoutPoolDetail() {
     queryFn: async () => {
       if (!chain || !address) return null;
       const data = await fetchPoolDetail(chain, address);
-      if (data) {
+      if (data && data.pool) {
         return {
           pool: unifiedPoolToViewPool(data.pool, data.score, data.ranges),
           history: data.history || [],

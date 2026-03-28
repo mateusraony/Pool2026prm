@@ -7,8 +7,9 @@ import rateLimit from 'express-rate-limit';
 import path from 'path';
 import fs from 'fs';
 import { config } from './config/index.js';
-import { getPrisma } from './routes/prisma.js';
+import { getPrisma, closePrisma } from './routes/prisma.js';
 import { logService } from './services/log.service.js';
+import { requireAdminKey } from './routes/middleware/admin-auth.js';
 import { metricsService } from './services/metrics.service.js';
 import { wsService } from './services/websocket.service.js';
 
@@ -37,7 +38,7 @@ if (config.nodeEnv === 'production') {
     process.env.CORS_ORIGIN,
   ].filter(Boolean) as string[];
   app.use(cors({
-    origin: allowedOrigins.length > 0 ? allowedOrigins : true,
+    origin: allowedOrigins.length > 0 ? allowedOrigins : (logService.warn('SYSTEM', 'No CORS origins configured — defaulting to self-origin only'), false),
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Admin-Key'],
   }));
@@ -45,7 +46,7 @@ if (config.nodeEnv === 'production') {
   app.use(cors());
 }
 app.use(compression());
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 // Health check (FIRST - before anything else, for Render health checks)
 app.get('/health', async (_req, res) => {
@@ -80,7 +81,7 @@ app.get('/health', async (_req, res) => {
 
 // Debug endpoint — only available in development (exposes internal paths and env info)
 if (config.nodeEnv !== 'production') {
-  app.get('/debug', (_req, res) => {
+  app.get('/debug', requireAdminKey, (_req, res) => {
     const frontendDir = path.resolve(process.cwd(), 'public');
     let files: string[] = [];
     let indexExists = false;
@@ -319,7 +320,7 @@ function gracefulShutdown(signal: string) {
     logService.info('SHUTDOWN', 'HTTP server closed');
 
     // Close Prisma connections
-    getPrisma().$disconnect()
+    closePrisma()
       .then(() => {
         logService.info('SHUTDOWN', 'Prisma disconnected');
         process.exit(0);

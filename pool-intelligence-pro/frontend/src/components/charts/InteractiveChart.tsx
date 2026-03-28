@@ -72,7 +72,7 @@ export default function InteractiveChart({
   }, [minPrice, maxPrice, chartWidth, currentPrice]);
 
   const liquidityToY = useCallback((liquidity: number) => {
-    const maxLiquidity = Math.max(...liquidityData.map(d => d.liquidity));
+    const maxLiquidity = Math.max(...liquidityData.map(d => d.liquidity)) || 1;
     return padding.top + chartHeight - (liquidity / maxLiquidity) * chartHeight;
   }, [liquidityData, chartHeight]);
 

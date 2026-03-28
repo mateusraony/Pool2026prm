@@ -66,7 +66,7 @@ function RecommendationCard({ rec, index }: { rec: Recommendation; index: number
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="stat-card">
             <div className="stat-label">Probabilidade</div>
-            <div className="stat-value text-primary-400">{rec.probability}%</div>
+            <div className="stat-value text-primary-400">{rec.probability ?? 0}%</div>
           </div>
           <div className="stat-card">
             <div className="stat-label">
