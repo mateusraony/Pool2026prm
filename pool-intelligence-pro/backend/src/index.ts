@@ -32,10 +32,10 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'sha256-31fQF/g9KGmEnutu6M7cTHdK4cN5J5z5NRerO5mFMfQ='"],   // inline SW registration script
-      styleSrc: ["'self'", "'unsafe-inline'"],    // inline styles in loading div + Tailwind
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],    // inline styles + Tailwind + Google Fonts CSS
       imgSrc: ["'self'", "data:", "https:"],      // data: for base64 icons, https: for external token logos
       connectSrc: ["'self'", "wss:", "ws:", "https:"], // WebSocket (Socket.io) + APIs externas
-      fontSrc: ["'self'", "data:"],
+      fontSrc: ["'self'", "data:", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
       workerSrc: ["'self'"],                      // Service Worker
       manifestSrc: ["'self'"],                    // PWA manifest
       objectSrc: ["'none'"],
