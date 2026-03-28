@@ -1,6 +1,6 @@
 # CHECKPOINT - Pool Intelligence Pro
 
-## Última Atualização: 2026-03-28 (Sessão 3)
+## Última Atualização: 2026-03-28 (Sessão 4)
 
 ---
 
@@ -10,11 +10,43 @@
 |------------|-----------|----------|
 | tsc frontend | ✅ | 0 erros |
 | tsc backend | ✅ | 0 erros |
-| build frontend | ✅ | Vite ~13s |
+| build frontend | ✅ | Vite ~8s |
 | build backend | ✅ | OK |
 | frontend tests | ✅ | 7 files, 98/98 passando |
-| backend tests | ✅ | 13 files, 349/349 passando |
-| **total testes** | ✅ | **447/447 (100%)** |
+| backend tests | ✅ | 14 files, 360/360 passando |
+| **total testes** | ✅ | **458/458 (100%)** |
+
+---
+
+## Sessão 4 — Persistência no Supabase + CSP Hash
+
+### Problema Resolvido
+Pools, scores, recomendações e histórico viviam APENAS em MemoryStore (perdidos a cada restart).
+15+ models Prisma existiam mas nenhum job escrevia neles.
+
+### O que foi feito
+
+| Mudança | Arquivo | Detalhes |
+|---------|---------|----------|
+| **db-sync.service** | `backend/src/services/db-sync.service.ts` | Write-through: upsert PoolCurrent, create PoolSnapshot, save Score |
+| **Cold-start hydration** | `backend/src/jobs/index.ts` | Na inicialização, hidrata MemoryStore do DB (dados instantâneos) |
+| **Radar → DB** | `backend/src/jobs/index.ts` | Após cada ciclo radar, persiste pools + scores (fire-and-forget) |
+| **Snapshot cleanup** | `backend/src/jobs/index.ts` | Cron diário 3AM: remove snapshots > 30 dias |
+| **Snapshots endpoint** | `backend/src/routes/pools.routes.ts` | GET /pools/:chain/:address/snapshots?days=7 |
+| **CSP hash** | `backend/src/index.ts` | scriptSrc: SHA-256 hash ao invés de unsafe-inline |
+| **Testes** | `backend/src/__tests__/db-sync.service.test.ts` | 11 testes unitários |
+
+### Fluxo de Dados Após Implementação
+
+```
+API Providers → Radar Job → MemoryStore (leituras rápidas)
+                          ↘ Supabase DB (persistência)
+
+Cold-start → DB → MemoryStore (dados instantâneos enquanto radar roda)
+
+Frontend → /api/pools → MemoryStore (rápido)
+Frontend → /api/pools/:id/snapshots → DB (histórico)
+```
 
 ---
 
