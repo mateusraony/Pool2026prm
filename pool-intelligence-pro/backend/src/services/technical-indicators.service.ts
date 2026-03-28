@@ -330,7 +330,7 @@ export function calcVwap(candles: OhlcvCandle[]): VwapResult | null {
 
   const vwap = cumulativeTPV / cumulativeVolume;
   const lastClose = candles[candles.length - 1].close;
-  const deviation = ((lastClose - vwap) / vwap) * 100;
+  const deviation = vwap !== 0 ? ((lastClose - vwap) / vwap) * 100 : 0;
 
   let signal: VwapResult['signal'];
   if (deviation > 0.5) signal = 'above';
@@ -448,11 +448,12 @@ export function calcSupportResistance(candles: OhlcvCandle[], levels: number = 3
   const resistancesAbove = resistances.filter(r => r > lastClose);
   const nearestResistance = resistancesAbove.length > 0 ? Math.min(...resistancesAbove) : null;
 
+  const safeLastClose = lastClose !== 0 ? lastClose : 1;
   const distanceToSupport = nearestSupport !== null
-    ? ((lastClose - nearestSupport) / lastClose) * 100
+    ? ((lastClose - nearestSupport) / safeLastClose) * 100
     : 0;
   const distanceToResistance = nearestResistance !== null
-    ? ((nearestResistance - lastClose) / lastClose) * 100
+    ? ((nearestResistance - lastClose) / safeLastClose) * 100
     : 0;
 
   return { supports, resistances, nearestSupport, nearestResistance, distanceToSupport, distanceToResistance };
@@ -465,6 +466,9 @@ export function calcTrend(
   sma?: SmaResult | null,
   macd?: MacdResult | null,
 ): TrendResult {
+  if (candles.length === 0) {
+    return { direction: 'sideways', strength: 0, priceChange: 0, higherHighs: false, higherLows: false };
+  }
   const firstClose = candles[0].close;
   const lastClose = candles[candles.length - 1].close;
   const priceChange = firstClose !== 0 ? ((lastClose - firstClose) / firstClose) * 100 : 0;

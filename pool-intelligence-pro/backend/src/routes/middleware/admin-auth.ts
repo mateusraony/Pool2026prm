@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { timingSafeEqual } from 'crypto';
 
 /**
  * Middleware de autenticação para endpoints de admin.
@@ -19,7 +20,9 @@ export function requireAdminKey(req: Request, res: Response, next: NextFunction)
     return;
   }
   const key = req.headers['x-admin-key'];
-  if (key !== adminSecret) {
+  const keyBuffer = Buffer.from(String(key));
+  const secretBuffer = Buffer.from(adminSecret);
+  if (keyBuffer.length !== secretBuffer.length || !timingSafeEqual(keyBuffer, secretBuffer)) {
     res.status(401).json({ success: false, error: 'Unauthorized' });
     return;
   }

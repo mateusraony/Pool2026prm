@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { logService } from '../services/log.service.js';
 import { notificationSettingsService } from '../services/notification-settings.service.js';
 import { persistService } from '../services/persist.service.js';
@@ -11,6 +12,14 @@ import {
   notificationSettingsSchema, telegramTestRecsSchema,
 } from './validation.js';
 import { requireAdminKey } from './middleware/admin-auth.js';
+
+const adminLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10,             // max 10 requests per minute for admin ops
+  message: { success: false, error: 'Too many admin requests, try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const router = Router();
 
@@ -51,7 +60,7 @@ router.get('/settings', async (req, res) => {
 });
 
 // Update Telegram Bot Token and/or Chat ID at runtime
-router.put('/settings/telegram', requireAdminKey, validate(telegramConfigSchema), async (req, res) => {
+router.put('/settings/telegram', adminLimiter, requireAdminKey, validate(telegramConfigSchema), async (req, res) => {
   try {
     const { chatId, botToken } = req.body;
     let botName: string | undefined;
@@ -91,7 +100,7 @@ router.put('/settings/telegram', requireAdminKey, validate(telegramConfigSchema)
 });
 
 // Save risk config (persisted to DB, validated with Zod)
-router.put('/settings/risk-config', requireAdminKey, validate(riskConfigSchema), async (req, res) => {
+router.put('/settings/risk-config', adminLimiter, requireAdminKey, validate(riskConfigSchema), async (req, res) => {
   try {
     persistService.setRiskConfig(req.body);
     res.json({

@@ -108,13 +108,13 @@ export default function WatchlistPage() {
                         <div className="text-center">
                           <div className="text-xs text-dark-400">{pool.token0?.symbol}</div>
                           <div className="font-semibold font-mono text-sm">
-                            {pool.token0?.priceUsd ? '$' + pool.token0.priceUsd.toFixed(2) : <span className="text-warning-400">—</span>}
+                            {pool.token0?.priceUsd != null ? '$' + pool.token0.priceUsd.toFixed(2) : <span className="text-warning-400">—</span>}
                           </div>
                         </div>
                         <div className="text-center">
                           <div className="text-xs text-dark-400">{pool.token1?.symbol}</div>
                           <div className="font-semibold font-mono text-sm">
-                            {pool.token1?.priceUsd ? '$' + pool.token1.priceUsd.toFixed(2) : <span className="text-warning-400">—</span>}
+                            {pool.token1?.priceUsd != null ? '$' + pool.token1.priceUsd.toFixed(2) : <span className="text-warning-400">—</span>}
                           </div>
                         </div>
                         <div className="text-center">

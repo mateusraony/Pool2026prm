@@ -28,7 +28,20 @@ wsService.init(server);
 
 // Middleware
 app.use(helmet({
-  contentSecurityPolicy: false, // Allow inline scripts from Vite build
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],  // needed for inline styles in loading div + Tailwind
+      imgSrc: ["'self'", "data:", "https:"],     // data: for base64 icons, https: for external token logos
+      connectSrc: ["'self'", "wss:", "https://api.coingecko.com", "https://api.dexscreener.com", "https://yields.llama.fi", "https://api.thegraph.com"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      frameSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+    },
+  },
 }));
 // CORS: restritivo em produção, aberto em desenvolvimento
 if (config.nodeEnv === 'production') {

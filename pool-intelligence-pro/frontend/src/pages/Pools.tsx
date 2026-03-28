@@ -382,7 +382,7 @@ export default function PoolsPage() {
       }
       await queryClient.invalidateQueries({ queryKey: ['favorites'] });
     } catch (e) {
-      console.error('Toggle favorite error:', e);
+      if (import.meta.env.DEV) console.error('Toggle favorite error:', e);
     } finally {
       setPendingFavId(null);
     }
@@ -413,7 +413,7 @@ export default function PoolsPage() {
       }
       return result;
     } catch (e) {
-      console.error('Filter error:', e);
+      if (import.meta.env.DEV) console.error('Filter error:', e);
       return [];
     }
   }, [pools, search]);
@@ -441,7 +441,7 @@ export default function PoolsPage() {
         return sortDir === 'desc' ? vb - va : va - vb;
       });
     } catch (e) {
-      console.error('Sort error:', e);
+      if (import.meta.env.DEV) console.error('Sort error:', e);
       return filtered;
     }
   }, [filtered, sortKey, sortDir]);
@@ -450,7 +450,7 @@ export default function PoolsPage() {
     // Defensive: use id as fallback if poolAddress is missing
     const address = pool.poolAddress || pool.id || 'unknown';
     if (address === 'unknown') {
-      console.warn('Pool has no valid address:', pool);
+      if (import.meta.env.DEV) console.warn('Pool has no valid address:', pool);
       return;
     }
     navigate(`/pools/${pool.chain}/${address}`);
