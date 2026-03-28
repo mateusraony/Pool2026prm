@@ -9,3 +9,10 @@ export function getPrisma(): PrismaClient {
   }
   return _prisma;
 }
+
+export async function closePrisma(): Promise<void> {
+  if (_prisma) {
+    await _prisma.$disconnect();
+    _prisma = null;
+  }
+}

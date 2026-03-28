@@ -24,8 +24,7 @@ services:
     plan: free
     rootDir: pool-intelligence-pro/backend
     buildCommand: npm ci && npm run build
-    # DIRECT_URL é usado pelo Prisma para migrations (conexão direta, sem PgBouncer).
-    # Se não estiver configurada, fallback para DATABASE_URL (pode funcionar com session pooler).
+    # DIRECT_URL: Conexão direta Supabase (sem pooler) para Prisma migrations
     preDeployCommand: export DIRECT_URL=${DIRECT_URL:-$DATABASE_URL} && npx prisma migrate deploy
     startCommand: npm start
     envVars:
@@ -35,11 +34,12 @@ services:
         value: 10000
       - key: DATABASE_URL
         sync: false
-      # DIRECT_URL: URL de conexão direta ao PostgreSQL (sem PgBouncer) para migrations.
-      # Supabase: Settings > Database > Connection string > URI (porta 5432, sem pooler)
-      # Formato: postgresql://postgres:[senha]@db.[ref].supabase.co:5432/postgres?sslmode=require
+        # Supabase Transaction Pooler (porta 6543, modo transaction)
+        # Formato: postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres
       - key: DIRECT_URL
         sync: false
+        # Supabase Direct Connection (porta 5432, para migrations)
+        # Formato: postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:5432/postgres
       - key: RENDER_EXTERNAL_URL
         sync: false
       - key: APP_URL
@@ -64,13 +64,3 @@ services:
         sync: false
     healthCheckPath: /health
     autoDeploy: true
-
-databases:
-  - name: pool-intelligence-db
-    region: oregon
-    # AÇÃO NECESSÁRIA: Fazer upgrade para plan: starter ($7/mês) no dashboard do Render
-    # O plan free expira em 90 dias e deleta todos os dados automaticamente
-    # plan: free  ← mudar para starter no dashboard, não aqui (requer billing)
-    plan: free
-    databaseName: poolintel
-    user: poolintel

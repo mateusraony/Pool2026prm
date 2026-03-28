@@ -113,21 +113,21 @@ export default function Portfolio() {
         <div className="glass-card p-4 text-center">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1"><GlossaryTooltip term="sharpe" compact>Sharpe Ratio</GlossaryTooltip></p>
           <p className={cn('font-mono text-2xl font-bold',
-            p.sharpeRatio > 1 ? 'text-success' : p.sharpeRatio > 0.5 ? 'text-primary' : 'text-warning')}>
-            {p.sharpeRatio.toFixed(2)}
+            (p.sharpeRatio || 0) > 1 ? 'text-success' : (p.sharpeRatio || 0) > 0.5 ? 'text-primary' : 'text-warning')}>
+            {(isNaN(p.sharpeRatio) ? 0 : p.sharpeRatio).toFixed(2)}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            {p.sharpeRatio > 2 ? 'Excelente' : p.sharpeRatio > 1 ? 'Bom' : p.sharpeRatio > 0.5 ? 'Aceitavel' : 'Baixo'}
+            {(p.sharpeRatio || 0) > 2 ? 'Excelente' : (p.sharpeRatio || 0) > 1 ? 'Bom' : (p.sharpeRatio || 0) > 0.5 ? 'Aceitavel' : 'Baixo'}
           </p>
         </div>
         <div className="glass-card p-4 text-center">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1"><GlossaryTooltip term="sortino" compact>Sortino Ratio</GlossaryTooltip></p>
           <p className={cn('font-mono text-2xl font-bold',
-            p.sortinoRatio > 1.5 ? 'text-success' : p.sortinoRatio > 0.7 ? 'text-primary' : 'text-warning')}>
-            {p.sortinoRatio.toFixed(2)}
+            (p.sortinoRatio || 0) > 1.5 ? 'text-success' : (p.sortinoRatio || 0) > 0.7 ? 'text-primary' : 'text-warning')}>
+            {(isNaN(p.sortinoRatio) ? 0 : p.sortinoRatio).toFixed(2)}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            {p.sortinoRatio > 2 ? 'Excelente' : p.sortinoRatio > 1 ? 'Bom' : 'Melhorar'}
+            {(p.sortinoRatio || 0) > 2 ? 'Excelente' : (p.sortinoRatio || 0) > 1 ? 'Bom' : 'Melhorar'}
           </p>
         </div>
         <div className="glass-card p-4 text-center">

@@ -71,7 +71,7 @@ router.post('/ranges', validate(rangePositionSchema), async (req, res) => {
       token1Symbol,
       rangeLower,
       rangeUpper,
-      entryPrice: entryPrice || (rangeLower + rangeUpper) / 2,
+      entryPrice: entryPrice || ((rangeLower + rangeUpper) / 2) || 1,
       capital,
       mode,
       alertThreshold,
