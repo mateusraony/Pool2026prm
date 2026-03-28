@@ -6,7 +6,7 @@
 #
 # OPCAO A (recomendada): Root Directory = pool-intelligence-pro/backend
 #   Build Command: npm install && npm run build
-#   Start Command: npm start
+#   Start Command: npx prisma db push --accept-data-loss && npm start
 #
 # OPCAO B: Root Directory = pool-intelligence-pro
 #   Build Command: npm run install:all && npm run build
@@ -24,9 +24,7 @@ services:
     plan: free
     rootDir: pool-intelligence-pro/backend
     buildCommand: npm ci && npm run build
-    # DIRECT_URL: Conexão direta Supabase (sem pooler) para Prisma migrations
-    preDeployCommand: export DIRECT_URL=${DIRECT_URL:-$DATABASE_URL} && npx prisma migrate deploy
-    startCommand: npm start
+    startCommand: npx prisma db push --accept-data-loss && npm start
     envVars:
       - key: NODE_ENV
         value: production
@@ -38,8 +36,8 @@ services:
         # Formato: postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:6543/postgres
       - key: DIRECT_URL
         sync: false
-        # Supabase Direct Connection (porta 5432, para migrations)
-        # Formato: postgresql://postgres.[ref]:[senha]@aws-0-[region].pooler.supabase.com:5432/postgres
+        # Supabase Direct Connection (porta 5432, para migrations/schema push)
+        # Formato: postgresql://postgres:[senha]@db.[ref].supabase.co:5432/postgres
       - key: RENDER_EXTERNAL_URL
         sync: false
       - key: APP_URL
