@@ -28,7 +28,22 @@ wsService.init(server);
 
 // Middleware
 app.use(helmet({
-  contentSecurityPolicy: false, // Allow inline scripts from Vite build
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],   // inline SW registration script
+      styleSrc: ["'self'", "'unsafe-inline'"],    // inline styles in loading div + Tailwind
+      imgSrc: ["'self'", "data:", "https:"],      // data: for base64 icons, https: for external token logos
+      connectSrc: ["'self'", "wss:", "ws:", "https:"], // WebSocket (Socket.io) + APIs externas
+      fontSrc: ["'self'", "data:"],
+      workerSrc: ["'self'"],                      // Service Worker
+      manifestSrc: ["'self'"],                    // PWA manifest
+      objectSrc: ["'none'"],
+      frameSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+    },
+  },
 }));
 // CORS: restritivo em produção, aberto em desenvolvimento
 if (config.nodeEnv === 'production') {

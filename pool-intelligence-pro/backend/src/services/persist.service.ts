@@ -94,7 +94,7 @@ class PersistService {
     if (!this.prisma) return;
     try {
       // Quick check: try a simple query
-      await this.prisma.$queryRawUnsafe(`SELECT 1 FROM "AppConfig" LIMIT 1`);
+      await this.prisma.$queryRaw`SELECT 1 FROM "AppConfig" LIMIT 1`;
     } catch (_error: unknown) {
       // Table doesn't exist - create it
       logService.info('SYSTEM', 'Creating AppConfig table...');

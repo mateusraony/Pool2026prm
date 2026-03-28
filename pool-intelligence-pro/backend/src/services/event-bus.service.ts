@@ -72,13 +72,11 @@ class EventBusService {
       handlers.map(handler => Promise.resolve(handler(event as BusEvent<unknown>)))
     );
 
-    for (const result of results) {
-      if (result.status === 'rejected') {
-        logService.warn('SYSTEM', 'Event bus listener error', {
-          eventType: type,
-          error: (result.reason as Error)?.message ?? result.reason,
-        });
-      }
+    const rejected = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (rejected.length > 0) {
+      logService.warn('SYSTEM', `${rejected.length} event handler(s) failed for ${type}`, {
+        errors: rejected.map(r => String(r.reason)),
+      });
     }
   }
 }

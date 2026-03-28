@@ -36,7 +36,7 @@
 | # | Problema | Arquivo | Status |
 |---|---------|---------|--------|
 | C1 | CORS fallback `true` em produção | `backend/src/index.ts:41` | ✅ CORRIGIDO — fallback para `false` com log warning |
-| C2 | CSP desabilitado | `backend/src/index.ts:30` | ⏳ Requer config Vite nonce (próxima sessão) |
+| C2 | CSP desabilitado | `backend/src/index.ts:30` | ✅ CORRIGIDO — CSP habilitado com directives seguras |
 | C3 | DB plano free Render → Migrar para Supabase | `render.yaml` | ✅ CORRIGIDO — render.yaml atualizado para Supabase |
 | C4 | Sem limit no express.json() — DoS | `backend/src/index.ts:48` | ✅ CORRIGIDO — limit: '1mb' |
 | C5 | InteractiveChart maxLiquidity=0 → Infinity | `frontend/src/components/charts/InteractiveChart.tsx` | ✅ CORRIGIDO — fallback || 1 |
@@ -47,7 +47,7 @@
 | # | Problema | Arquivo | Status |
 |---|---------|---------|--------|
 | H1 | Deps vulneráveis (ReDoS, SSRF) | `backend/package.json` | ✅ CORRIGIDO — npm audit fix |
-| H2 | Technical indicators sem bounds check | `backend/src/services/technical-indicators.service.ts` | ⏳ Próxima sessão |
+| H2 | Technical indicators sem bounds check | `backend/src/services/technical-indicators.service.ts` | ✅ CORRIGIDO — guards em calcTrend, calcVwap, calcSR |
 | H3 | Range position entryPrice=0 corrompe P&L | `backend/src/routes/ranges.routes.ts` | ✅ CORRIGIDO — fallback || 1 |
 | H4 | PoolDetail.tsx divisão por price=0 | `frontend/src/pages/PoolDetail.tsx` | ✅ CORRIGIDO — safePrice guard |
 | H5 | Recommendations.tsx rec.probability sem null check | `frontend/src/pages/Recommendations.tsx` | ✅ CORRIGIDO — ?? 0 fallback |
@@ -59,13 +59,13 @@
 
 | # | Problema | Status |
 |---|---------|--------|
-| M1 | Config vars sem validação de NaN | ⏳ Próxima sessão |
-| M2 | Timing attack em admin key comparison | ⏳ Próxima sessão |
-| M3 | Sem rate limiting em endpoints admin | ⏳ Próxima sessão |
-| M4 | $queryRawUnsafe → $queryRaw | ⏳ Próxima sessão |
-| M5 | Event bus não loga rejeições | ⏳ Próxima sessão |
-| M6 | Console.logs em produção no frontend | ⏳ Próxima sessão |
-| M7 | Falsy 0 tratado como "sem preço" em Radar | ⏳ Próxima sessão |
+| M1 | Config vars sem validação de NaN | ✅ CORRIGIDO — safeInt/safeFloat helpers |
+| M2 | Timing attack em admin key comparison | ✅ CORRIGIDO — crypto.timingSafeEqual |
+| M3 | Sem rate limiting em endpoints admin | ✅ CORRIGIDO — adminLimiter 10 req/min |
+| M4 | $queryRawUnsafe → $queryRaw | ✅ CORRIGIDO — tagged template literals |
+| M5 | Event bus não loga rejeições | ✅ CORRIGIDO — log rejected handlers |
+| M6 | Console.logs em produção no frontend | ✅ CORRIGIDO — DEV check wrap |
+| M7 | Falsy 0 tratado como "sem preço" em Radar | ✅ CORRIGIDO — != null check |
 
 ---
 
@@ -117,8 +117,50 @@
 1. render.yaml: removida database Render free, Supabase como padrão
 2. .env.example: atualizado com formatos Supabase
 
-## Próximos Passos (próxima sessão)
-1. C2: Habilitar CSP com nonces do Vite
-2. H2: Bounds check em technical-indicators.service.ts
-3. M1-M7: Issues médios da auditoria
-4. Configurar Supabase real no Render Dashboard (env vars)
+## Correções Sessão 2 — 2026-03-28 (continuação)
+
+### Backend (7 fixes)
+1. C2: CSP habilitado com directives seguras (script-src self, style-src unsafe-inline, connect-src APIs)
+2. H2: Bounds checks em calcTrend (candles vazio), calcVwap (vwap=0), calcSR (lastClose=0)
+3. M1: Config vars — safeInt/safeFloat com validação NaN
+4. M2: Admin key — timing-safe comparison com crypto.timingSafeEqual
+5. M3: Rate limiting em endpoints admin PUT (10 req/min)
+6. M4: $queryRawUnsafe → $queryRaw em persist.service (SELECT simples)
+7. M5: Event bus — log de handlers rejeitados
+
+### Frontend (3 fixes)
+1. M6: Console.logs em produção wrappados em import.meta.env.DEV
+2. M7: Falsy 0 preço — usar != null ao invés de truthy check (Radar, Pools, Watchlist, TokenAnalyzer, Simulation)
+
+## Verificação Final Completa — 2026-03-28
+
+| Check | Resultado |
+|-------|-----------|
+| tsc frontend | ✅ 0 erros |
+| tsc backend | ✅ 0 erros |
+| frontend tests | ✅ 98/98 |
+| backend tests | ✅ 349/349 |
+| full build | ✅ OK |
+| **total testes** | ✅ **447/447 (100%)** |
+
+## Status de TODOS os Issues da Auditoria
+
+| Severidade | Total | Corrigidos | Pendentes |
+|-----------|-------|-----------|-----------|
+| CRITICOS | 6 | ✅ 6/6 | 0 |
+| ALTOS | 8 | ✅ 8/8 | 0 |
+| MÉDIOS | 7 | ✅ 7/7 | 0 |
+| **TOTAL** | **21** | **✅ 21/21** | **0** |
+
+## Pendente — Ação do Usuário no Render Dashboard
+1. **Configurar Supabase** — No Render Dashboard, definir env vars:
+   - `DATABASE_URL` = URL do Supabase Transaction Pooler (porta 6543)
+   - `DIRECT_URL` = URL do Supabase Direct Connection (porta 5432)
+2. **Redeploy** após configurar as env vars
+
+## Branch e Commits
+- **Branch:** `claude/write-deep-analysis-plan-rM6eK`
+- **Commits desta sessão:**
+  - `cb33d98` — fix: TS2339 Pool.price
+  - `7685ef3` — fix: auditoria profunda (CORS, body limit, null checks, Supabase)
+  - `10fe945` — fix: CSP, bounds checks, M1-M7 issues médios

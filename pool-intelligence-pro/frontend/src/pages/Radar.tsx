@@ -71,10 +71,10 @@ function PoolCard({ pool, score, index, isWatched, isAdding, onAddToWatchlist }:
         {/* Token Prices - for verification */}
         <div className="flex gap-2 mb-3 text-xs">
           <span className="px-2 py-1 rounded bg-dark-700 font-mono">
-            {pool.token0?.symbol}: {pool.token0?.priceUsd ? '$' + pool.token0.priceUsd.toFixed(2) : <span className="text-warning-400">sem preço</span>}
+            {pool.token0?.symbol}: {pool.token0?.priceUsd != null ? '$' + pool.token0.priceUsd.toFixed(2) : <span className="text-warning-400">sem preço</span>}
           </span>
           <span className="px-2 py-1 rounded bg-dark-700 font-mono">
-            {pool.token1?.symbol}: {pool.token1?.priceUsd ? '$' + pool.token1.priceUsd.toFixed(2) : <span className="text-warning-400">sem preço</span>}
+            {pool.token1?.symbol}: {pool.token1?.priceUsd != null ? '$' + pool.token1.priceUsd.toFixed(2) : <span className="text-warning-400">sem preço</span>}
           </span>
         </div>
 

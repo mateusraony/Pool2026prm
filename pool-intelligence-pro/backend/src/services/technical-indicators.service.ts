@@ -186,11 +186,13 @@ export function calcMacd(
   const slowEma = calcEma(closes, slow);
 
   // Align: fastEma starts at index `fast`, slowEma at index `slow`
-  // We need to align them so they correspond to the same candle indices
+  if (fastEma.length === 0 || slowEma.length === 0) return null;
   const offset = slow - fast; // fastEma has `offset` more values at the start
   const macdLine: number[] = [];
   for (let i = 0; i < slowEma.length; i++) {
-    macdLine.push(fastEma[i + offset] - slowEma[i]);
+    if (i + offset < fastEma.length) {
+      macdLine.push(fastEma[i + offset] - slowEma[i]);
+    }
   }
 
   if (macdLine.length === 0) return null;
@@ -330,7 +332,7 @@ export function calcVwap(candles: OhlcvCandle[]): VwapResult | null {
 
   const vwap = cumulativeTPV / cumulativeVolume;
   const lastClose = candles[candles.length - 1].close;
-  const deviation = ((lastClose - vwap) / vwap) * 100;
+  const deviation = vwap !== 0 ? ((lastClose - vwap) / vwap) * 100 : 0;
 
   let signal: VwapResult['signal'];
   if (deviation > 0.5) signal = 'above';
@@ -384,11 +386,13 @@ export function calcSma(candles: OhlcvCandle[], periods: number[] = [7, 25, 99])
 
     // Previous SMAs (shift by 1 candle)
     const prevCloses = closes.slice(0, -1);
-    const prevShort = prevCloses.slice(-shortPeriod).reduce((a, b) => a + b, 0) / shortPeriod;
-    const prevLong = prevCloses.slice(-longPeriod).reduce((a, b) => a + b, 0) / longPeriod;
+    if (prevCloses.length >= longPeriod) {
+      const prevShort = prevCloses.slice(-shortPeriod).reduce((a, b) => a + b, 0) / shortPeriod;
+      const prevLong = prevCloses.slice(-longPeriod).reduce((a, b) => a + b, 0) / longPeriod;
 
-    if (prevShort <= prevLong && currentShort > currentLong) goldenCross = true;
-    if (prevShort >= prevLong && currentShort < currentLong) deathCross = true;
+      if (prevShort <= prevLong && currentShort > currentLong) goldenCross = true;
+      if (prevShort >= prevLong && currentShort < currentLong) deathCross = true;
+    }
   }
 
   return { values, trend, goldenCross, deathCross };
@@ -421,7 +425,8 @@ export function calcSupportResistance(candles: OhlcvCandle[], levels: number = 3
     for (let i = 1; i < sorted.length; i++) {
       const lastCluster = clusters[clusters.length - 1];
       const clusterAvg = lastCluster.reduce((a, b) => a + b, 0) / lastCluster.length;
-      if (clusterAvg === 0 || Math.abs(sorted[i] - clusterAvg) / Math.abs(clusterAvg) <= 0.005) {
+      const absAvg = Math.abs(clusterAvg);
+      if (absAvg === 0 || (absAvg > 0 && Math.abs(sorted[i] - clusterAvg) / absAvg <= 0.005)) {
         lastCluster.push(sorted[i]);
       } else {
         clusters.push([sorted[i]]);
@@ -448,11 +453,12 @@ export function calcSupportResistance(candles: OhlcvCandle[], levels: number = 3
   const resistancesAbove = resistances.filter(r => r > lastClose);
   const nearestResistance = resistancesAbove.length > 0 ? Math.min(...resistancesAbove) : null;
 
+  const safeLastClose = lastClose !== 0 ? lastClose : 1;
   const distanceToSupport = nearestSupport !== null
-    ? ((lastClose - nearestSupport) / lastClose) * 100
+    ? ((lastClose - nearestSupport) / safeLastClose) * 100
     : 0;
   const distanceToResistance = nearestResistance !== null
-    ? ((nearestResistance - lastClose) / lastClose) * 100
+    ? ((nearestResistance - lastClose) / safeLastClose) * 100
     : 0;
 
   return { supports, resistances, nearestSupport, nearestResistance, distanceToSupport, distanceToResistance };
@@ -465,6 +471,9 @@ export function calcTrend(
   sma?: SmaResult | null,
   macd?: MacdResult | null,
 ): TrendResult {
+  if (candles.length === 0) {
+    return { direction: 'sideways', strength: 0, priceChange: 0, higherHighs: false, higherLows: false };
+  }
   const firstClose = candles[0].close;
   const lastClose = candles[candles.length - 1].close;
   const priceChange = firstClose !== 0 ? ((lastClose - firstClose) / firstClose) * 100 : 0;

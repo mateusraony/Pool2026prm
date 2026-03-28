@@ -373,7 +373,7 @@ export function useTokenPrice(token0: string, token1: string): UseTokenPriceResu
             }
           }
         } catch (geckoError) {
-          console.warn('CoinGecko fetch failed, trying DeFiLlama...', geckoError);
+          if (import.meta.env.DEV) console.warn('CoinGecko fetch failed, trying DeFiLlama...', geckoError);
         }
       }
 
@@ -400,7 +400,7 @@ export function useTokenPrice(token0: string, token1: string): UseTokenPriceResu
             usedSource = usedSource || 'defillama';
           }
         } catch (llamaError) {
-          console.warn('DeFiLlama fetch failed:', llamaError);
+          if (import.meta.env.DEV) console.warn('DeFiLlama fetch failed:', llamaError);
         }
       }
 

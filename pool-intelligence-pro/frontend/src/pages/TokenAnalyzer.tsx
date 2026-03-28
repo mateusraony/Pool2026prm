@@ -274,7 +274,7 @@ export default function TokenAnalyzerPage() {
         })
         .sort((a, b) => (b.healthScore || 0) - (a.healthScore || 0));
     } catch (e) {
-      console.error('Filter error:', e);
+      if (import.meta.env.DEV) console.error('Filter error:', e);
       return [];
     }
   }, [data?.pools, searchedToken]);
@@ -290,7 +290,7 @@ export default function TokenAnalyzerPage() {
       const totalVol24h = filteredPools.reduce((s, p) => s + (p.volume24hUSD || 0), 0);
       return { totalTVL, avgHealth, maxAPR, totalVol24h };
     } catch (e) {
-      console.error('Stats calculation error:', e);
+      if (import.meta.env.DEV) console.error('Stats calculation error:', e);
       return null;
     }
   }, [filteredPools]);

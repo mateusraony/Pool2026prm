@@ -30,7 +30,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
   const [monitorSuccess, setMonitorSuccess] = useState(false);
 
   // Real price: use pool.price from backend, or derive from token prices ratio
-  const derivedPrice = (pool.token0?.priceUsd && pool.token1?.priceUsd && pool.token1.priceUsd > 0)
+  const derivedPrice = (pool.token0?.priceUsd != null && pool.token1?.priceUsd != null && pool.token1.priceUsd > 0)
     ? pool.token0.priceUsd / pool.token1.priceUsd
     : undefined;
   const currentPrice = pool.price || derivedPrice || 0;
@@ -249,13 +249,13 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
             <div className="flex items-center gap-2">
               <span className="text-dark-400 text-sm">Preço {pool.token0?.symbol}:</span>
               <span className="font-mono font-semibold">
-                {pool.token0?.priceUsd ? '$' + pool.token0.priceUsd.toFixed(4) : <span className="text-warning-400">API sem dados</span>}
+                {pool.token0?.priceUsd != null ? '$' + pool.token0.priceUsd.toFixed(4) : <span className="text-warning-400">API sem dados</span>}
               </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-dark-400 text-sm">Preço {pool.token1?.symbol}:</span>
               <span className="font-mono font-semibold">
-                {pool.token1?.priceUsd ? '$' + pool.token1.priceUsd.toFixed(4) : <span className="text-warning-400">API sem dados</span>}
+                {pool.token1?.priceUsd != null ? '$' + pool.token1.priceUsd.toFixed(4) : <span className="text-warning-400">API sem dados</span>}
               </span>
             </div>
             <div className="flex items-center gap-2">
