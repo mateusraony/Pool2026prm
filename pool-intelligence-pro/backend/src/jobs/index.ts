@@ -17,6 +17,7 @@ import { wsService } from '../services/websocket.service.js';
 import { eventBus } from '../services/event-bus.service.js';
 import { isTimeMatch, todayStringTz } from '../services/time.service.js';
 import { runDeepAnalysisJob } from './deep-analysis.job.js';
+import { dbSyncService } from '../services/db-sync.service.js';
 
 // ============================================
 // JOB STATE MANAGER — encapsula todo estado mutável
@@ -107,6 +108,20 @@ async function radarJobRunner() {
     for (const p of unifiedPools) {
       memoryStore.recordTvl(p.id, p.tvlUSD);
     }
+
+    // Persist to DB (async, fire-and-forget)
+    dbSyncService.syncPools(unifiedPools).catch(err =>
+      logService.warn('SYSTEM', 'DB pool sync failed', { error: String(err) })
+    );
+
+    // Sync scores to DB
+    const scoreEntries = radarResults.map(r => ({
+      poolId: r.pool.externalId,
+      score: r.score,
+    }));
+    dbSyncService.syncScores(scoreEntries).catch(err =>
+      logService.warn('SYSTEM', 'DB score sync failed', { error: String(err) })
+    );
 
     // Armazena scores por pool no MemoryStore
     for (const r of radarResults) {
@@ -288,8 +303,27 @@ async function dailyReportJobRunner() {
 // ============================================
 // INITIALIZE CRON JOBS
 // ============================================
-export function initializeJobs() {
+export async function initializeJobs() {
   logService.info('SYSTEM', 'Initializing scheduled jobs');
+
+  // Cold-start: hydrate MemoryStore from DB
+  try {
+    const dbPools = await dbSyncService.loadPoolsFromDb();
+    if (dbPools.length > 0) {
+      memoryStore.setPools(dbPools);
+      logService.info('SYSTEM', `Cold-start: loaded ${dbPools.length} pools from DB`);
+    }
+
+    const dbScores = await dbSyncService.loadScoresFromDb();
+    for (const [poolId, score] of dbScores) {
+      memoryStore.setScore(poolId, score);
+    }
+    if (dbScores.size > 0) {
+      logService.info('SYSTEM', `Cold-start: loaded ${dbScores.size} scores from DB`);
+    }
+  } catch (err) {
+    logService.warn('SYSTEM', 'Cold-start DB hydration failed (will fetch fresh)', { error: String(err) });
+  }
 
   // ============================================
   // REGISTRAR LISTENERS DO EVENT BUS
@@ -362,6 +396,11 @@ export function initializeJobs() {
   cron.schedule('0 * * * *', () => {
     const evicted = memoryStore.evictStale();
     logService.info('SYSTEM', 'MemoryStore eviction done', { evicted, ...memoryStore.getStats() });
+  });
+
+  // Cleanup old snapshots: daily at 3 AM
+  cron.schedule('0 3 * * *', async () => {
+    await dbSyncService.cleanupOldSnapshots(30);
   });
 
   // Run initial jobs in sequence

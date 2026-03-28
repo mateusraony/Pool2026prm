@@ -31,7 +31,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],   // inline SW registration script
+      scriptSrc: ["'self'", "'sha256-31fQF/g9KGmEnutu6M7cTHdK4cN5J5z5NRerO5mFMfQ='"],   // inline SW registration script
       styleSrc: ["'self'", "'unsafe-inline'"],    // inline styles in loading div + Tailwind
       imgSrc: ["'self'", "data:", "https:"],      // data: for base64 icons, https: for external token logos
       connectSrc: ["'self'", "wss:", "ws:", "https:"], // WebSocket (Socket.io) + APIs externas

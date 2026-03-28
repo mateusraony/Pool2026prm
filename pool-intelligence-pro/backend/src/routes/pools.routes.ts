@@ -989,4 +989,42 @@ router.get('/pools/:chain/:address/deep-analysis', async (req, res) => {
   }
 });
 
+// GET /pools/:chain/:address/snapshots — historical snapshots from DB
+router.get('/pools/:chain/:address/snapshots', async (req, res) => {
+  try {
+    const poolId = `${req.params.chain}_${req.params.address}`;
+    const daysParam = parseInt(req.query.days as string, 10);
+    const days = isNaN(daysParam) || daysParam < 1 || daysParam > 90 ? 7 : daysParam;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const prisma = getPrisma();
+    const pool = await prisma.poolCurrent.findUnique({
+      where: { externalId: poolId },
+      select: { id: true },
+    });
+
+    if (!pool) {
+      return res.json({ success: true, data: [], timestamp: new Date() });
+    }
+
+    const snapshots = await prisma.poolSnapshot.findMany({
+      where: { poolId: pool.id, timestamp: { gte: since } },
+      orderBy: { timestamp: 'asc' },
+      select: {
+        timestamp: true,
+        price: true,
+        tvl: true,
+        volume24h: true,
+        fees24h: true,
+        aprFee: true,
+      },
+    });
+
+    res.json({ success: true, data: snapshots, timestamp: new Date() });
+  } catch (error) {
+    logService.error('POOLS', 'Failed to get snapshots', { error });
+    res.status(500).json({ success: false, error: 'Failed to get snapshots' });
+  }
+});
+
 export default router;
