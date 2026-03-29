@@ -21,10 +21,18 @@ export class RecommendationService {
     // Generate recommendations for ALL modes to allow filtering later
     const allRecommendations: Recommendation[] = [];
 
-    // Sort by score
-    const sorted = poolsWithScores
+    // Separate non-suspect (priority) and suspect (fallback)
+    const nonSuspect = poolsWithScores
       .filter(({ score }) => !score.isSuspect)
       .sort((a, b) => b.score.total - a.score.total);
+
+    // Suspect pools with decent score as fallback to avoid empty results
+    const suspectFallback = poolsWithScores
+      .filter(({ score }) => score.isSuspect && score.total >= 30)
+      .sort((a, b) => b.score.total - a.score.total);
+
+    // Prioritize non-suspect, use suspect as fallback if < 3 clean pools
+    const sorted = nonSuspect.length >= 3 ? nonSuspect : [...nonSuspect, ...suspectFallback];
 
     // Usar o modo solicitado pelo caller para gerar cada recomendação
     // (item.score.recommendedMode é o modo sugerido pelo pool, não o escolhido pelo usuário)
@@ -304,6 +312,11 @@ export class RecommendationService {
       commentary += 'Atencao: ' + risks[0] + '. ';
     }
     
+    // Suspect warning
+    if (score.isSuspect && score.suspectReason) {
+      commentary += 'ATENCAO: ' + score.suspectReason + '. ';
+    }
+
     // Disclaimer
     commentary += 'Esta analise e baseada em dados historicos e nao constitui garantia de resultados futuros.';
     
