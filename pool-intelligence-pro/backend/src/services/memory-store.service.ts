@@ -19,7 +19,7 @@ import { logService } from './log.service.js';
 const MAX_POOLS = 500;               // cap máximo de pools em memória
 const POOL_TTL_MS  = 15 * 60 * 1000; // 15 min — mesma frequência do radar
 const SCORE_TTL_MS = 15 * 60 * 1000;
-const REC_TTL_MS   =  5 * 60 * 1000; // 5 min — mesma frequência das recomendações
+const REC_TTL_MS   = 30 * 60 * 1000; // 30 min — manter recomendações entre ciclos do radar
 
 interface Entry<T> {
   data: T;

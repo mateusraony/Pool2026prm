@@ -6,7 +6,7 @@
 #
 # OPCAO A (recomendada): Root Directory = pool-intelligence-pro/backend
 #   Build Command: npm install && npm run build
-#   Start Command: npx prisma db push --accept-data-loss && npm start
+#   Start Command: npm start
 #
 # OPCAO B: Root Directory = pool-intelligence-pro
 #   Build Command: npm run install:all && npm run build
@@ -24,7 +24,7 @@ services:
     plan: free
     rootDir: pool-intelligence-pro/backend
     buildCommand: npm ci && npm run build
-    startCommand: npx prisma db push --accept-data-loss && npm start
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production

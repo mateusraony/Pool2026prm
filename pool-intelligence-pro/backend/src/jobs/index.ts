@@ -18,6 +18,7 @@ import { eventBus } from '../services/event-bus.service.js';
 import { isTimeMatch, todayStringTz } from '../services/time.service.js';
 import { runDeepAnalysisJob } from './deep-analysis.job.js';
 import { dbSyncService } from '../services/db-sync.service.js';
+import { scoreService } from '../services/score.service.js';
 
 // ============================================
 // JOB STATE MANAGER — encapsula todo estado mutável
@@ -162,10 +163,38 @@ async function watchlistJobRunner() {
 }
 
 async function recommendationJobRunner() {
-  const radarResults = jobState.getRadarResults();
-  if (radarResults.length === 0) {
-    logService.warn('SYSTEM', 'No radar results for recommendations');
-    return;
+  // Fonte primária: radarResults. Fallback: pools do MemoryStore
+  let poolsWithScores = jobState.getRadarResults();
+
+  if (poolsWithScores.length === 0) {
+    // Fallback: gerar scores a partir das pools em memória (cold-start ou radar vazio)
+    const memPools = memoryStore.getAllPools();
+    if (memPools.length === 0) {
+      logService.warn('SYSTEM', 'No radar results or cached pools for recommendations');
+      return;
+    }
+
+    poolsWithScores = memPools.map(p => {
+      const pool: Pool = {
+        externalId: p.id,
+        chain: p.chain,
+        protocol: p.protocol,
+        poolAddress: p.poolAddress,
+        token0: p.token0,
+        token1: p.token1,
+        tvl: p.tvlUSD,
+        volume24h: p.volume24hUSD,
+        fees24h: p.fees24hUSD || 0,
+        apr: p.aprFee || p.apr || 0,
+        feeTier: p.feeTier || 0.003,
+        bluechip: p.bluechip || false,
+        volatilityAnn: p.volatilityAnn,
+      };
+      const score = memoryStore.getScore(p.id) || scoreService.calculateScore(pool);
+      return { pool, score };
+    });
+
+    logService.info('SYSTEM', `Using ${poolsWithScores.length} cached pools for recommendations (radar empty)`);
   }
 
   const start = Date.now();
@@ -176,13 +205,16 @@ async function recommendationJobRunner() {
     // Gerar recomendações para todos os modos para que o filtro por modo nas rotas funcione
     const allModes: Array<'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE'> = ['DEFENSIVE', 'NORMAL', 'AGGRESSIVE'];
     const allRecommendations = allModes.flatMap(m =>
-      recommendationService.generateTop3(radarResults, m, capital, 10)
+      recommendationService.generateTop3(poolsWithScores, m, capital, 10)
     );
 
-    jobState.setRecommendations(allRecommendations);
-
-    // Persiste recomendações no MemoryStore para leitura imediata pelas rotas
-    memoryStore.setRecommendations(allRecommendations);
+    // Só atualizar se temos resultados — nunca descartar recomendações boas por dados vazios
+    if (allRecommendations.length > 0) {
+      jobState.setRecommendations(allRecommendations);
+      memoryStore.setRecommendations(allRecommendations);
+    } else {
+      logService.warn('SYSTEM', 'Recommendation job produced 0 results — keeping previous');
+    }
 
     // Emit top recommendation via event bus (listener aplica deduplicação)
     if (allRecommendations.length > 0) {

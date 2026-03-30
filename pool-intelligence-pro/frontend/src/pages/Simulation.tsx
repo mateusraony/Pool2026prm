@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TrendingUp, TrendingDown, Clock, Fuel, DollarSign, AlertTriangle, ArrowLeft, ExternalLink, Bell, BellRing, Check } from 'lucide-react';
 import { fetchPool, fetchPools, createRangePosition, fetchRangePositions, deleteRangePosition, calcRange, fetchOhlcv, fetchLiquidityDistribution, Pool, Score } from '../api/client';
 import { feeTierToBps, feeTierToPercent } from '../data/constants';
-import InteractiveChart from '../components/charts/InteractiveChart';
 import { UniswapRangeChart } from '@/components/charts/UniswapRangeChart';
 import clsx from 'clsx';
 
@@ -135,6 +134,11 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
   const priceHistoryData = useMemo(() => {
     if (!ohlcvData?.candles) return [];
     return ohlcvData.candles.map((c: any) => ({ timestamp: c.timestamp * 1000, price: c.close }));
+  }, [ohlcvData]);
+
+  const volumeHistoryData = useMemo(() => {
+    if (!ohlcvData?.candles) return [];
+    return ohlcvData.candles.map((c: any) => ({ timestamp: c.timestamp * 1000, volume: c.volume ?? 0 }));
   }, [ohlcvData]);
 
   // Color based on current mode
@@ -307,7 +311,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
         </div>
       )}
 
-      {/* Uniswap-style Range Chart (primary) */}
+      {/* Uniswap-style Range Chart with volume + info */}
       {!priceUnavailable && (
         <UniswapRangeChart
           priceHistory={priceHistoryData}
@@ -316,22 +320,10 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
           rangeUpper={rangeUpper}
           onRangeChange={handleRangeChange}
           liquidityData={liqData?.bars?.map((b: any) => ({ price: b.price, liquidity: b.liquidity }))}
+          volumeData={volumeHistoryData}
+          timeInRange={metrics.timeInRange}
           height={300}
           accentColor={modeChartColor}
-        />
-      )}
-
-      {/* Interactive Chart (secondary) */}
-      {!priceUnavailable && (
-        <InteractiveChart
-          currentPrice={currentPrice}
-          minPrice={currentPrice * 0.5}
-          maxPrice={currentPrice * 1.5}
-          rangeLower={rangeLower}
-          rangeUpper={rangeUpper}
-          onRangeChange={handleRangeChange}
-          token0Symbol={pool.token0?.symbol ?? '???'}
-          token1Symbol={pool.token1?.symbol ?? '???'}
         />
       )}
 

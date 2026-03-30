@@ -10,6 +10,11 @@ interface PricePoint {
   price: number;
 }
 
+interface VolumePoint {
+  timestamp: number;
+  volume: number;
+}
+
 interface LiquidityTick {
   price: number;
   liquidity: number;
@@ -25,6 +30,10 @@ export interface UniswapRangeChartProps {
   onRangeChange?: (lower: number, upper: number) => void;
   /** Real liquidity distribution from API */
   liquidityData?: LiquidityTick[];
+  /** Volume data from OHLCV candles */
+  volumeData?: VolumePoint[];
+  /** Estimated time in range (0-100) */
+  timeInRange?: number;
   /** Chart body height in px (default 300) */
   height?: number;
   /** Accent color (default #FF37C7) */
@@ -41,6 +50,7 @@ const PAD_BOTTOM = 12;
 const SCROLLBAR_W = 16;
 const HANDLE_R = 6;
 const TIME_AXIS_H = 22;
+const VOLUME_H = 60;
 
 /* ──────────────────────────────────────────────
    Helpers
@@ -117,6 +127,12 @@ function generateSyntheticPriceHistory(
    Component
    ────────────────────────────────────────────── */
 
+function formatVolume(v: number): string {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
+  return v.toFixed(0);
+}
+
 export function UniswapRangeChart({
   priceHistory = [],
   currentPrice,
@@ -124,6 +140,8 @@ export function UniswapRangeChart({
   rangeUpper,
   onRangeChange,
   liquidityData,
+  volumeData,
+  timeInRange,
   height = 300,
   accentColor = '#FF37C7',
   className,
@@ -225,6 +243,20 @@ export function UniswapRangeChart({
     });
   }, [liquidityData, currentPrice, pMin, pMax, rangeLower, rangeUpper, priceToY, bodyH, liqW]);
 
+  // ── Volume bars ──
+  const volBars = useMemo(() => {
+    if (!volumeData || volumeData.length < 2) return [];
+    const maxVol = Math.max(...volumeData.map((d) => d.volume), 1);
+    const barW = chartW / volumeData.length;
+    return volumeData.map((d, i) => {
+      const barHeight = (d.volume / maxVol) * (VOLUME_H - 8);
+      return { x: i * barW, w: Math.max(1, barW - 1), h: barHeight, vol: d.volume };
+    });
+  }, [volumeData, chartW]);
+
+  const hasVolume = volBars.length > 0;
+  const totalSvgH = bodyH + (hasVolume ? VOLUME_H : 0);
+
   // ── Range positions ──
   const rangeTopY = priceToY(rangeUpper);
   const rangeBotY = priceToY(rangeLower);
@@ -305,7 +337,7 @@ export function UniswapRangeChart({
 
   return (
     <div ref={containerRef} className={cn('select-none', className)}>
-      <svg width="100%" height={bodyH} style={{ touchAction: 'manipulation' }}>
+      <svg width="100%" height={totalSvgH} style={{ touchAction: 'manipulation' }}>
         {/* ── Defs ── */}
         <defs>
           <mask id={maskId}>
@@ -475,6 +507,37 @@ export function UniswapRangeChart({
         <text x={4} y={curY - 6} textAnchor="start" style={{ fill: 'rgba(255,255,255,0.65)', fontSize: 10, fontFamily: 'monospace' }}>
           {formatPrice(currentPrice)}
         </text>
+
+        {/* ── Volume bars ── */}
+        {hasVolume && (
+          <g>
+            {/* Separator line between price and volume */}
+            <line x1={0} x2={chartW} y1={bodyH} y2={bodyH} stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
+            {/* Volume label */}
+            <text x={4} y={bodyH + 12} style={{ fill: 'rgba(255,255,255,0.35)', fontSize: 9, fontFamily: 'monospace' }}>
+              Vol
+            </text>
+            {/* Volume bars */}
+            {volBars.map((b, i) => (
+              <rect
+                key={i}
+                x={b.x}
+                y={bodyH + VOLUME_H - 4 - b.h}
+                width={b.w}
+                height={b.h}
+                rx={0.5}
+                fill={accentColor}
+                opacity={0.4}
+              />
+            ))}
+            {/* Max volume label */}
+            {volumeData && volumeData.length > 0 && (
+              <text x={chartW - 4} y={bodyH + 12} textAnchor="end" style={{ fill: 'rgba(255,255,255,0.3)', fontSize: 9, fontFamily: 'monospace' }}>
+                {formatVolume(Math.max(...volumeData.map(d => d.volume)))}
+              </text>
+            )}
+          </g>
+        )}
       </svg>
 
       {/* ── Time axis ── */}
@@ -494,15 +557,35 @@ export function UniswapRangeChart({
         </svg>
       )}
 
-      {/* ── Info bar ── */}
-      <div className="flex items-center justify-between text-[10px] text-muted-foreground mt-1 px-1 font-mono">
-        <span>
-          Range: {formatPrice(rangeLower)} — {formatPrice(rangeUpper)}
-        </span>
-        <span>
-          Largura: {(currentPrice > 0 ? (rangeUpper - rangeLower) / currentPrice * 100 : 0).toFixed(1)}%
-        </span>
-        <span>Preco atual: {formatPrice(currentPrice)}</span>
+      {/* ── Info cards ── */}
+      <div className="mt-3 grid grid-cols-5 gap-2 text-center">
+        <div className="bg-dark-700/50 rounded-lg p-2">
+          <div className="text-[10px] text-dark-400 mb-0.5">Preco Atual</div>
+          <div className="font-mono font-bold text-xs">{formatPrice(currentPrice)}</div>
+        </div>
+        <div className="bg-dark-700/50 rounded-lg p-2">
+          <div className="text-[10px] text-dark-400 mb-0.5">Preco Min</div>
+          <div className="font-mono font-bold text-xs" style={{ color: accentColor }}>{formatPrice(rangeLower)}</div>
+        </div>
+        <div className="bg-dark-700/50 rounded-lg p-2">
+          <div className="text-[10px] text-dark-400 mb-0.5">Preco Max</div>
+          <div className="font-mono font-bold text-xs" style={{ color: accentColor }}>{formatPrice(rangeUpper)}</div>
+        </div>
+        <div className="bg-dark-700/50 rounded-lg p-2">
+          <div className="text-[10px] text-dark-400 mb-0.5">Range Width</div>
+          <div className="font-mono font-bold text-xs text-warning-400">
+            ±{(currentPrice > 0 ? (rangeUpper - rangeLower) / currentPrice * 50 : 0).toFixed(1)}%
+          </div>
+        </div>
+        <div className="bg-dark-700/50 rounded-lg p-2">
+          <div className="text-[10px] text-dark-400 mb-0.5">No Range</div>
+          <div className="font-mono font-bold text-xs text-success-400">
+            {timeInRange != null ? `${timeInRange}%` : '—'}
+          </div>
+        </div>
+      </div>
+      <div className="mt-1.5 text-center text-[10px] text-dark-500">
+        🖱️ Arraste os handles para ajustar o range
       </div>
     </div>
   );
