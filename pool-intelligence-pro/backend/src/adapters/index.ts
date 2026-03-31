@@ -24,7 +24,8 @@ const adapters: Record<string, ProviderAdapter> = {
 // Provedores que não afetam o status geral se falharem:
 // - thegraph: requer API key (THEGRAPH_API_KEY)
 // - geckoterminal: supplementary, rate-limited; main data comes from DefiLlama
-const optionalProviders = new Set(['thegraph', 'geckoterminal']);
+// - dexscreener: supplementary; API retorna 403 de IPs cloud (Render, etc)
+const optionalProviders = new Set(['thegraph', 'geckoterminal', 'dexscreener']);
 
 // Get adapter by name
 export function getAdapter(name: string): ProviderAdapter | undefined {
