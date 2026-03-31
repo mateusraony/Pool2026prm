@@ -1660,6 +1660,336 @@ export function calcRangeBenchmark(params: RangeBenchmarkParams): RangeBenchmark
   };
 }
 
+// ============================================================
+// 18. TOKEN QUANTITIES FOR CONCENTRATED LIQUIDITY
+// ============================================================
+
+export interface TokenQuantitiesResult {
+  amount0: number;         // quantidade de token0 (ex: ETH)
+  amount1: number;         // quantidade de token1 (ex: USDC)
+  amount0Usd: number;      // valor em USD do token0
+  amount1Usd: number;      // valor em USD do token1
+  ratio0Pct: number;       // % do capital em token0
+  ratio1Pct: number;       // % do capital em token1
+  zone: 'below' | 'in_range' | 'above';
+}
+
+/**
+ * Calcula quanto de cada token depositar para liquidez concentrada V3.
+ * Usa fórmulas oficiais da Uniswap V3 com sqrtPrice.
+ */
+export function calcTokenQuantities(params: {
+  currentPrice: number;
+  rangeLower: number;
+  rangeUpper: number;
+  capitalUsd: number;
+  token0PriceUsd?: number;
+  token1PriceUsd?: number;
+}): TokenQuantitiesResult {
+  const { currentPrice, rangeLower, rangeUpper, capitalUsd } = params;
+  const p0Usd = params.token0PriceUsd || currentPrice;
+  const p1Usd = params.token1PriceUsd || 1;
+
+  if (currentPrice <= 0 || rangeLower <= 0 || rangeUpper <= rangeLower || capitalUsd <= 0) {
+    return { amount0: 0, amount1: 0, amount0Usd: 0, amount1Usd: 0, ratio0Pct: 50, ratio1Pct: 50, zone: 'in_range' };
+  }
+
+  const sqrtP = Math.sqrt(currentPrice);
+  const sqrtA = Math.sqrt(rangeLower);
+  const sqrtB = Math.sqrt(rangeUpper);
+
+  let amount0: number;
+  let amount1: number;
+  let zone: 'below' | 'in_range' | 'above';
+
+  if (currentPrice <= rangeLower) {
+    // 100% token0
+    amount0 = capitalUsd / p0Usd;
+    amount1 = 0;
+    zone = 'below';
+  } else if (currentPrice >= rangeUpper) {
+    // 100% token1
+    amount0 = 0;
+    amount1 = capitalUsd / p1Usd;
+    zone = 'above';
+  } else {
+    // Dentro do range: calcular L e derivar quantidades
+    const denominator = p0Usd * (1 / sqrtP - 1 / sqrtB) + p1Usd * (sqrtP - sqrtA);
+    if (denominator <= 0) {
+      return { amount0: capitalUsd / 2 / p0Usd, amount1: capitalUsd / 2 / p1Usd, amount0Usd: capitalUsd / 2, amount1Usd: capitalUsd / 2, ratio0Pct: 50, ratio1Pct: 50, zone: 'in_range' };
+    }
+    const L = capitalUsd / denominator;
+    amount0 = L * (1 / sqrtP - 1 / sqrtB);
+    amount1 = L * (sqrtP - sqrtA);
+    zone = 'in_range';
+  }
+
+  const amount0Usd = Math.max(0, amount0 * p0Usd);
+  const amount1Usd = Math.max(0, amount1 * p1Usd);
+  const total = amount0Usd + amount1Usd || 1;
+
+  return {
+    amount0: Math.round(amount0 * 1e8) / 1e8,
+    amount1: Math.round(amount1 * 1e4) / 1e4,
+    amount0Usd: Math.round(amount0Usd * 100) / 100,
+    amount1Usd: Math.round(amount1Usd * 100) / 100,
+    ratio0Pct: Math.round((amount0Usd / total) * 100),
+    ratio1Pct: Math.round((amount1Usd / total) * 100),
+    zone,
+  };
+}
+
+// ============================================================
+// 19. CAPITAL EFFICIENCY MULTIPLIER (V3 vs V2)
+// ============================================================
+
+export interface CapitalEfficiencyResult {
+  multiplier: number;       // ex: 4.2x = V3 rende 4.2x mais que V2
+  v2EquivalentCapital: number; // quanto precisaria em V2 para o mesmo efeito
+  warning: string | null;   // alerta se multiplicador muito alto
+}
+
+/**
+ * Calcula o multiplicador de eficiência: quantas vezes a posição V3
+ * é mais eficiente que V2 full-range para o mesmo capital.
+ */
+export function calcCapitalEfficiency(params: {
+  currentPrice: number;
+  rangeLower: number;
+  rangeUpper: number;
+  capital: number;
+}): CapitalEfficiencyResult {
+  const { currentPrice, rangeLower, rangeUpper, capital } = params;
+
+  if (currentPrice <= 0 || rangeLower <= 0 || rangeUpper <= rangeLower) {
+    return { multiplier: 1, v2EquivalentCapital: capital, warning: null };
+  }
+
+  // Fórmula oficial: multiplier = 1 / (1 - sqrt(Pa/Pb))
+  const sqrtRatio = Math.sqrt(rangeLower / rangeUpper);
+  const denom = 1 - sqrtRatio;
+  const multiplier = denom > 0 ? clamp(1 / denom, 1, 500) : 1;
+
+  const v2EquivalentCapital = Math.round(capital * multiplier * 100) / 100;
+
+  let warning: string | null = null;
+  if (multiplier > 50) {
+    warning = 'Range extremamente apertado — qualquer variacao de preco te tira da pool';
+  } else if (multiplier > 20) {
+    warning = 'Range muito concentrado — monitorar frequentemente';
+  }
+
+  return {
+    multiplier: Math.round(multiplier * 10) / 10,
+    v2EquivalentCapital,
+    warning,
+  };
+}
+
+// ============================================================
+// 20. GAS BREAK-EVEN CALCULATOR
+// ============================================================
+
+export interface GasBreakevenResult {
+  breakEvenDays: number;    // dias para cobrir custo de gas
+  dailyFeeEstimate: number; // ganho diário estimado em USD
+  totalGasCost: number;     // custo entrada + saída
+  viable: boolean;          // true se break-even < horizonDays
+  warning: string | null;
+}
+
+/**
+ * Calcula quantos dias leva para as fees cobrirem o custo de gas.
+ */
+export function calcGasBreakeven(params: {
+  capital: number;
+  tvl: number;
+  fees24h: number;
+  gasCostUsd: number;      // custo total (entrada + saída)
+  horizonDays: number;
+  riskMode: RiskMode;
+}): GasBreakevenResult {
+  const { capital, tvl, fees24h, gasCostUsd, horizonDays, riskMode } = params;
+
+  const kMap: Record<RiskMode, number> = { DEFENSIVE: 0.55, NORMAL: 0.75, AGGRESSIVE: 0.95 };
+  const k_active = kMap[riskMode];
+  const userShare = tvl > 0 ? capital / tvl : 0;
+  const dailyFeeEstimate = fees24h * userShare * k_active;
+
+  if (dailyFeeEstimate <= 0) {
+    return {
+      breakEvenDays: Infinity,
+      dailyFeeEstimate: 0,
+      totalGasCost: gasCostUsd,
+      viable: false,
+      warning: 'Sem dados de fees — impossivel estimar break-even',
+    };
+  }
+
+  const breakEvenDays = gasCostUsd / dailyFeeEstimate;
+  const viable = breakEvenDays <= horizonDays;
+
+  let warning: string | null = null;
+  if (!viable) {
+    warning = `Gas custa mais que o lucro esperado em ${horizonDays} dias. Aumente o capital ou escolha pool com mais volume.`;
+  } else if (breakEvenDays > horizonDays * 0.5) {
+    warning = `Break-even em ${Math.ceil(breakEvenDays)} dias — metade do horizonte sera so para cobrir gas.`;
+  }
+
+  return {
+    breakEvenDays: Math.round(breakEvenDays * 10) / 10,
+    dailyFeeEstimate: Math.round(dailyFeeEstimate * 100) / 100,
+    totalGasCost: gasCostUsd,
+    viable,
+    warning,
+  };
+}
+
+// ============================================================
+// 21. HEALTH FACTOR (DISTANCIA DAS BORDAS DO RANGE)
+// ============================================================
+
+export interface HealthFactorResult {
+  factor: number;           // 0-100 (100 = centro do range, 0 = na borda)
+  distToLower: number;      // distância % para borda inferior
+  distToUpper: number;      // distância % para borda superior
+  closestEdge: 'lower' | 'upper';
+  status: 'healthy' | 'warning' | 'critical' | 'out_of_range';
+}
+
+/**
+ * Calcula quão "saudável" está a posição — distância do preço atual
+ * em relação às bordas do range. Quanto mais perto do centro, mais saudável.
+ */
+export function calcHealthFactor(params: {
+  currentPrice: number;
+  rangeLower: number;
+  rangeUpper: number;
+}): HealthFactorResult {
+  const { currentPrice, rangeLower, rangeUpper } = params;
+
+  if (currentPrice <= 0 || rangeLower <= 0 || rangeUpper <= rangeLower) {
+    return { factor: 0, distToLower: 0, distToUpper: 0, closestEdge: 'lower', status: 'out_of_range' };
+  }
+
+  const distToLower = ((currentPrice - rangeLower) / currentPrice) * 100;
+  const distToUpper = ((rangeUpper - currentPrice) / currentPrice) * 100;
+
+  if (currentPrice < rangeLower || currentPrice > rangeUpper) {
+    return {
+      factor: 0,
+      distToLower: Math.round(distToLower * 10) / 10,
+      distToUpper: Math.round(distToUpper * 10) / 10,
+      closestEdge: Math.abs(currentPrice - rangeLower) < Math.abs(currentPrice - rangeUpper) ? 'lower' : 'upper',
+      status: 'out_of_range',
+    };
+  }
+
+  // Factor: posição relativa dentro do range (0 = borda, 100 = centro)
+  const rangeWidth = rangeUpper - rangeLower;
+  const posInRange = (currentPrice - rangeLower) / rangeWidth; // 0..1
+  const factor = Math.round((1 - Math.abs(posInRange - 0.5) * 2) * 100);
+
+  const closestEdge = distToLower < distToUpper ? 'lower' : 'upper';
+  const minDist = Math.min(distToLower, distToUpper);
+
+  let status: 'healthy' | 'warning' | 'critical';
+  if (minDist < 5) status = 'critical';
+  else if (minDist < 15) status = 'warning';
+  else status = 'healthy';
+
+  return {
+    factor,
+    distToLower: Math.round(distToLower * 10) / 10,
+    distToUpper: Math.round(distToUpper * 10) / 10,
+    closestEdge,
+    status,
+  };
+}
+
+// ============================================================
+// 22. MULTI-PERIOD VOLATILITY FROM OHLCV DATA
+// ============================================================
+
+export interface MultiPeriodVolatility {
+  vol7d: number;
+  vol14d: number;
+  vol30d: number;
+  ranges: {
+    period: 7 | 14 | 30;
+    label: string;
+    lower: number;
+    upper: number;
+    widthPct: number;
+    sigma: number;
+  }[];
+}
+
+/**
+ * Calcula volatilidade e ranges sugeridos para 3 períodos
+ * usando dados reais de OHLCV (preços de fechamento).
+ */
+export function calcMultiPeriodRanges(params: {
+  closePrices: number[];   // últimos 31+ dias de preço de fechamento (mais antigo primeiro)
+  currentPrice: number;
+  sigmaMultiplier?: number; // padrão 1.5 (cobre ~87% da distribuição)
+}): MultiPeriodVolatility {
+  const { closePrices, currentPrice } = params;
+  const mult = params.sigmaMultiplier ?? 1.5;
+
+  function volForPeriod(prices: number[]): number {
+    if (prices.length < 3) return 0.5;
+    const logReturns: number[] = [];
+    for (let i = 1; i < prices.length; i++) {
+      if (prices[i - 1] > 0 && prices[i] > 0) {
+        logReturns.push(Math.log(prices[i] / prices[i - 1]));
+      }
+    }
+    if (logReturns.length < 2) return 0.5;
+    return stdev(logReturns);
+  }
+
+  const last31 = closePrices.slice(-31);
+  const last14 = closePrices.slice(-14);
+  const last7 = closePrices.slice(-7);
+
+  const sigma7 = volForPeriod(last7);
+  const sigma14 = volForPeriod(last14);
+  const sigma30 = volForPeriod(last31);
+
+  // Anualizar para referência
+  const vol7d = clamp(sigma7 * Math.sqrt(365), 0.01, 10);
+  const vol14d = clamp(sigma14 * Math.sqrt(365), 0.01, 10);
+  const vol30d = clamp(sigma30 * Math.sqrt(365), 0.01, 10);
+
+  function rangeForSigma(sigma: number, period: 7 | 14 | 30, label: string) {
+    // Range = preço ± mult * sigma_diário * √período
+    const spread = mult * sigma * Math.sqrt(period);
+    const lower = currentPrice * Math.exp(-spread);
+    const upper = currentPrice * Math.exp(spread);
+    const widthPct = ((upper - lower) / currentPrice) * 100;
+    return {
+      period,
+      label,
+      lower: Math.round(lower * 10000) / 10000,
+      upper: Math.round(upper * 10000) / 10000,
+      widthPct: Math.round(widthPct * 100) / 100,
+      sigma: Math.round(sigma * 10000) / 10000,
+    };
+  }
+
+  return {
+    vol7d: Math.round(vol7d * 10000) / 10000,
+    vol14d: Math.round(vol14d * 10000) / 10000,
+    vol30d: Math.round(vol30d * 10000) / 10000,
+    ranges: [
+      rangeForSigma(sigma7, 7, 'Agressivo (7d)'),
+      rangeForSigma(sigma14, 14, 'Moderado (14d)'),
+      rangeForSigma(sigma30, 30, 'Conservador (30d)'),
+    ],
+  };
+}
+
 const calcService = {
   calcAprFee,
   calcVolatilityAnn,
@@ -1681,6 +2011,11 @@ const calcService = {
   calcIL,
   calcTickLiquidity,
   calcRangeBenchmark,
+  calcTokenQuantities,
+  calcCapitalEfficiency,
+  calcGasBreakeven,
+  calcHealthFactor,
+  calcMultiPeriodRanges,
 };
 
 export { calcService };
