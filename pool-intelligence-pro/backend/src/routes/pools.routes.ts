@@ -15,6 +15,7 @@ import {
   calcRangeRecommendation, calcUserFees, calcILRisk, calcMonteCarlo, calcBacktest, calcLVR,
   calcPortfolioAnalytics, calcAutoCompound, calcTokenCorrelation,
   calcTickLiquidity, calcRangeBenchmark,
+  calcTokenQuantities, calcCapitalEfficiency, calcGasBreakeven, calcHealthFactor,
   type PortfolioPosition,
 } from '../services/calc.service.js';
 import { Pool, UnifiedPool } from '../types/index.js';
@@ -863,10 +864,42 @@ router.post('/range-calc', validate(rangeCalcSchema), async (req, res) => {
 
     const selected = ranges[(riskMode as string).toUpperCase() as 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE'] || ranges.NORMAL;
 
-    const feeEstimate = calcUserFees({ tvl: tvl || 0, fees24h, userCapital: capital, riskMode: riskMode as 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE' });
+    const mode = (riskMode as string).toUpperCase() as 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE';
+    const feeEstimate = calcUserFees({ tvl: tvl || 0, fees24h, userCapital: capital, riskMode: mode });
     const ilRisk = calcILRisk({ price, rangeLower: selected.lower, rangeUpper: selected.upper, volAnn, horizonDays });
 
-    res.json({ success: true, data: { ranges, selected, feeEstimate, ilRisk } });
+    // Enhanced data: token quantities, capital efficiency, gas break-even, health factor
+    const tokenQty = calcTokenQuantities({
+      currentPrice: price, rangeLower: selected.lower, rangeUpper: selected.upper,
+      capitalUsd: capital,
+    });
+
+    const capEfficiency = calcCapitalEfficiency({
+      currentPrice: price, rangeLower: selected.lower, rangeUpper: selected.upper,
+      capital,
+    });
+
+    // Gas costs por chain (entrada + saída)
+    const gasMap: Record<string, number> = { ethereum: 60, arbitrum: 6, base: 3, optimism: 4, polygon: 1 };
+    const chain = (req.body.chain as string) || 'ethereum';
+    const gasCost = gasMap[chain] ?? 10;
+
+    const gasBreakeven = calcGasBreakeven({
+      capital, tvl: tvl || 0, fees24h: fees24h || 0,
+      gasCostUsd: gasCost, horizonDays, riskMode: mode,
+    });
+
+    const healthFactor = calcHealthFactor({
+      currentPrice: price, rangeLower: selected.lower, rangeUpper: selected.upper,
+    });
+
+    res.json({ success: true, data: {
+      ranges, selected, feeEstimate, ilRisk,
+      tokenQuantities: tokenQty,
+      capitalEfficiency: capEfficiency,
+      gasBreakeven,
+      healthFactor,
+    } });
   } catch (error) {
     logService.error('SYSTEM', 'POST /range-calc failed', { error });
     res.status(500).json({ success: false, error: 'Internal error' });

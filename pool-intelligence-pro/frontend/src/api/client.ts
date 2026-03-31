@@ -469,11 +469,16 @@ export async function calcRange(params: {
   capital?: number;
   tvl?: number;
   fees24h?: number;
+  chain?: string;
 }): Promise<{
   ranges: { DEFENSIVE: RangeResult; NORMAL: RangeResult; AGGRESSIVE: RangeResult };
   selected: RangeResult;
   feeEstimate: FeeEstimate;
   ilRisk: ILRiskResult;
+  tokenQuantities?: { amount0: number; amount1: number; amount0Usd: number; amount1Usd: number; ratio0Pct: number; ratio1Pct: number; zone: string };
+  capitalEfficiency?: { multiplier: number; v2EquivalentCapital: number; warning: string | null };
+  gasBreakeven?: { breakEvenDays: number; dailyFeeEstimate: number; totalGasCost: number; viable: boolean; warning: string | null };
+  healthFactor?: { factor: number; distToLower: number; distToUpper: number; status: string };
 } | null> {
   try {
     const { data } = await api.post('/range-calc', params);
