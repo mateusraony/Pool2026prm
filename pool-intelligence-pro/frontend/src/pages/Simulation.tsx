@@ -111,6 +111,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
       capital,
       tvl: pool.tvl,
       fees24h: pool.fees24h,
+      chain: pool.chain,
     }),
     enabled: currentPrice > 0,
     staleTime: 60_000,
@@ -495,6 +496,76 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
                     ? ' Considere Arbitrum/Base para reduzir custos.'
                     : ' Aumente o capital para diluir o custo de gas.'}
                 </span>
+              </div>
+            )}
+
+            {/* Enhanced analysis from server */}
+            {serverCalc && (
+              <div className="space-y-3">
+                {/* Token Quantities */}
+                {serverCalc.tokenQuantities && (
+                  <div className="bg-dark-700/50 rounded-lg p-3">
+                    <div className="text-xs text-dark-400 mb-2 font-medium">Deposito Necessario</div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <span className="text-xs text-dark-500">{pool.token0?.symbol}</span>
+                        <div className="font-mono font-bold">{serverCalc.tokenQuantities.amount0.toFixed(6)}</div>
+                        <div className="text-xs text-dark-400">${serverCalc.tokenQuantities.amount0Usd.toFixed(2)} ({serverCalc.tokenQuantities.ratio0Pct}%)</div>
+                      </div>
+                      <div>
+                        <span className="text-xs text-dark-500">{pool.token1?.symbol}</span>
+                        <div className="font-mono font-bold">{serverCalc.tokenQuantities.amount1.toFixed(2)}</div>
+                        <div className="text-xs text-dark-400">${serverCalc.tokenQuantities.amount1Usd.toFixed(2)} ({serverCalc.tokenQuantities.ratio1Pct}%)</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Capital Efficiency + Gas Break-even + Health Factor */}
+                <div className="grid grid-cols-3 gap-2">
+                  {serverCalc.capitalEfficiency && (
+                    <div className="bg-dark-700/50 rounded-lg p-2 text-center">
+                      <div className="text-[10px] text-dark-400 mb-0.5">Eficiencia</div>
+                      <div className="font-mono font-bold text-primary-400">{serverCalc.capitalEfficiency.multiplier}x</div>
+                      <div className="text-[10px] text-dark-500">vs V2</div>
+                    </div>
+                  )}
+                  {serverCalc.gasBreakeven && (
+                    <div className="bg-dark-700/50 rounded-lg p-2 text-center">
+                      <div className="text-[10px] text-dark-400 mb-0.5">Break-even Gas</div>
+                      <div className={clsx('font-mono font-bold', serverCalc.gasBreakeven.viable ? 'text-success-400' : 'text-danger-400')}>
+                        {serverCalc.gasBreakeven.breakEvenDays === Infinity ? '∞' : serverCalc.gasBreakeven.breakEvenDays + 'd'}
+                      </div>
+                      <div className="text-[10px] text-dark-500">${serverCalc.gasBreakeven.totalGasCost} gas</div>
+                    </div>
+                  )}
+                  {serverCalc.healthFactor && (
+                    <div className="bg-dark-700/50 rounded-lg p-2 text-center">
+                      <div className="text-[10px] text-dark-400 mb-0.5">Saude do Range</div>
+                      <div className={clsx('font-mono font-bold',
+                        serverCalc.healthFactor.status === 'healthy' ? 'text-success-400' :
+                        serverCalc.healthFactor.status === 'warning' ? 'text-warning-400' : 'text-danger-400'
+                      )}>
+                        {serverCalc.healthFactor.factor}%
+                      </div>
+                      <div className="text-[10px] text-dark-500">
+                        ↓{serverCalc.healthFactor.distToLower}% ↑{serverCalc.healthFactor.distToUpper}%
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Warnings */}
+                {serverCalc.capitalEfficiency?.warning && (
+                  <div className="bg-warning-500/10 border border-warning-500/30 rounded-lg p-2 text-xs text-warning-400">
+                    ⚠ {serverCalc.capitalEfficiency.warning}
+                  </div>
+                )}
+                {serverCalc.gasBreakeven?.warning && (
+                  <div className="bg-danger-500/10 border border-danger-500/30 rounded-lg p-2 text-xs text-danger-400">
+                    ⚠ {serverCalc.gasBreakeven.warning}
+                  </div>
+                )}
               </div>
             )}
 
