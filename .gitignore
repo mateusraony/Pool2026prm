@@ -6,3 +6,7 @@ pool-intelligence-pro/backend/dist/
 pool-intelligence-pro/frontend/dist/
 *.env.local
 .env
+
+# Playwright test artifacts
+pool-intelligence-pro/playwright-report/
+pool-intelligence-pro/test-results/
