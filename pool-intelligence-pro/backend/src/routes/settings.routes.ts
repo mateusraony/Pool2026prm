@@ -11,7 +11,6 @@ import {
   validate, telegramConfigSchema, riskConfigSchema,
   notificationSettingsSchema, telegramTestRecsSchema,
 } from './validation.js';
-import { requireAdminKey } from './middleware/admin-auth.js';
 
 const adminLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
@@ -60,7 +59,7 @@ router.get('/settings', async (req, res) => {
 });
 
 // Update Telegram Bot Token and/or Chat ID at runtime
-router.put('/settings/telegram', adminLimiter, requireAdminKey, validate(telegramConfigSchema), async (req, res) => {
+router.put('/settings/telegram', adminLimiter, validate(telegramConfigSchema), async (req, res) => {
   try {
     const { chatId, botToken } = req.body;
     let botName: string | undefined;
@@ -100,7 +99,7 @@ router.put('/settings/telegram', adminLimiter, requireAdminKey, validate(telegra
 });
 
 // Save risk config (persisted to DB, validated with Zod)
-router.put('/settings/risk-config', adminLimiter, requireAdminKey, validate(riskConfigSchema), async (req, res) => {
+router.put('/settings/risk-config', adminLimiter, validate(riskConfigSchema), async (req, res) => {
   try {
     persistService.setRiskConfig(req.body);
     res.json({

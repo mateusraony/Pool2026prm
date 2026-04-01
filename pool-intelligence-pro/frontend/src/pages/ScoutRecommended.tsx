@@ -286,12 +286,23 @@ export default function ScoutRecommended() {
           <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <h3 className="font-medium mb-2">Nenhuma pool encontrada</h3>
           <p className="text-sm text-muted-foreground mb-4">
-            {error ? 'Erro ao carregar pools do servidor' : 'Tente ajustar os filtros ou atualizar os dados'}
+            {error
+              ? 'Erro ao carregar pools do servidor'
+              : networkFilter !== 'all'
+                ? `Nenhuma recomendacao disponivel para ${networkFilter}. O motor de analise pode nao ter encontrado pools com score suficiente nesta rede. Tente "Todas as redes" ou atualize.`
+                : 'Tente ajustar os filtros ou atualizar os dados'}
           </p>
-          <Button onClick={handleRefresh} disabled={isFetching}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Buscar pools da API
-          </Button>
+          <div className="flex gap-2 justify-center">
+            {networkFilter !== 'all' && (
+              <Button variant="outline" onClick={() => setNetworkFilter('all')}>
+                Ver todas as redes
+              </Button>
+            )}
+            <Button onClick={handleRefresh} disabled={isFetching}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Buscar pools da API
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
