@@ -1,11 +1,18 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { TrendingUp, TrendingDown, Clock, Fuel, DollarSign, AlertTriangle, ArrowLeft, ExternalLink, Bell, BellRing, Check } from 'lucide-react';
+import { TrendingUp, TrendingDown, Clock, Fuel, DollarSign, AlertTriangle, ArrowLeft, ExternalLink, Bell, BellRing, Check, BarChart3 } from 'lucide-react';
 import { fetchPool, fetchPools, createRangePosition, fetchRangePositions, deleteRangePosition, calcRange, fetchOhlcv, fetchLiquidityDistribution, Pool, Score } from '../api/client';
 import { feeTierToBps, feeTierToPercent } from '../data/constants';
 import { UniswapRangeChart } from '@/components/charts/UniswapRangeChart';
 import clsx from 'clsx';
+
+type Period = '7D' | '30D' | 'YTD';
+const periodConfig: Record<Period, { timeframe: 'hour' | 'day'; limit: number; days: number; label: string }> = {
+  '7D': { timeframe: 'hour', limit: 168, days: 7, label: '7 Dias' },
+  '30D': { timeframe: 'day', limit: 30, days: 30, label: '30 Dias' },
+  'YTD': { timeframe: 'day', limit: 365, days: 365, label: 'Ano' },
+};
 
 function formatNum(num: number): string {
   if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
@@ -27,6 +34,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
   const [capital, setCapital] = useState(100);
   const [customRange, setCustomRange] = useState<{ lower: number; upper: number } | null>(null);
   const [monitorSuccess, setMonitorSuccess] = useState(false);
+  const [period, setPeriod] = useState<Period>('7D');
 
   // Real price: use pool.price from backend, or derive from token prices ratio
   const derivedPrice = (pool.token0?.priceUsd != null && pool.token1?.priceUsd != null && pool.token1.priceUsd > 0)
@@ -86,9 +94,9 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
     }
   };
 
-  // Calculate range based on mode or custom
-  const rangeLower = customRange?.lower ?? currentPrice * (1 - config.rangePercent / 100);
-  const rangeUpper = customRange?.upper ?? currentPrice * (1 + config.rangePercent / 100);
+  // Calculate range based on mode or custom (local fallback %)
+  const localRangeLower = currentPrice * (1 - config.rangePercent / 100);
+  const localRangeUpper = currentPrice * (1 + config.rangePercent / 100);
 
   const handleRangeChange = (lower: number, upper: number) => {
     setCustomRange({ lower, upper });
@@ -117,10 +125,16 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
     staleTime: 60_000,
   });
 
-  // OHLCV data for UniswapRangeChart price history
+  // Prefer server-calculated range, fallback to local %
+  const serverRange = serverCalc?.ranges?.[mode];
+  const rangeLower = customRange?.lower ?? serverRange?.lower ?? localRangeLower;
+  const rangeUpper = customRange?.upper ?? serverRange?.upper ?? localRangeUpper;
+
+  // OHLCV data for UniswapRangeChart price history (tied to period selector)
+  const pCfg = periodConfig[period];
   const { data: ohlcvData } = useQuery({
-    queryKey: ['ohlcv-sim', pool.chain, pool.poolAddress, 'hour'],
-    queryFn: () => fetchOhlcv(pool.chain || '', pool.poolAddress || '', 'hour', 168),
+    queryKey: ['ohlcv-sim', pool.chain, pool.poolAddress, pCfg.timeframe, pCfg.limit],
+    queryFn: () => fetchOhlcv(pool.chain || '', pool.poolAddress || '', pCfg.timeframe, pCfg.limit),
     enabled: !!(pool.chain && pool.poolAddress),
     staleTime: 300_000,
   });
@@ -312,7 +326,23 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
         </div>
       )}
 
-      {/* Uniswap-style Range Chart with volume + info */}
+      {/* Period selector + Uniswap-style Range Chart */}
+      {!priceUnavailable && (
+        <div className="flex items-center gap-2 mb-2">
+          {(['7D', '30D', 'YTD'] as Period[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              className={clsx(
+                'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
+                period === p ? 'bg-primary-600 text-white' : 'bg-dark-700 text-dark-400 hover:bg-dark-600'
+              )}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+      )}
       {!priceUnavailable && (
         <UniswapRangeChart
           priceHistory={priceHistoryData}
@@ -630,6 +660,99 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
                 </span>
               </div>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* HODL vs LP Comparison */}
+      {!priceUnavailable && (
+        <HodlVsLpComparison
+          capital={capital}
+          feesPercent={metrics.feesPercent}
+          ilPercent={metrics.ilPercent}
+          gasPercent={capital > 0 ? (metrics.gasEstimate / capital) * 100 : 0}
+          period={period}
+          apr={metrics.apr}
+        />
+      )}
+    </div>
+  );
+}
+
+function HodlVsLpComparison({ capital, feesPercent, ilPercent, gasPercent, period, apr }: {
+  capital: number;
+  feesPercent: number;
+  ilPercent: number;
+  gasPercent: number;
+  period: Period;
+  apr: number;
+}) {
+  const days = periodConfig[period].days;
+  const periodMultiplier = days / 7; // metrics are for 7 days
+  const lpReturn = (feesPercent - ilPercent - gasPercent) * periodMultiplier;
+  const lpValue = capital * (1 + lpReturn / 100);
+  // HODL assumes 0% return (just holding tokens)
+  const hodlValue = capital;
+  const diff = lpValue - hodlValue;
+  const diffPercent = capital > 0 ? (diff / capital) * 100 : 0;
+  const lpWins = diff >= 0;
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <h2 className="font-semibold flex items-center gap-2">
+          <BarChart3 className="w-5 h-5" />
+          HODL vs LP — Comparacao ({period})
+        </h2>
+      </div>
+      <div className="card-body">
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className={clsx(
+            'rounded-xl p-4 border-2 text-center',
+            !lpWins ? 'border-success-500/50 bg-success-500/10' : 'border-dark-600 bg-dark-700/50'
+          )}>
+            <div className="text-sm text-dark-400 mb-1">HODL</div>
+            <div className="text-2xl font-bold">${hodlValue.toFixed(2)}</div>
+            <div className="text-sm text-dark-400 mt-1">+0.00%</div>
+          </div>
+          <div className={clsx(
+            'rounded-xl p-4 border-2 text-center',
+            lpWins ? 'border-success-500/50 bg-success-500/10' : 'border-dark-600 bg-dark-700/50'
+          )}>
+            <div className="text-sm text-dark-400 mb-1">Liquidity Provider</div>
+            <div className={clsx('text-2xl font-bold', lpWins ? 'text-success-400' : 'text-danger-400')}>
+              ${lpValue.toFixed(2)}
+            </div>
+            <div className={clsx('text-sm mt-1', lpWins ? 'text-success-400' : 'text-danger-400')}>
+              {(lpReturn >= 0 ? '+' : '') + lpReturn.toFixed(2)}%
+            </div>
+          </div>
+        </div>
+
+        <div className={clsx(
+          'rounded-lg p-3 text-center font-medium',
+          lpWins ? 'bg-success-500/10 text-success-400' : 'bg-danger-500/10 text-danger-400'
+        )}>
+          {lpWins
+            ? `LP ganha +$${diff.toFixed(2)} (+${diffPercent.toFixed(2)}%) vs HODL`
+            : `HODL ganha +$${Math.abs(diff).toFixed(2)} (+${Math.abs(diffPercent).toFixed(2)}%) vs LP`
+          }
+        </div>
+
+        <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+          <div className="bg-dark-700/50 rounded-lg p-2">
+            <div className="text-dark-400">Fees ({period})</div>
+            <div className="text-success-400 font-mono font-bold">+{(feesPercent * periodMultiplier).toFixed(2)}%</div>
+          </div>
+          <div className="bg-dark-700/50 rounded-lg p-2">
+            <div className="text-dark-400">IL ({period})</div>
+            <div className="text-danger-400 font-mono font-bold">-{(ilPercent * periodMultiplier).toFixed(2)}%</div>
+          </div>
+          <div className="bg-dark-700/50 rounded-lg p-2">
+            <div className="text-dark-400">APR Estimado</div>
+            <div className={clsx('font-mono font-bold', apr >= 0 ? 'text-primary-400' : 'text-danger-400')}>
+              {apr >= 0 ? '+' : ''}{apr.toFixed(1)}%
+            </div>
           </div>
         </div>
       </div>
