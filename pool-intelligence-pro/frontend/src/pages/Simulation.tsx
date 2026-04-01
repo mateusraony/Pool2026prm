@@ -94,10 +94,9 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
     }
   };
 
-  // Calculate range based on mode: prefer server calc, fallback to local %
-  const serverRange = serverCalc?.ranges?.[mode];
-  const rangeLower = customRange?.lower ?? serverRange?.lower ?? currentPrice * (1 - config.rangePercent / 100);
-  const rangeUpper = customRange?.upper ?? serverRange?.upper ?? currentPrice * (1 + config.rangePercent / 100);
+  // Calculate range based on mode or custom (local fallback %)
+  const localRangeLower = currentPrice * (1 - config.rangePercent / 100);
+  const localRangeUpper = currentPrice * (1 + config.rangePercent / 100);
 
   const handleRangeChange = (lower: number, upper: number) => {
     setCustomRange({ lower, upper });
@@ -125,6 +124,11 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
     enabled: currentPrice > 0,
     staleTime: 60_000,
   });
+
+  // Prefer server-calculated range, fallback to local %
+  const serverRange = serverCalc?.ranges?.[mode];
+  const rangeLower = customRange?.lower ?? serverRange?.lower ?? localRangeLower;
+  const rangeUpper = customRange?.upper ?? serverRange?.upper ?? localRangeUpper;
 
   // OHLCV data for UniswapRangeChart price history (tied to period selector)
   const pCfg = periodConfig[period];
