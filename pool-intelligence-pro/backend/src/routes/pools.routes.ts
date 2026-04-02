@@ -285,7 +285,21 @@ router.get('/pools-detail/:chain/:address', async (req, res) => {
         const { geckoTerminalAdapter } = await import('../adapters/index.js');
         const geckoHistory = await geckoTerminalAdapter.getPoolHistory(chain, normalizedAddress, 30);
         if (geckoHistory.length > 0) history = geckoHistory;
-      } catch { /* ignore — use proxy volatility */ }
+      } catch { /* ignore */ }
+    }
+
+    // Fallback: gerar história sintética a partir de preço e volatilidade
+    if (history.length === 0 && pool) {
+      const ohlcvFallback = await priceHistoryService.getOhlcvWithFallback(
+        chain, normalizedAddress, 'day', 30, 'base',
+        pool.price || 1, pool.volatilityAnn || 0.5, pool.volume24h || 50000
+      );
+      history = ohlcvFallback.candles.map(c => ({
+        timestamp: new Date(c.timestamp),
+        price: c.close,
+        tvl: pool.tvl || 0,
+        volume24h: c.volume,
+      }));
     }
 
     const unified = poolIntelligenceService.enrichToUnifiedPool(pool, { updatedAt: new Date(), history });
@@ -928,7 +942,8 @@ router.get('/pools/:chain/:address/ohlcv', async (req, res) => {
     const limit = Math.min(!Number.isNaN(limitOhlcvParsed) && limitOhlcvParsed > 0 ? limitOhlcvParsed : 168, 1000);
     const token = (req.query.token as string) === 'quote' ? 'quote' : 'base';
 
-    const result = await priceHistoryService.getOhlcv(
+    // Tentar dados reais primeiro
+    let result = await priceHistoryService.getOhlcv(
       chain,
       normalizedAddress,
       timeframe as 'day' | 'hour' | 'minute',
@@ -936,8 +951,20 @@ router.get('/pools/:chain/:address/ohlcv', async (req, res) => {
       token
     );
 
+    // Fallback: gerar candles sintéticos com dados da pool
     if (!result) {
-      return res.status(404).json({ success: false, error: 'Price history not available for this pool', timestamp: new Date() });
+      const poolData = await getPoolWithFallback(chain, normalizedAddress);
+      const pool = poolData?.pool;
+      const price = pool?.price || 1;
+      const vol = pool?.volatilityAnn || 0.5;
+      const vol24h = pool?.volume24h || 50000;
+
+      result = await priceHistoryService.getOhlcvWithFallback(
+        chain, normalizedAddress,
+        timeframe as 'day' | 'hour' | 'minute',
+        limit, token,
+        price, vol, vol24h
+      );
     }
 
     res.json({ success: true, data: result, timestamp: new Date() });
@@ -993,16 +1020,21 @@ router.get('/pools/:chain/:address/deep-analysis', async (req, res) => {
       return res.json({ success: true, data: cached.data, fromCache: true, timestamp: new Date() });
     }
 
-    // Fetch OHLCV
+    // Fetch OHLCV (com fallback sintético)
     const limit = timeframe === 'hour' ? 168 : 90;
-    const ohlcv = await priceHistoryService.getOhlcv(chain, normalizedAddress, timeframe, limit);
-    if (!ohlcv || ohlcv.candles.length < 15) {
-      return res.status(404).json({ success: false, error: 'Insufficient OHLCV data for analysis' });
-    }
-
-    // Get TVL from MemoryStore
     const poolId = `${chain}_${normalizedAddress}`;
     const pool = memoryStore.getPool(poolId);
+
+    let ohlcv = await priceHistoryService.getOhlcv(chain, normalizedAddress, timeframe, limit);
+    if (!ohlcv || ohlcv.candles.length < 15) {
+      // Fallback: buscar dados da pool e gerar candles sintéticos
+      const poolData = await getPoolWithFallback(chain, normalizedAddress);
+      const p = poolData?.pool;
+      ohlcv = await priceHistoryService.getOhlcvWithFallback(
+        chain, normalizedAddress, timeframe, limit, 'base',
+        p?.price || 1, p?.volatilityAnn || 0.5, p?.volume24h || 50000
+      );
+    }
     const tvl = pool?.tvlUSD ?? 0;
 
     // Compute

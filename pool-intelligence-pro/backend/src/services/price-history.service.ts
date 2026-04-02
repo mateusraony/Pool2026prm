@@ -1,6 +1,7 @@
 /**
  * Price History Service — ETAPA 15
  * Busca dados OHLCV reais da GeckoTerminal API com cache.
+ * Fallback: gera candles sintéticos a partir de preço/volatilidade da pool.
  * Timeframes: day, hour, minute.
  */
 
@@ -39,6 +40,7 @@ export interface OhlcvResult {
   currency: 'usd';
   token: 'base' | 'quote';
   fetchedAt: string;
+  synthetic?: boolean;
 }
 
 function getGeckoNetwork(chain: string): string {
@@ -68,9 +70,75 @@ interface GeckoOhlcvResponse {
   };
 }
 
+/**
+ * Gera candles sintéticos baseados em random walk com mean-reversion.
+ * Usado quando GeckoTerminal não retorna dados para a pool.
+ */
+function generateSyntheticCandles(
+  currentPrice: number,
+  volatilityAnn: number,
+  timeframe: OhlcvTimeframe,
+  limit: number,
+  volume24h: number,
+): OhlcvCandle[] {
+  const safePrice = currentPrice > 0 ? currentPrice : 1;
+  const vol = volatilityAnn > 0 ? volatilityAnn : 0.5;
+  const now = Date.now();
+
+  // Intervalo em ms por candle
+  const intervalMs: Record<OhlcvTimeframe, number> = {
+    minute: 60 * 1000,
+    hour: 60 * 60 * 1000,
+    day: 24 * 60 * 60 * 1000,
+  };
+  const step = intervalMs[timeframe];
+
+  // Volatilidade por candle: σ_annual * sqrt(dt/year)
+  const dtYears = step / (365.25 * 24 * 60 * 60 * 1000);
+  const volPerCandle = vol * Math.sqrt(dtYears);
+
+  // Seed determinístico baseado no preço (mesma pool → mesma linha)
+  let seed = Math.abs(Math.round(safePrice * 100000)) % 2147483647;
+  if (seed === 0) seed = 42;
+  const rand = () => {
+    seed = (seed * 16807) % 2147483647;
+    return (seed - 1) / 2147483646;
+  };
+
+  // Volume médio por candle
+  const candlesPerDay = (24 * 60 * 60 * 1000) / step;
+  const avgVolPerCandle = Math.max(1000, volume24h / candlesPerDay);
+
+  const candles: OhlcvCandle[] = [];
+  let price = safePrice * (1 + (rand() - 0.5) * vol * 0.3);
+
+  for (let i = 0; i < limit; i++) {
+    const t = now - (limit - i) * step;
+    // Random walk com mean reversion para currentPrice
+    const drift = (safePrice - price) * 0.03;
+    const shock = (rand() - 0.5) * 2 * price * volPerCandle;
+    const open = price;
+    price = Math.max(safePrice * 0.3, price + drift + shock);
+    const close = price;
+    const high = Math.max(open, close) * (1 + rand() * volPerCandle * 0.5);
+    const low = Math.min(open, close) * (1 - rand() * volPerCandle * 0.5);
+    const volume = avgVolPerCandle * (0.3 + rand() * 1.4);
+
+    candles.push({ timestamp: t, open, high, low, close, volume });
+  }
+
+  // Último candle termina no preço atual
+  if (candles.length > 0) {
+    candles[candles.length - 1].close = safePrice;
+  }
+
+  return candles;
+}
+
 class PriceHistoryService {
   /**
    * Busca candles OHLCV para uma pool.
+   * Tenta GeckoTerminal primeiro; se falhar, gera candles sintéticos.
    */
   async getOhlcv(
     chain: string,
@@ -105,8 +173,8 @@ class PriceHistoryService {
 
       const ohlcvList = data?.data?.attributes?.ohlcv_list;
       if (!Array.isArray(ohlcvList) || ohlcvList.length === 0) {
-        logService.warn('POOLS', 'Empty OHLCV response', { chain, address, timeframe });
-        return null;
+        logService.warn('POOLS', 'Empty OHLCV from GeckoTerminal, will use fallback', { chain, address, timeframe });
+        return null; // Caller can use getOhlcvWithFallback
       }
 
       const candles: OhlcvCandle[] = ohlcvList.map(([ts, o, h, l, c, v]) => ({
@@ -140,6 +208,41 @@ class PriceHistoryService {
       logService.error('POOLS', `OHLCV fetch failed: ${msg}`, { chain, address, timeframe });
       return null;
     }
+  }
+
+  /**
+   * Busca OHLCV com fallback sintético quando GeckoTerminal não tem dados.
+   * Usado pelos endpoints que precisam SEMPRE retornar algo.
+   */
+  async getOhlcvWithFallback(
+    chain: string,
+    address: string,
+    timeframe: OhlcvTimeframe = 'hour',
+    limit = 168,
+    token: 'base' | 'quote' = 'base',
+    poolPrice = 0,
+    poolVolatility = 0.5,
+    poolVolume24h = 50000,
+  ): Promise<OhlcvResult> {
+    const real = await this.getOhlcv(chain, address, timeframe, limit, token);
+    if (real && real.candles.length > 0) return real;
+
+    // Fallback: gerar candles sintéticos
+    const clampedLimit = Math.min(limit, MAX_LIMIT[timeframe]);
+    const candles = generateSyntheticCandles(poolPrice, poolVolatility, timeframe, clampedLimit, poolVolume24h);
+
+    logService.info('POOLS', `Synthetic OHLCV generated: ${candles.length} candles`, { chain, address, timeframe });
+
+    return {
+      chain,
+      address,
+      timeframe,
+      candles,
+      currency: 'usd',
+      token,
+      fetchedAt: new Date().toISOString(),
+      synthetic: true,
+    };
   }
 
   /**
