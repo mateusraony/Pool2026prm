@@ -1070,6 +1070,7 @@ export interface OhlcvResult {
   currency: 'usd';
   token: 'base' | 'quote';
   fetchedAt: string;
+  synthetic?: boolean;
 }
 
 export async function fetchOhlcv(
