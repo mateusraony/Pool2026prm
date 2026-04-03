@@ -294,12 +294,22 @@ router.get('/pools-detail/:chain/:address', async (req, res) => {
         chain, normalizedAddress, 'day', 30, 'base',
         pool.price || 1, pool.volatilityAnn || 0.5, pool.volume24h || 50000
       );
-      history = ohlcvFallback.candles.map(c => ({
-        timestamp: new Date(c.timestamp),
-        price: c.close,
-        tvl: pool.tvl || 0,
-        volume24h: c.volume,
-      }));
+      // Vary TVL around current value using price movement as proxy
+      const baseTvl = pool.tvl || 50000;
+      const baseVolume = pool.volume24h || 5000;
+      const feeRate = pool.feeTier || 0.003;
+      history = ohlcvFallback.candles.map((c, idx) => {
+        // TVL varies proportionally to price movement from current
+        const priceRatio = pool.price && pool.price > 0 ? c.close / pool.price : 1;
+        const tvlVariation = baseTvl * (0.85 + 0.3 * priceRatio * (0.9 + 0.2 * Math.sin(idx * 0.5)));
+        return {
+          timestamp: new Date(c.timestamp),
+          price: c.close,
+          tvl: Math.round(tvlVariation),
+          volume24h: c.volume,
+          fees24h: Math.round(c.volume * feeRate * 100) / 100,
+        };
+      });
     }
 
     const unified = poolIntelligenceService.enrichToUnifiedPool(pool, { updatedAt: new Date(), history });

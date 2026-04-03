@@ -311,13 +311,16 @@ export function calcRangeRecommendation(params: {
   const zMap: Record<RiskMode, number> = { DEFENSIVE: 1.8, NORMAL: 1.2, AGGRESSIVE: 0.8 };
   const z = zMap[riskMode];
 
-  let widthPct = clamp(z * volAnn * Math.sqrt(horizonDays / 365), 0.003, 0.45);
+  // Lognormal-consistent range: use exp(±z*σ*√T) for multiplicative bounds
+  const logWidth = clamp(z * volAnn * Math.sqrt(horizonDays / 365), 0.003, 0.45);
+  let widthPct = logWidth; // stored for reference/API response
   if (poolType === 'STABLE') {
     widthPct = Math.min(widthPct, 0.03);
   }
 
-  const lower = price * (1 - widthPct);
-  const upper = price * (1 + widthPct);
+  // Multiplicative bounds: consistent with lognormal price model
+  const lower = price * Math.exp(-widthPct);
+  const upper = price * Math.exp(widthPct);
 
   // IL probability using lognormal
   const sigma = volAnn;
@@ -586,7 +589,9 @@ export function calcMonteCarlo(params: {
   const dailyFees = fees24h * userShare * k_active;
 
   const dailyVol = volAnn / Math.sqrt(365);
-  const dailyDrift = -0.5 * dailyVol * dailyVol; // risk-neutral drift
+  // Zero drift: neutral assumption for LP simulation (no directional bias)
+  // Risk-neutral drift (-0.5σ²) would systematically bias prices downward
+  const dailyDrift = 0;
 
   const outcomes: MonteCarloOutcome[] = [];
 
@@ -1505,8 +1510,8 @@ export function calcTickLiquidity(params: TickLiquidityParams): TickLiquidityRes
     };
   }
 
-  // σ diária da volatilidade anualizada (252 dias de trading)
-  const sigmaDaily = volatilityAnn / Math.sqrt(252);
+  // σ diária da volatilidade anualizada (365 dias — crypto opera 24/7)
+  const sigmaDaily = volatilityAnn / Math.sqrt(365);
   // σ para o horizonte relevante (7 dias — horizonte típico de LP)
   const sigma = sigmaDaily * Math.sqrt(7);
 
@@ -1766,14 +1771,23 @@ export function calcCapitalEfficiency(params: {
   }
 
   // Fórmula oficial: multiplier = 1 / (1 - sqrt(Pa/Pb))
+  // Only applies when current price is within range
   const sqrtRatio = Math.sqrt(rangeLower / rangeUpper);
   const denom = 1 - sqrtRatio;
-  const multiplier = denom > 0 ? clamp(1 / denom, 1, 500) : 1;
+  let multiplier = denom > 0 ? clamp(1 / denom, 1, 500) : 1;
+
+  // If price is outside range, position earns no fees — effective efficiency is 0
+  const isOutOfRange = currentPrice < rangeLower || currentPrice > rangeUpper;
+  if (isOutOfRange) {
+    multiplier = 0;
+  }
 
   const v2EquivalentCapital = Math.round(capital * multiplier * 100) / 100;
 
   let warning: string | null = null;
-  if (multiplier > 50) {
+  if (isOutOfRange) {
+    warning = 'Preco fora do range — posicao nao esta gerando fees';
+  } else if (multiplier > 50) {
     warning = 'Range extremamente apertado — qualquer variacao de preco te tira da pool';
   } else if (multiplier > 20) {
     warning = 'Range muito concentrado — monitorar frequentemente';
