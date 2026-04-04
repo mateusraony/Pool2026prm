@@ -148,24 +148,22 @@ export class RecommendationService {
     const grossAdjusted = weeklyGross * modeMultiplier[mode];
 
     // Deduzir IL semanal esperado
-    // IL ≈ 0.5 × σ² × (7/365) × fatorConcentracao
+    // IL ≈ 0.5 × σ² × fatorConcentracao (primeira ordem para pequenos movimentos)
     // σ = volatilidade anualizada do pool (decimal); fallback 0.35 se ausente
-    // 0.35 = 35% ao ano, conservador para crypto genérico (BTC/ETH ficam em 0.50-0.80)
-    // Evita penalizar demais pools estáveis ou pares com baixa vol real
     const volAnn = pool.volatilityAnn ?? 0.35;
     const sigmaWeekly = volAnn * Math.sqrt(7 / 365);
 
-    // Range width implícito por modo (baseado em z-score × vol × sqrt(T))
-    // DEFENSIVE = range largo → menos concentração → menos IL
-    // AGGRESSIVE = range estreito → mais concentração → mais IL
-    const rangeWidthByMode: Record<Mode, number> = {
-      DEFENSIVE: 0.22,   // range largo → baixa concentração → menos IL (concentrationFactor ≈ 0.68)
-      NORMAL: 0.15,      // baseline (concentrationFactor = 1.0)
-      AGGRESSIVE: 0.08,  // range estreito → alta concentração → mais IL (concentrationFactor ≈ 1.875)
+    // Range width dinâmico: usa mesmos z-scores do calcRangeRecommendation
+    // para consistência entre recomendação de range e estimativa de ganhos
+    const zMap: Record<Mode, number> = {
+      DEFENSIVE: 1.8,
+      NORMAL: 1.2,
+      AGGRESSIVE: 0.8,
     };
-    const rangeWidth = rangeWidthByMode[mode];
-    // fatorConcentracao: range estreito amplifica IL (cap em 4x)
-    const concentrationFactor = Math.min(4.0, 0.15 / Math.max(rangeWidth, 0.01));
+    const rangeWidth = zMap[mode] * volAnn * Math.sqrt(7 / 365);
+    // fatorConcentracao: range estreito amplifica IL (referência = NORMAL range, cap em 4x)
+    const normalRangeWidth = 1.2 * volAnn * Math.sqrt(7 / 365);
+    const concentrationFactor = Math.min(4.0, normalRangeWidth / Math.max(rangeWidth, 0.001));
 
     // IL semanal esperado (em %)
     const weeklyIL = 0.5 * sigmaWeekly * sigmaWeekly * concentrationFactor * 100;

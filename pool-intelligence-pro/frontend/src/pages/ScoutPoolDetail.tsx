@@ -148,7 +148,7 @@ export default function ScoutPoolDetail() {
   // Price history derived from OHLCV candles for UniswapRangeChart
   const priceHistory = useMemo(() => {
     if (!ohlcvData?.candles) return [];
-    return ohlcvData.candles.map((c: any) => ({ timestamp: c.timestamp * 1000, price: c.close }));
+    return ohlcvData.candles.map((c: any) => ({ timestamp: c.timestamp, price: c.close }));
   }, [ohlcvData]);
 
   // Mutation: add to favorites
