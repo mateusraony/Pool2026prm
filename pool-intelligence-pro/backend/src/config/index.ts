@@ -52,8 +52,8 @@ export const config = {
   
   // Circuit breaker
   circuitBreaker: {
-    threshold: safeInt(process.env.CIRCUIT_BREAKER_THRESHOLD, 5),
-    timeout: safeInt(process.env.CIRCUIT_BREAKER_TIMEOUT, 300000), // 5 min
+    threshold: safeInt(process.env.CIRCUIT_BREAKER_THRESHOLD, 15),
+    timeout: safeInt(process.env.CIRCUIT_BREAKER_TIMEOUT, 120000), // 2 min
   },
   
   // Rate limits por provider (requests per minute)

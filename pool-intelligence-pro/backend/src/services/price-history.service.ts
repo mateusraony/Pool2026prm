@@ -163,7 +163,7 @@ class PriceHistoryService {
         'geckoterminal-ohlcv',
         () =>
           fetch(url, {
-            headers: { Accept: 'application/json;version=20230302' },
+            headers: { Accept: 'application/json' },
           }).then(r => {
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
             return r.json() as Promise<GeckoOhlcvResponse>;
