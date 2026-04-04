@@ -1,6 +1,6 @@
 # CHECKPOINT - Pool Intelligence Pro
 
-## Última Atualização: 2026-03-30 (Sessão 5)
+## Última Atualização: 2026-04-04 (Sessão 6)
 
 ---
 
@@ -8,8 +8,8 @@
 
 | Verificação | Resultado | Detalhes |
 |------------|-----------|----------|
-| tsc frontend | ✅ | 0 erros |
-| tsc backend | ✅ | 0 erros |
+| tsc frontend | ✅ | 0 erros (sessão 5) |
+| tsc backend | ✅ | 0 erros (sessão 5) |
 | build frontend | ✅ | Vite ~18s |
 | build backend | ✅ | OK |
 | backend tests | ✅ | 14 files, 360/360 passando |
@@ -17,11 +17,40 @@
 
 ---
 
+## Sessão 6 — Correções de Fórmulas + OHLCV + Deploy
+
+### Branch atual
+
+`claude/fix-calc-formulas-t9NvR` — **100% sincronizada com main**  
+Todos os commits desta sessão foram mergeados via PR #81.
+
+### O que foi feito nesta sessão
+
+| Área | Correção | Arquivo |
+|------|----------|---------|
+| Monte Carlo | Removido viés que puxava resultados pra baixo | `calc.service.ts` |
+| Recomendação de range | Fórmula agora consistente com modelo lognormal | `calc.service.ts` |
+| Eficiência de capital | Avisa quando preço está fora do range | `calc.service.ts` |
+| Tick liquidity | Corrigido 252→365 dias (crypto é 24/7) | `calc.service.ts` |
+| Estimativa de ganhos | Substituídas constantes mágicas por cálculo dinâmico | `calc.service.ts` |
+| OHLCV | UUID interno → endereço de contrato real no GeckoTerminal | `geckoterminal.adapter.ts` |
+| Circuit breaker | 404 não trava chamadas; rate limit (429) usa backoff mais longo | `circuit-breaker` |
+| Deploy Render | `prisma db push` movido do start para o build | `package.json` |
+
+### PRs desta sessão
+
+| PR | Título | Status |
+|----|--------|--------|
+| #79 | fix: OHLCV sempre disponível com fallback sintético | ✅ Merged |
+| #80 | fix: corrigir fórmulas de cálculo e histórico de performance | ✅ Merged |
+| #81 | fix: OHLCV real, circuit breaker e deploy resiliente | ✅ Merged |
+| #3  | fix: branch antiga fevereiro (conflicts resolvidos) | 🟡 Pendente decisão |
+
+---
+
 ## Sessão 5 — Correção Recomendações + Simulação Uniswap
 
-### 1. Recomendações Intermitentes (Sessão 4→5)
-
-**Problema:** "tem hora que aparece recomendado tem hora que não tem"
+### 1. Recomendações Intermitentes
 
 **7 causas identificadas, 3 corrigidas:**
 
@@ -32,10 +61,6 @@
 | Radar vazio → recommendations vazio | Fallback para MemoryStore + nunca sobrescreve com vazio | `jobs/index.ts` |
 
 ### 2. Simulação — Gráfico estilo Uniswap com Volume
-
-**Problema:** Gráfico de simulação faltava volume; gráfico "Distribuição de Liquidez" (InteractiveChart) era redundante.
-
-**O que foi feito:**
 
 | Mudança | Arquivo | Detalhes |
 |---------|---------|----------|
@@ -48,8 +73,6 @@
 
 ## Sessão 4 — Persistência no Supabase + CSP Hash + Deploy Render
 
-### Persistência Supabase
-
 | Mudança | Arquivo | Detalhes |
 |---------|---------|----------|
 | **db-sync.service** | `backend/src/services/db-sync.service.ts` | Write-through: upsert PoolCurrent, create PoolSnapshot, save Score |
@@ -58,50 +81,22 @@
 | **Snapshot cleanup** | `backend/src/jobs/index.ts` | Cron diário 3AM: remove snapshots > 30 dias |
 | **Snapshots endpoint** | `backend/src/routes/pools.routes.ts` | GET /pools/:chain/:address/snapshots?days=7 |
 | **CSP hash** | `backend/src/index.ts` | scriptSrc: SHA-256 hash ao invés de unsafe-inline |
-| **Google Fonts CSP** | `backend/src/index.ts` | fontSrc + styleSrc permitir fonts.googleapis.com |
-| **Testes** | `backend/src/__tests__/db-sync.service.test.ts` | 11 testes unitários |
 
-### Deploy Render — Correções
-
-| Problema | Fix |
-|----------|-----|
-| Build não alcança Supabase (P1001) | Movido `prisma db push` para start command (runtime tem rede) |
-| `npx prisma` baixava Prisma v7 (breaking changes) | `prisma db push` dentro do package.json start (usa v5 local) |
-
-### Fluxo de Dados
-
-```
-API Providers → Radar Job → MemoryStore (leituras rápidas)
-                          ↘ Supabase DB (persistência)
-
-Cold-start → DB → MemoryStore (dados instantâneos enquanto radar roda)
-
-Frontend → /api/pools → MemoryStore (rápido)
-Frontend → /api/pools/:id/snapshots → DB (histórico)
-```
-
----
-
-## Prisma + Supabase — Configuração
-
-### Render Dashboard Config
+### Deploy Render — Config atual
 
 ```
 Build Command:  npm install && npm run build
-Start Command:  npm start
+Start Command:  npm start  (= node dist/index.js)
 ```
 
-O `npm start` executa: `prisma db push --accept-data-loss && node dist/index.js`
+`prisma db push` roda dentro do `build` via `npm run db:sync`.
 
-### Env Vars Necessárias no Render
+### Env Vars necessárias no Render
 
 ```
 DATABASE_URL=postgresql://postgres.xxx:***@aws-1-us-east-2.pooler.supabase.com:6543/postgres?sslmode=require&pgbouncer=true&connect_timeout=30
 DIRECT_URL=postgresql://postgres:***@db.xxx.supabase.co:5432/postgres?sslmode=require
 ```
-
-- Porta 6543 no DATABASE_URL (Transaction Pooler)
-- Porta 5432 no DIRECT_URL (conexão direta para migrations)
 
 ---
 
@@ -123,37 +118,12 @@ DIRECT_URL=postgresql://postgres:***@db.xxx.supabase.co:5432/postgres?sslmode=re
 
 ---
 
-## Correções Sessões 1-2
-
-- UniswapRangeChart divisão por zero (4 guards)
-- OHLCV timestamps segundos → milissegundos
-- ScoutPoolDetail TS2339
-- Z-scores invertidos
-- Deep Analysis retry button
-- Notas PUT + UI edição
-- Portfolio NaN guard sharpe/sortino
-
----
-
-## Branch e PRs
-
-- **Branch:** `claude/write-deep-analysis-plan-rM6eK`
-- **Último commit:** sessão 5 (gráfico simulação + volume)
-
-| PR | Título | Status |
-|----|--------|--------|
-| #69 | fix: UniswapRangeChart + Deep Analysis + Notas | ✅ Merged |
-| #70 | fix: auditoria profunda (CORS, body limit, Supabase) | ✅ Merged |
-| #71 | fix: CSP, persistência, recomendações, deploy | 🟡 Aberta |
-
----
-
 ## Ações Pendentes
 
-1. 🟡 **Merge PR #71** — Contém persistência Supabase, CSP, recomendações, deploy fixes
-2. 🟡 **Rotacionar senha Supabase** — Credenciais foram compartilhadas em sessão
-3. 🟡 **Verificar deploy** — Após merge, checar /health e verificar dados no Supabase Table Editor (~15min)
-4. 🟡 **Verificar CSP em produção** — SW, Tailwind, Socket.io, Google Fonts
+1. 🟡 **Verificar deploy no Render** — PR #81 foi mergeado; auto-deploy deve ter rodado. Checar se erros P1001 e OHLCV sumiram do log.
+2. 🟡 **Testar OHLCV no app** — Abrir uma pool e verificar se o gráfico de velas mostra dados reais (`"synthetic": false` na API).
+3. 🟡 **PR #3** — Branch antiga de fevereiro. Main já contém tudo mais atualizado. Decidir: fechar sem merge.
+4. 🟡 **Rotacionar senha Supabase** — Credenciais foram compartilhadas em sessão anterior.
 
 ---
 
@@ -161,6 +131,6 @@ DIRECT_URL=postgresql://postgres:***@db.xxx.supabase.co:5432/postgres?sslmode=re
 
 1. Leia este `CHECKPOINT.md`
 2. `git log --oneline -10` para ver últimos commits
-3. Merge PR #71 se ainda não feito
-4. Verificar health: `curl https://seu-app.onrender.com/health`
-5. No Supabase Table Editor: verificar tabelas PoolCurrent, PoolSnapshot, Score com dados
+3. Branch: `claude/fix-calc-formulas-t9NvR` (sincronizada com main)
+4. Para novos trabalhos: criar branch nova ou continuar nesta
+5. Verificar health: `curl https://seu-app.onrender.com/health`
