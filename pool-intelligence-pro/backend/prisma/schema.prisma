@@ -3,8 +3,12 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // DIRECT_URL: conexão direta ao PostgreSQL (sem PgBouncer)
+  // Usada pelo Prisma para migrations (migrate deploy/push)
+  // DATABASE_URL usa Transaction Pooler (PgBouncer) — ideal para queries da app
+  directUrl = env("DIRECT_URL")
 }
 
 // ============================================
@@ -462,6 +466,31 @@ model Position {
 }
 
 // ============================================
+// RANGE POSITIONS (persisted LP positions for monitoring)
+// ============================================
+
+model RangePositionRecord {
+  id            String   @id @default(uuid())
+  poolId        String
+  chain         String
+  poolAddress   String
+  token0Symbol  String
+  token1Symbol  String
+  rangeLower    Float
+  rangeUpper    Float
+  entryPrice    Float
+  capital       Float
+  mode          String   // DEFENSIVE, NORMAL, AGGRESSIVE
+  alertThreshold Float   @default(5)
+  isActive      Boolean  @default(true)
+  lastCheckedAt DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([isActive])
+  @@index([chain, poolAddress])
+}
+
+// ============================================
 // SAÚDE DO SISTEMA
 // ============================================
 
@@ -500,14 +529,51 @@ model ProviderHealth {
 
 model SystemLog {
   id        String   @id @default(uuid())
-  
+
   level     String   // INFO, WARN, ERROR, CRITICAL
   component String   // RADAR, WATCHLIST, SCORE, RECOMMENDATION, ALERT, PROVIDER
   message   String   @db.Text
   data      Json?
-  
+
   createdAt DateTime @default(now())
-  
+
   @@index([level, createdAt])
   @@index([component, createdAt])
+}
+
+// ============================================
+// APP CONFIG (key-value store for runtime settings)
+// ============================================
+
+model AppConfig {
+  key       String   @id           // e.g. "telegram", "notifications", "riskConfig"
+  value     Json                   // JSON blob with the config data
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================
+// POSITION HISTORY (timeline of LP actions)
+// ============================================
+
+model PositionHistory {
+  id          String   @id @default(uuid())
+  poolId      String                   // e.g. "ethereum_0x123..."
+  chain       String
+  poolAddress String
+  token0      String                   // e.g. "WETH"
+  token1      String                   // e.g. "USDC"
+  type        String                   // ENTRY | EXIT | REBALANCE | FEE_COLLECT
+  mode        String?                  // DEFENSIVE | NORMAL | AGGRESSIVE
+  capital     Float?                   // USD value at time of action
+  pnl         Float?                   // P&L at time of exit/rebalance
+  rangeLower  Float?
+  rangeUpper  Float?
+  price       Float?                   // Token price at time of action
+  note        String?                  // Optional user note
+  metadata    Json?                    // Extra data (fees collected, IL, etc.)
+  createdAt   DateTime @default(now())
+
+  @@index([poolId])
+  @@index([chain])
+  @@index([createdAt])
 }

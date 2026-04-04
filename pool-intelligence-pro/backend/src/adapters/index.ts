@@ -24,7 +24,8 @@ const adapters: Record<string, ProviderAdapter> = {
 // Provedores que não afetam o status geral se falharem:
 // - thegraph: requer API key (THEGRAPH_API_KEY)
 // - geckoterminal: supplementary, rate-limited; main data comes from DefiLlama
-const optionalProviders = new Set(['thegraph', 'geckoterminal']);
+// - dexscreener: supplementary; API retorna 403 de IPs cloud (Render, etc)
+const optionalProviders = new Set(['thegraph', 'geckoterminal', 'dexscreener']);
 
 // Get adapter by name
 export function getAdapter(name: string): ProviderAdapter | undefined {
@@ -60,7 +61,7 @@ export async function getPoolWithFallback(
       price: memPool.price,
       tvl: memPool.tvlUSD,
       volume24h: memPool.volume24hUSD,
-      fees24h: memPool.fees24hUSD ?? 0,
+      fees24h: memPool.fees24hUSD ?? undefined,  // preservar null como "dado indisponível" (não zero)
       apr: memPool.aprTotal ?? memPool.aprFee ?? 0,
     } as Pool;
     return { pool, provider: 'memory-store', usedFallback: false };
@@ -221,11 +222,13 @@ export async function getPoolWithConsensus(
   const basePool = results[0].pool;
   const sources = results.map(r => r.provider);
   
-  // Calculate TVL divergence
+  // Calculate TVL divergence (guard against division by zero when basePool.tvl = 0)
   let maxDivergence = 0;
-  for (let i = 1; i < results.length; i++) {
-    const divergence = Math.abs(results[i].pool.tvl - basePool.tvl) / basePool.tvl * 100;
-    maxDivergence = Math.max(maxDivergence, divergence);
+  if (basePool.tvl > 0) {
+    for (let i = 1; i < results.length; i++) {
+      const divergence = Math.abs(results[i].pool.tvl - basePool.tvl) / basePool.tvl * 100;
+      maxDivergence = Math.max(maxDivergence, divergence);
+    }
   }
   
   // Confidence: 100% if 1 source, reduce by divergence if multiple

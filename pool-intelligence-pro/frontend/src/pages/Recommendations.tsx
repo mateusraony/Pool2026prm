@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Brain, TrendingUp, TrendingDown, AlertTriangle, Clock, Target, Filter, ArrowRight, ExternalLink } from 'lucide-react';
 import { fetchRecommendations, Recommendation } from '../api/client';
+import { GlossaryTooltip } from '../components/common/GlossaryTooltip';
 import { format } from 'date-fns';
 import clsx from 'clsx';
 
@@ -26,8 +27,7 @@ function RecommendationCard({ rec, index }: { rec: Recommendation; index: number
   const navigate = useNavigate();
   const isPositive = (rec.estimatedGainPercent ?? 0) >= 0;
   const poolName = (rec.pool.token0?.symbol ?? '?') + '/' + (rec.pool.token1?.symbol ?? '?');
-  // Defensive: use externalId as fallback
-  const poolAddress = rec.pool.poolAddress || rec.pool.externalId || 'unknown';
+  const poolAddress = rec.pool.poolAddress || 'unknown';
   const poolPath = '/simulation/' + rec.pool.chain + '/' + poolAddress;
 
   const rankColors = ['from-yellow-500/20 to-orange-500/20', 'from-gray-400/20 to-gray-500/20', 'from-amber-700/20 to-amber-800/20'];
@@ -66,10 +66,12 @@ function RecommendationCard({ rec, index }: { rec: Recommendation; index: number
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="stat-card">
             <div className="stat-label">Probabilidade</div>
-            <div className="stat-value text-primary-400">{rec.probability}%</div>
+            <div className="stat-value text-primary-400">{rec.probability ?? 0}%</div>
           </div>
           <div className="stat-card">
-            <div className="stat-label">Retorno Est. (7d)</div>
+            <div className="stat-label">
+              <GlossaryTooltip term="estimatedReturn" />
+            </div>
             <div className={clsx('stat-value', isPositive ? 'text-success-400' : 'text-danger-400')}>
               {isPositive ? '+' : ''}{(rec.estimatedGainPercent ?? 0).toFixed(2)}%
             </div>
@@ -101,7 +103,7 @@ function RecommendationCard({ rec, index }: { rec: Recommendation; index: number
               Condicoes de Entrada
             </h4>
             <ul className="text-sm space-y-1 text-dark-300">
-              {rec.entryConditions.map((c, i) => <li key={i}>• {c}</li>)}
+              {rec.entryConditions.map((c, i) => <li key={`entry-${i}`}>• {c}</li>)}
             </ul>
           </div>
 
@@ -111,7 +113,7 @@ function RecommendationCard({ rec, index }: { rec: Recommendation; index: number
               Condicoes de Saida
             </h4>
             <ul className="text-sm space-y-1 text-dark-300">
-              {rec.exitConditions.map((c, i) => <li key={i}>• {c}</li>)}
+              {rec.exitConditions.map((c, i) => <li key={`exit-${i}`}>• {c}</li>)}
             </ul>
           </div>
 
@@ -121,7 +123,7 @@ function RecommendationCard({ rec, index }: { rec: Recommendation; index: number
               Riscos Principais
             </h4>
             <ul className="text-sm space-y-1 text-dark-300">
-              {rec.mainRisks.map((r, i) => <li key={i}>• {r}</li>)}
+              {rec.mainRisks.map((r, i) => <li key={`risk-${i}`}>• {r}</li>)}
             </ul>
           </div>
         </div>
@@ -236,7 +238,7 @@ export default function RecommendationsPage() {
       ) : filteredRecs.length > 0 ? (
         <div className="space-y-6">
           {filteredRecs.map((rec, index) => (
-            <RecommendationCard key={rec.pool.externalId + '-' + index} rec={rec} index={index} />
+            <RecommendationCard key={rec.pool.poolAddress || rec.pool.externalId || String(index)} rec={rec} index={index} />
           ))}
         </div>
       ) : (

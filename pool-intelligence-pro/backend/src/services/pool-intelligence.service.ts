@@ -10,10 +10,13 @@ import {
   calcHealthScore,
   calcAprAdjusted,
   calcVolatilityProxy,
+  calcVolatilityAnn,
   inferPoolType,
   isBluechip,
   PoolType,
+  type VolatilityResult,
 } from './calc.service.js';
+import type { PoolSnapshot } from '../types/index.js';
 import { logService } from './log.service.js';
 
 // In-memory token registry for autocomplete
@@ -21,7 +24,7 @@ const tokenRegistry = new Map<string, string>(); // symbol → symbol (normalize
 
 export function enrichToUnifiedPool(
   pool: Pool,
-  opts?: { warnings?: string[]; updatedAt?: Date }
+  opts?: { warnings?: string[]; updatedAt?: Date; history?: PoolSnapshot[] }
 ): UnifiedPool {
   const warnings = opts?.warnings ?? [];
   const updatedAt = opts?.updatedAt ?? new Date();
@@ -40,9 +43,10 @@ export function enrichToUnifiedPool(
     feeTier: pool.feeTier,
   });
 
-  const volume1h = p.volume1h ?? null;
+  // Fallback: quando volume/fees de 1h não disponíveis, estima de 24h (DefiLlama, GeckoTerminal)
+  const volume1h = p.volume1h ?? (pool.volume24h > 0 ? pool.volume24h / 24 : null);
   const volume5m = p.volume5m ?? null;
-  const fees1h = p.fees1h ?? null;
+  const fees1h = p.fees1h ?? (pool.fees24h != null && pool.fees24h > 0 ? pool.fees24h / 24 : null);
   const fees5m = p.fees5m ?? null;
 
   // APR from fees
@@ -54,36 +58,43 @@ export function enrichToUnifiedPool(
   });
 
   const aprFee = aprRes.feeAPR;
-  // Use real incentive APR from DefiLlama (apyReward) when available
-  const aprIncentive = pool.aprReward ?? 0;
+  const aprIncentive = 0; // No incentive data yet
   // Use computed fee APR when available; otherwise fall back to adapter-provided APR/APY
   // (e.g. DefiLlama provides APY directly even when fees24h is unavailable)
   const aprTotal = aprFee != null
     ? aprFee + aprIncentive
     : (pool.apr != null ? pool.apr : null);
 
-  // Volatility: prefer adapter-provided value (real, from historical OHLCV),
-  // fall back to type-aware estimate only if no real data available.
-  let finalVolAnn: number;
-  if (pool.volatilityAnn != null && pool.volatilityAnn > 0) {
-    // Real volatility from adapter (TheGraph poolHourData or GeckoTerminal OHLCV)
-    finalVolAnn = pool.volatilityAnn;
+  // Volatility — prefer real OHLCV data, fall back to proxy
+  let volResult: VolatilityResult;
+  const history = opts?.history;
+
+  if (history && history.length >= 3) {
+    // Use real historical prices (log-returns method)
+    const pricePoints = history
+      .filter(h => h.price != null && h.price > 0)
+      .map(h => ({ timestamp: h.timestamp, price: h.price! }));
+
+    if (pricePoints.length >= 3) {
+      const interval = pricePoints.length > 48 ? 'hourly' as const : 'hourly' as const;
+      volResult = calcVolatilityAnn(pricePoints, interval);
+    } else {
+      volResult = calcVolatilityProxy(
+        pool.price ?? 1,
+        pool.price != null ? pool.price * (1 + (pool.apr || 0) / 100 / 365) : 1
+      );
+    }
   } else {
-    // Try proxy from price data
-    const { volAnn: computedVol } = calcVolatilityProxy(
+    // Proxy: use current price + APR-based estimate
+    volResult = calcVolatilityProxy(
       pool.price ?? 1,
       pool.price != null ? pool.price * (1 + (pool.apr || 0) / 100 / 365) : 1
     );
-    if (computedVol > 0.05) {
-      finalVolAnn = computedVol;
-    } else {
-      // No real data — use type-aware conservative estimate
-      // Stablecoin pairs are low vol, crypto pairs are higher
-      finalVolAnn = poolType === 'STABLE' ? 0.05 : 0.50;
-    }
-    if (!warnings.includes('volatility estimated')) {
-      warnings.push('volatility estimated');
-    }
+  }
+
+  const finalVolAnn = volResult.volAnn > 0.05 ? volResult.volAnn : 0.20;
+  if (volResult.volAnn <= 0.05) {
+    warnings.push('volatility_fallback_20pct_default');
   }
 
   // Health score
@@ -133,12 +144,33 @@ export function enrichToUnifiedPool(
     aprTotal,
     aprAdjusted,
     volatilityAnn: finalVolAnn,
+    priceChange24h: (pool as Pool & { priceChange24h?: number }).priceChange24h,
     ratio,
     healthScore: healthResult.score,
     penaltyTotal: healthResult.penaltyTotal,
     bluechip: p.bluechip ?? isBluechip(pool.token0.symbol, pool.token1.symbol),
     warnings,
     updatedAt: updatedAt.toISOString(),
+    // Data confidence metadata — merge adapter-provided price/volume/fees with
+    // freshly computed volatility and apr values
+    dataConfidence: {
+      // Carry through adapter-provided confidence for price, volume, fees
+      // (fall back to safe defaults if the adapter did not populate them)
+      price: pool.dataConfidence?.price ?? { method: 'observed' as const, confidence: 'low' as const },
+      volume: pool.dataConfidence?.volume ?? { method: 'observed' as const, confidence: 'low' as const },
+      fees: pool.dataConfidence?.fees ?? { method: 'derived_volume' as const, confidence: 'low' as const },
+      // Computed here in pool-intelligence service
+      volatility: {
+        method: volResult.method,
+        dataPoints: volResult.dataPoints,
+        confidence: volResult.method === 'log_returns' && volResult.dataPoints >= 24
+          ? 'high' : volResult.method === 'log_returns' ? 'medium' : 'low',
+      },
+      apr: {
+        method: aprRes.fees24hUSD != null ? 'real_fees' : (pool.apr != null ? 'adapter_apy' : 'unavailable'),
+        confidence: aprRes.fees24hUSD != null ? 'high' : (pool.apr != null ? 'medium' : 'low'),
+      },
+    },
     // Backward compat
     apr: pool.apr,
     tvl: pool.tvl,

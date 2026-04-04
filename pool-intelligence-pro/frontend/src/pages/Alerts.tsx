@@ -3,15 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Bell, BellOff, Settings, Plus, X, Send, Trash2 } from 'lucide-react';
 import { fetchHealth, fetchPools, fetchAlerts, createAlert, deleteAlert, fetchSettings, Pool, Score } from '../api/client';
 import clsx from 'clsx';
-
-type AlertType = 'PRICE_ABOVE' | 'PRICE_BELOW' | 'VOLUME_DROP' | 'LIQUIDITY_FLIGHT';
-
-const alertTypeConfig: Record<AlertType, { label: string; icon: string; unit: string; description: string }> = {
-  PRICE_ABOVE: { label: 'Preco Acima', icon: '📈', unit: '$', description: 'Notificar quando preco subir acima' },
-  PRICE_BELOW: { label: 'Preco Abaixo', icon: '📉', unit: '$', description: 'Notificar quando preco cair abaixo' },
-  VOLUME_DROP: { label: 'Queda de Volume', icon: '💧', unit: '%', description: 'Notificar quando volume cair' },
-  LIQUIDITY_FLIGHT: { label: 'Fuga de Liquidez', icon: '🚨', unit: '%', description: 'Notificar fuga de TVL' },
-};
+import { AlertType, alertTypeConfig } from '@/data/alert-events';
 
 export default function AlertsPage() {
   const queryClient = useQueryClient();
@@ -20,6 +12,7 @@ export default function AlertsPage() {
     poolId?: string;
     type: AlertType;
     threshold: number;
+    condition?: { rangeLower: number; rangeUpper: number };
   }>({
     type: 'PRICE_BELOW',
     threshold: 0,
@@ -47,12 +40,12 @@ export default function AlertsPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: () => createAlert(newAlert.poolId, newAlert.type, newAlert.threshold),
+    mutationFn: () => createAlert(newAlert.poolId, newAlert.type, newAlert.threshold, newAlert.condition),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['alerts'] });
       queryClient.invalidateQueries({ queryKey: ['health'] });
       setShowModal(false);
-      setNewAlert({ type: 'PRICE_BELOW', threshold: 0 });
+      setNewAlert({ type: 'PRICE_BELOW', threshold: 0, condition: undefined });
     },
   });
 
@@ -64,22 +57,37 @@ export default function AlertsPage() {
     },
   });
 
+  const isRangeType = newAlert.type === 'OUT_OF_RANGE' || newAlert.type === 'NEAR_RANGE_EXIT';
+  const isGlobalType = newAlert.type === 'NEW_RECOMMENDATION';
+
+  const isFormValid = (): boolean => {
+    if (isRangeType) {
+      return (
+        !!newAlert.condition?.rangeLower &&
+        !!newAlert.condition?.rangeUpper &&
+        newAlert.condition.rangeUpper > newAlert.condition.rangeLower
+      );
+    }
+    if (isGlobalType) return true;
+    return newAlert.threshold > 0;
+  };
+
   const handleCreate = () => {
-    if (newAlert.threshold > 0) {
+    if (isFormValid()) {
       createMutation.mutate();
     }
   };
 
   const getPoolName = (poolId?: string): string => {
     if (!poolId) return 'Global';
-    const pool = pools?.find(p => p.pool.externalId === poolId);
-    if (pool) {
+    const pool = pools?.find(p => (p?.pool?.poolAddress || p?.pool?.externalId) === poolId);
+    if (pool?.pool?.token0?.symbol && pool?.pool?.token1?.symbol) {
       return pool.pool.token0.symbol + '/' + pool.pool.token1.symbol;
     }
     return poolId.slice(0, 12) + '...';
   };
 
-  const telegramConnected = health?.alerts?.rulesCount !== undefined;
+  const telegramConnected = (settings as any)?.telegram?.enabled ?? false;
 
   return (
     <div className="space-y-6">
@@ -133,7 +141,7 @@ export default function AlertsPage() {
                         </div>
                         <button
                           className="p-2 rounded-lg bg-danger-600 hover:bg-danger-500 transition-colors"
-                          onClick={() => deleteMutation.mutate(id)}
+                          onClick={() => { if (window.confirm('Remover este alerta?')) deleteMutation.mutate(id); }}
                           disabled={deleteMutation.isPending}
                         >
                           <Trash2 className="w-4 h-4" />
@@ -164,11 +172,11 @@ export default function AlertsPage() {
             <div className="card-body space-y-4">
               <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
                 <span>Cooldown entre alertas</span>
-                <span className="text-primary-400 font-medium">60 min</span>
+                <span className="text-primary-400 font-medium">{settings?.alertConfig?.cooldownMinutes ?? 60} min</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
                 <span>Max alertas por hora</span>
-                <span className="text-primary-400 font-medium">10</span>
+                <span className="text-primary-400 font-medium">{settings?.alertConfig?.maxAlertsPerHour ?? 30}</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
                 <span>Modo atual</span>
@@ -245,8 +253,8 @@ export default function AlertsPage() {
                 >
                   <option value="">🌐 Global (todas as pools)</option>
                   {pools?.slice(0, 30).map((item) => (
-                    <option key={item.pool.externalId} value={item.pool.externalId}>
-                      {item.pool.token0.symbol}/{item.pool.token1.symbol} - {item.pool.protocol}
+                    <option key={item.pool.poolAddress || item.pool.externalId} value={item.pool.poolAddress || item.pool.externalId}>
+                      {item.pool.token0?.symbol ?? '?'}/{item.pool.token1?.symbol ?? '?'} - {item.pool.protocol}
                     </option>
                   ))}
                 </select>
@@ -264,7 +272,7 @@ export default function AlertsPage() {
                           'p-3 rounded-lg border-2 transition-all text-left',
                           newAlert.type === type ? 'border-primary-500 bg-primary-500/10' : 'border-dark-600 hover:border-dark-500'
                         )}
-                        onClick={() => setNewAlert({ ...newAlert, type })}
+                        onClick={() => setNewAlert({ ...newAlert, type, condition: undefined })}
                       >
                         <div className="text-lg mb-1">{config.icon}</div>
                         <div className="text-sm font-medium">{config.label}</div>
@@ -275,18 +283,70 @@ export default function AlertsPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm text-dark-400 mb-2">
-                  Valor ({alertTypeConfig[newAlert.type]?.unit || '$'})
-                </label>
-                <input
-                  type="number"
-                  className="input w-full"
-                  value={newAlert.threshold || ''}
-                  onChange={(e) => setNewAlert({ ...newAlert, threshold: Number(e.target.value) })}
-                  placeholder="Ex: 1000"
-                />
-              </div>
+              {isRangeType ? (
+                <div className="space-y-3">
+                  <label className="block text-sm text-dark-400">Range de Preço</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-dark-400 mb-1">Limite Inferior ($)</label>
+                      <input
+                        type="number"
+                        className="input w-full"
+                        value={newAlert.condition?.rangeLower || ''}
+                        onChange={(e) => setNewAlert({
+                          ...newAlert,
+                          condition: { rangeLower: Number(e.target.value), rangeUpper: newAlert.condition?.rangeUpper ?? 0 },
+                        })}
+                        placeholder="Ex: 1800"
+                        step="any"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-dark-400 mb-1">Limite Superior ($)</label>
+                      <input
+                        type="number"
+                        className="input w-full"
+                        value={newAlert.condition?.rangeUpper || ''}
+                        onChange={(e) => setNewAlert({
+                          ...newAlert,
+                          condition: { rangeLower: newAlert.condition?.rangeLower ?? 0, rangeUpper: Number(e.target.value) },
+                        })}
+                        placeholder="Ex: 2200"
+                        step="any"
+                      />
+                    </div>
+                  </div>
+                  {newAlert.type === 'NEAR_RANGE_EXIT' && (
+                    <div>
+                      <label className="block text-xs text-dark-400 mb-1">
+                        Proximidade para alertar (% do limite) — padrão: 5%
+                      </label>
+                      <input
+                        type="number"
+                        className="input w-full"
+                        value={newAlert.threshold || ''}
+                        onChange={(e) => setNewAlert({ ...newAlert, threshold: Number(e.target.value) })}
+                        placeholder="5"
+                        min="1"
+                        max="20"
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : !isGlobalType && (
+                <div>
+                  <label className="block text-sm text-dark-400 mb-2">
+                    Valor ({alertTypeConfig[newAlert.type]?.unit || '$'})
+                  </label>
+                  <input
+                    type="number"
+                    className="input w-full"
+                    value={newAlert.threshold || ''}
+                    onChange={(e) => setNewAlert({ ...newAlert, threshold: Number(e.target.value) })}
+                    placeholder="Ex: 1000"
+                  />
+                </div>
+              )}
 
               <div className="flex gap-3 pt-4">
                 <button className="btn btn-secondary flex-1" onClick={() => setShowModal(false)}>
@@ -295,7 +355,7 @@ export default function AlertsPage() {
                 <button
                   className="btn btn-primary flex-1"
                   onClick={handleCreate}
-                  disabled={!newAlert.threshold || createMutation.isPending}
+                  disabled={!isFormValid() || createMutation.isPending}
                 >
                   {createMutation.isPending ? 'Criando...' : 'Criar Alerta'}
                 </button>

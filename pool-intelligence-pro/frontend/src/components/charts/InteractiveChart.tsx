@@ -72,7 +72,7 @@ export default function InteractiveChart({
   }, [minPrice, maxPrice, chartWidth, currentPrice]);
 
   const liquidityToY = useCallback((liquidity: number) => {
-    const maxLiquidity = Math.max(...liquidityData.map(d => d.liquidity));
+    const maxLiquidity = Math.max(...liquidityData.map(d => d.liquidity)) || 1;
     return padding.top + chartHeight - (liquidity / maxLiquidity) * chartHeight;
   }, [liquidityData, chartHeight]);
 
@@ -167,8 +167,9 @@ export default function InteractiveChart({
     };
   }, [dragging, handleMove, handleEnd]);
 
-  const rangePercent = ((rangeUpper - rangeLower) / currentPrice * 100).toFixed(1);
+  const rangePercent = currentPrice > 0 ? ((rangeUpper - rangeLower) / currentPrice * 100).toFixed(1) : '0.0';
   const inRangePercent = useMemo(() => {
+    if (currentPrice <= 0) return '70';
     const rangeWidth = (rangeUpper - rangeLower) / currentPrice;
     return Math.min(98, 70 + rangeWidth * 100).toFixed(0);
   }, [rangeLower, rangeUpper, currentPrice]);

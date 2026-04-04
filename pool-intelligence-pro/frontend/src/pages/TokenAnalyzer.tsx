@@ -93,7 +93,7 @@ function PoolCard({ pool, rank, onClick }: { pool: UnifiedPool; rank: number; on
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-3 text-center">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
         <div>
           <div className="text-[10px] text-dark-500 mb-0.5">TVL</div>
           <div className="text-sm font-mono">{fmt(pool.tvlUSD)}</div>
@@ -152,6 +152,7 @@ function VerdictPanel({ pools, token }: { pools: UnifiedPool[]; token: string })
     verdictText = `Liquidez moderada (${fmt(totalTVL)}). Pools existem mas volume pode ser inconsistente.`;
     verdictIcon = <TrendingDown className="w-5 h-5 text-yellow-400" />;
   } else if (avgHealth >= 60 && bluechipPools.length > 0) {
+    verdict = 'good';
     verdictText = `✅ Excelente liquidez com ${pools.length} pools. Média de health score ${avgHealth.toFixed(0)}.`;
     verdictIcon = <CheckCircle className="w-5 h-5 text-green-400" />;
   } else if (avgHealth >= 45) {
@@ -273,7 +274,7 @@ export default function TokenAnalyzerPage() {
         })
         .sort((a, b) => (b.healthScore || 0) - (a.healthScore || 0));
     } catch (e) {
-      console.error('Filter error:', e);
+      if (import.meta.env.DEV) console.error('Filter error:', e);
       return [];
     }
   }, [data?.pools, searchedToken]);
@@ -289,7 +290,7 @@ export default function TokenAnalyzerPage() {
       const totalVol24h = filteredPools.reduce((s, p) => s + (p.volume24hUSD || 0), 0);
       return { totalTVL, avgHealth, maxAPR, totalVol24h };
     } catch (e) {
-      console.error('Stats calculation error:', e);
+      if (import.meta.env.DEV) console.error('Stats calculation error:', e);
       return null;
     }
   }, [filteredPools]);
@@ -345,7 +346,12 @@ export default function TokenAnalyzerPage() {
             <button
               key={t}
               onClick={() => { setTokenInput(t); setSearchedToken(t); setSearchParams({ token: t }); }}
-              className="px-2 py-1 text-xs rounded bg-dark-700 hover:bg-dark-600 transition-colors"
+              className={clsx(
+                'px-2 py-1 text-xs rounded transition-colors',
+                searchedToken === t
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-dark-700 hover:bg-dark-600'
+              )}
             >
               {t}
             </button>
@@ -425,7 +431,7 @@ export default function TokenAnalyzerPage() {
                       key={pool.id}
                       pool={pool}
                       rank={i + 1}
-                      onClick={() => navigate(`/pools/${pool.chain}/${pool.poolAddress || pool.id || 'unknown'}`)}
+                      onClick={() => navigate(`/pools/${pool.chain}/${pool.poolAddress || 'unknown'}`)}
                     />
                   ))}
                 </div>

@@ -1,12 +1,16 @@
 import { useState, useMemo, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  ChevronUp, ChevronDown, ChevronsUpDown, Star, StarOff,
+  ChevronUp, ChevronDown, ChevronsUpDown, Star, StarOff, Loader2,
   RefreshCw, Filter, Search, Shield, Zap, BarChart2, AlertTriangle, ExternalLink,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { fetchUnifiedPools, fetchTokens, fetchFavorites, addFavorite, removeFavorite, UnifiedPool } from '../api/client';
+import { ExportButton } from '@/components/common/ExportButton';
+import { Skeleton } from '@/components/ui/skeleton';
+import { exportCSV, exportPrintReport } from '@/lib/export';
+import { ConfBadge } from '@/components/common/ConfBadge';
 
 // ============================================================
 // HELPERS
@@ -65,8 +69,8 @@ function SortHeader({ label, sortKey, current, dir, onSort }: {
 // POOL ROW
 // ============================================================
 
-function PoolRow({ pool, isFav, onToggleFav, onClick }: {
-  pool: UnifiedPool; isFav: boolean;
+function PoolRow({ pool, isFav, isLoadingFav, onToggleFav, onClick }: {
+  pool: UnifiedPool; isFav: boolean; isLoadingFav?: boolean;
   onToggleFav: (pool: UnifiedPool) => void;
   onClick: (pool: UnifiedPool) => void;
 }) {
@@ -97,9 +101,13 @@ function PoolRow({ pool, isFav, onToggleFav, onClick }: {
         <div className="flex items-center gap-2">
           <button
             onClick={e => { e.stopPropagation(); onToggleFav(pool); }}
-            className="flex-shrink-0 text-dark-500 hover:text-yellow-400 transition-colors"
+            disabled={isLoadingFav}
+            className="flex-shrink-0 text-dark-500 hover:text-yellow-400 transition-colors disabled:opacity-50"
           >
-            {isFav ? <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" /> : <StarOff className="w-3.5 h-3.5" />}
+            {isLoadingFav
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : isFav ? <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" /> : <StarOff className="w-3.5 h-3.5" />
+            }
           </button>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 font-medium text-sm">
@@ -126,6 +134,7 @@ function PoolRow({ pool, isFav, onToggleFav, onClick }: {
         <span className={clsx('font-mono', (pool.aprTotal ?? 0) > 50 ? 'text-green-400' : '')}>
           {fmtPct(pool.aprTotal)}
         </span>
+        <ConfBadge conf={pool.dataConfidence?.apr?.confidence} />
       </td>
 
       {/* APR Adjusted */}
@@ -158,6 +167,89 @@ function PoolRow({ pool, isFav, onToggleFav, onClick }: {
         {formatTime(pool.updatedAt)}
       </td>
     </tr>
+  );
+}
+
+// ============================================================
+// POOL MOBILE CARD (12.9)
+// ============================================================
+
+function PoolMobileCard({ pool, isFav, isLoadingFav, onToggleFav, onClick }: {
+  pool: UnifiedPool; isFav: boolean; isLoadingFav?: boolean;
+  onToggleFav: (pool: UnifiedPool) => void;
+  onClick: (pool: UnifiedPool) => void;
+}) {
+  const poolType = pool.poolType || 'V2';
+  const modeColor = poolType === 'STABLE' ? 'bg-blue-500/20 text-blue-400' : poolType === 'CL' ? 'bg-purple-500/20 text-purple-400' : 'bg-gray-500/20 text-gray-400';
+  const healthScore = pool.healthScore ?? 0;
+  const warnings = pool.warnings || [];
+
+  return (
+    <div
+      className="bg-dark-800 border border-dark-600 rounded-xl p-3 cursor-pointer hover:border-dark-500 transition-colors active:bg-dark-700"
+      onClick={() => onClick(pool)}
+    >
+      {/* Header row: pair + fav + health */}
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            onClick={e => { e.stopPropagation(); onToggleFav(pool); }}
+            disabled={isLoadingFav}
+            className="flex-shrink-0 text-dark-500 hover:text-yellow-400 disabled:opacity-50"
+          >
+            {isLoadingFav
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : isFav ? <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" /> : <StarOff className="w-4 h-4" />
+            }
+          </button>
+          <div className="min-w-0">
+            <p className="font-semibold text-sm truncate">
+              {pool.baseToken}/{pool.quoteToken}
+              {pool.bluechip && <span className="ml-1 text-blue-400 text-xs">★</span>}
+              {warnings.length > 0 && <AlertTriangle className="inline w-3 h-3 ml-1 text-yellow-500" />}
+            </p>
+            <div className="flex items-center gap-1 mt-0.5">
+              <span className={clsx('text-[10px] px-1.5 rounded', modeColor)}>{poolType}</span>
+              <span className="text-[10px] text-dark-500">{pool.protocol}</span>
+              <span className="text-[10px] text-dark-500 capitalize">· {pool.chain}</span>
+            </div>
+          </div>
+        </div>
+        <span className={clsx('px-2 py-0.5 rounded text-xs font-bold flex-shrink-0', healthBg(healthScore))}>
+          {healthScore}
+        </span>
+      </div>
+
+      {/* Metrics grid */}
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div>
+          <p className="text-[10px] text-dark-500 mb-0.5">TVL</p>
+          <p className="text-xs font-mono font-medium">{fmt(pool.tvlUSD)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-dark-500 mb-0.5">APR</p>
+          <p className={clsx('text-xs font-mono font-medium', (pool.aprTotal ?? 0) > 50 ? 'text-green-400' : '')}>
+            {fmtPct(pool.aprTotal)}<ConfBadge conf={pool.dataConfidence?.apr?.confidence} />
+          </p>
+        </div>
+        <div>
+          <p className="text-[10px] text-dark-500 mb-0.5">APR Aj.</p>
+          <p className="text-xs font-mono font-medium text-yellow-400">{fmtPct(pool.aprAdjusted)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-dark-500 mb-0.5">Vol. 1h</p>
+          <p className="text-xs font-mono text-dark-300">{fmt(pool.volume1hUSD)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-dark-500 mb-0.5">Fees 1h</p>
+          <p className="text-xs font-mono text-dark-300">{fmt(pool.fees1hUSD)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-dark-500 mb-0.5">Volat.</p>
+          <p className="text-xs font-mono text-dark-400">{fmtPct((pool.volatilityAnn ?? 0) * 100, 0)}</p>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -229,6 +321,7 @@ function Top3Cards({ pools, onClick }: { pools: UnifiedPool[]; onClick: (p: Unif
 
 export default function PoolsPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [sortKey, setSortKey] = useState<SortKey>('healthScore');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [search, setSearch] = useState('');
@@ -238,6 +331,7 @@ export default function PoolsPage() {
   const [minTVL, setMinTVL] = useState('');
   const [minHealth, setMinHealth] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [pendingFavId, setPendingFavId] = useState<string | null>(null);
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['unified-pools', chainFilter, bluechipOnly, poolTypeFilter, minTVL, minHealth],
@@ -247,6 +341,8 @@ export default function PoolsPage() {
       poolType: poolTypeFilter || undefined,
       minTVL: minTVL ? parseFloat(minTVL) : undefined,
       minHealth: minHealth ? parseFloat(minHealth) : undefined,
+      // limit: 200 é intencional — pools já são filtradas/ordenadas server-side;
+      // a tabela exibe todas com client-side sort/search sem paginação adicional
       limit: 200,
     }),
     staleTime: 60000,
@@ -270,6 +366,7 @@ export default function PoolsPage() {
 
   const handleToggleFav = useCallback(async (pool: UnifiedPool) => {
     if (!pool?.id) return;
+    setPendingFavId(pool.id);
     try {
       if (favSet.has(pool.id)) {
         await removeFavorite(pool.id);
@@ -283,10 +380,13 @@ export default function PoolsPage() {
           protocol: pool.protocol || ''
         });
       }
+      await queryClient.invalidateQueries({ queryKey: ['favorites'] });
     } catch (e) {
-      console.error('Toggle favorite error:', e);
+      if (import.meta.env.DEV) console.error('Toggle favorite error:', e);
+    } finally {
+      setPendingFavId(null);
     }
-  }, [favSet]);
+  }, [favSet, queryClient]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc');
@@ -313,7 +413,7 @@ export default function PoolsPage() {
       }
       return result;
     } catch (e) {
-      console.error('Filter error:', e);
+      if (import.meta.env.DEV) console.error('Filter error:', e);
       return [];
     }
   }, [pools, search]);
@@ -341,7 +441,7 @@ export default function PoolsPage() {
         return sortDir === 'desc' ? vb - va : va - vb;
       });
     } catch (e) {
-      console.error('Sort error:', e);
+      if (import.meta.env.DEV) console.error('Sort error:', e);
       return filtered;
     }
   }, [filtered, sortKey, sortDir]);
@@ -350,7 +450,7 @@ export default function PoolsPage() {
     // Defensive: use id as fallback if poolAddress is missing
     const address = pool.poolAddress || pool.id || 'unknown';
     if (address === 'unknown') {
-      console.warn('Pool has no valid address:', pool);
+      if (import.meta.env.DEV) console.warn('Pool has no valid address:', pool);
       return;
     }
     navigate(`/pools/${pool.chain}/${address}`);
@@ -368,12 +468,12 @@ export default function PoolsPage() {
             🏊 Pool Intelligence
           </h1>
           <p className="text-dark-400 text-sm mt-1">
-            {data?.total ?? 0} pools analisadas · score institucional · dados reais
+            {data?.total ?? 0} pools analisadas · score institucional · dados observados e estimados
             {data?.syncing && <span className="ml-2 text-blue-400 text-xs">Sincronizando TheGraph...</span>}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => refetch()} disabled={isFetching} className="p-2 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors disabled:opacity-50">
+          <button onClick={() => refetch({ cancelRefetch: false })} disabled={isFetching} className="p-2 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors disabled:opacity-50">
             <RefreshCw className={clsx('w-4 h-4', isFetching && 'animate-spin')} />
           </button>
           <button
@@ -383,6 +483,36 @@ export default function PoolsPage() {
             <Filter className="w-4 h-4" />
             Filtros
           </button>
+          <ExportButton
+            disabled={sorted.length === 0}
+            onExportCSV={() => {
+              const poolExportCols = [
+                { header: 'Par', key: 'pair', format: (_: any, r: UnifiedPool) => `${r.baseToken}/${r.quoteToken}` },
+                { header: 'Protocolo', key: 'protocol' },
+                { header: 'Chain', key: 'chain' },
+                { header: 'Tipo', key: 'poolType' },
+                { header: 'TVL (USD)', key: 'tvlUSD', format: (v: number) => v?.toFixed(0) ?? '0' },
+                { header: 'APR Total (%)', key: 'aprTotal', format: (v: number) => v?.toFixed(2) ?? '0' },
+                { header: 'APR Ajustado (%)', key: 'aprAdjusted', format: (v: number) => v?.toFixed(2) ?? '0' },
+                { header: 'Volume 24h (USD)', key: 'volume24hUSD', format: (v: number) => v?.toFixed(0) ?? '0' },
+                { header: 'Fees 24h (USD)', key: 'fees24hUSD', format: (v: number) => v?.toFixed(2) ?? '0' },
+                { header: 'Volatilidade (%)', key: 'volatilityAnn', format: (v: number) => ((v ?? 0) * 100).toFixed(1) },
+                { header: 'Health Score', key: 'healthScore' },
+                { header: 'Blue-chip', key: 'bluechip', format: (v: boolean) => v ? 'Sim' : 'Nao' },
+              ];
+              exportCSV(sorted as any, poolExportCols, `pool-intelligence-${new Date().toISOString().slice(0, 10)}`);
+            }}
+            onExportPDF={() => {
+              const poolExportCols = [
+                { header: 'Par', key: 'pair', format: (_: any, r: UnifiedPool) => `${r.baseToken}/${r.quoteToken}` },
+                { header: 'Chain', key: 'chain' },
+                { header: 'TVL', key: 'tvlUSD', format: (v: number) => `$${((v ?? 0) / 1e6).toFixed(1)}M` },
+                { header: 'APR', key: 'aprTotal', format: (v: number) => `${v?.toFixed(1) ?? '0'}%` },
+                { header: 'Health', key: 'healthScore' },
+              ];
+              exportPrintReport(sorted as any, poolExportCols, 'Pool Intelligence');
+            }}
+          />
         </div>
       </div>
 
@@ -477,10 +607,34 @@ export default function PoolsPage() {
         <Top3Cards pools={sorted} onClick={handlePoolClick} />
       )}
 
-      {/* Table */}
-      <div className="bg-dark-800 rounded-xl border border-dark-600 overflow-hidden">
+      {/* Mobile card list (12.9) — visível apenas em mobile */}
+      <div className="sm:hidden space-y-2">
+        {isLoading ? (
+          <div className="space-y-2">
+            {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
+          </div>
+        ) : sorted.length === 0 ? (
+          <div className="py-12 text-center text-dark-400">
+            Nenhuma pool encontrada. Ajuste os filtros.
+          </div>
+        ) : (
+          sorted.map(pool => (
+            <PoolMobileCard
+              key={pool.id}
+              pool={pool}
+              isFav={favSet.has(pool.id)}
+              isLoadingFav={pendingFavId === pool.id}
+              onToggleFav={handleToggleFav}
+              onClick={handlePoolClick}
+            />
+          ))
+        )}
+      </div>
+
+      {/* Table — visível em sm+ */}
+      <div className="hidden sm:block bg-dark-800 rounded-xl border border-dark-600 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full text-left min-w-[800px]">
             <thead className="bg-dark-900 border-b border-dark-700">
               <tr>
                 <th className="px-3 py-2 text-xs font-medium text-dark-400">Pool</th>
@@ -497,12 +651,17 @@ export default function PoolsPage() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr>
-                  <td colSpan={10} className="px-3 py-12 text-center text-dark-400">
-                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
-                    Carregando pools...
-                  </td>
-                </tr>
+                <>
+                  {[...Array(8)].map((_, i) => (
+                    <tr key={i} className="border-b border-dark-700">
+                      {[...Array(10)].map((__, j) => (
+                        <td key={j} className="px-3 py-3">
+                          <Skeleton className="h-4 w-full" />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </>
               ) : sorted.length === 0 && (data?.syncing || isFetching) ? (
                 <tr>
                   <td colSpan={10} className="px-3 py-12 text-center text-dark-400">
@@ -523,6 +682,7 @@ export default function PoolsPage() {
                     key={pool.id}
                     pool={pool}
                     isFav={favSet.has(pool.id)}
+                    isLoadingFav={pendingFavId === pool.id}
                     onToggleFav={handleToggleFav}
                     onClick={handlePoolClick}
                   />

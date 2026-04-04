@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/*.ts",
+    "src/adapters/**/*.ts",
+    "src/bot/**/*.ts",
+    "src/config/**/*.ts",
+    "src/constants/**/*.ts",
+    "src/jobs/**/*.ts",
+    "src/routes/*.ts",
+    "src/services/*.ts",
+    "src/types/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

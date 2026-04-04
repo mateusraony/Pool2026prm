@@ -35,7 +35,7 @@ export default function WatchlistPage() {
 
   // Map watchlist items to pool data
   const watchlistWithDetails = watchlist?.map(item => {
-    const poolData = pools?.find(p => p.pool.externalId === item.poolId);
+    const poolData = pools?.find(p => (p.pool.poolAddress || p.pool.externalId) === item.poolId);
     return { ...item, poolData };
   }) || [];
 
@@ -76,7 +76,7 @@ export default function WatchlistPage() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.05 }}
                 className="card hover:border-primary-500/50 transition-all cursor-pointer"
-                onClick={() => pool && navigate('/simulation/' + pool.chain + '/' + (pool.poolAddress || pool.externalId || 'unknown'))}
+                onClick={() => pool && navigate('/simulation/' + pool.chain + '/' + (pool.poolAddress || 'unknown'))}
               >
                 <div className="p-4">
                   <div className="flex items-center justify-between">
@@ -108,13 +108,13 @@ export default function WatchlistPage() {
                         <div className="text-center">
                           <div className="text-xs text-dark-400">{pool.token0?.symbol}</div>
                           <div className="font-semibold font-mono text-sm">
-                            {pool.token0?.priceUsd ? '$' + pool.token0.priceUsd.toFixed(2) : <span className="text-warning-400">—</span>}
+                            {pool.token0?.priceUsd != null ? '$' + pool.token0.priceUsd.toFixed(2) : <span className="text-warning-400">—</span>}
                           </div>
                         </div>
                         <div className="text-center">
                           <div className="text-xs text-dark-400">{pool.token1?.symbol}</div>
                           <div className="font-semibold font-mono text-sm">
-                            {pool.token1?.priceUsd ? '$' + pool.token1.priceUsd.toFixed(2) : <span className="text-warning-400">—</span>}
+                            {pool.token1?.priceUsd != null ? '$' + pool.token1.priceUsd.toFixed(2) : <span className="text-warning-400">—</span>}
                           </div>
                         </div>
                         <div className="text-center">
@@ -164,7 +164,7 @@ export default function WatchlistPage() {
                       </button>
                       <button
                         className="btn bg-danger-600 hover:bg-danger-500 p-2"
-                        onClick={(e) => { e.stopPropagation(); removeMutation.mutate(item.poolId); }}
+                        onClick={(e) => { e.stopPropagation(); if (window.confirm('Remover da watchlist?')) removeMutation.mutate(item.poolId); }}
                         disabled={removeMutation.isPending}
                         title="Remover da watchlist"
                       >
@@ -175,7 +175,7 @@ export default function WatchlistPage() {
 
                   {/* Mobile stats */}
                   {pool && score && (
-                    <div className="md:hidden mt-4 grid grid-cols-4 gap-2 text-center text-sm">
+                    <div className="md:hidden mt-4 grid grid-cols-2 gap-2 text-center text-sm">
                       <div className="bg-dark-700/50 rounded p-2">
                         <div className="text-xs text-dark-400">TVL</div>
                         <div className="font-semibold">${formatNum(pool.tvl)}</div>

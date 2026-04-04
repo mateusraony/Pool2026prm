@@ -1,0 +1,21 @@
+{
+  "name": "pool-intelligence-pro",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "install:all": "cd frontend && NODE_ENV=development npm install --include=dev && cd ../backend && npm install",
+    "build:frontend": "cd frontend && npm run build",
+    "build:backend": "cd backend && npx prisma generate && npm run build",
+    "copy:frontend": "rm -rf backend/public && cp -r frontend/dist backend/public",
+    "db:push": "cd backend && npx prisma db push --skip-generate --accept-data-loss 2>/dev/null || echo 'DB push skipped (no DATABASE_URL or DB unavailable)'",
+    "build": "npm run build:frontend && npm run copy:frontend && npm run build:backend && npm run db:push",
+    "start": "cd backend && node dist/index.js",
+    "e2e:build": "cd frontend && npm ci && npm run build",
+    "e2e:serve": "cd frontend && npm run preview -- --port 5173",
+    "test:e2e": "npx playwright test",
+    "test:e2e:ui": "playwright test --ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
+  }
+}

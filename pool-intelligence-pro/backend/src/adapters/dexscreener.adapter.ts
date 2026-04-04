@@ -69,14 +69,21 @@ export class DexScreenerAdapter extends BaseAdapter {
   
   private async fetchPoolsBySearch(chain: string, limit: number): Promise<Pool[]> {
     // DexScreener doesn't have a "list all pools" endpoint
-    // We search for popular tokens on the chain
-    const searchTerms = ['ETH', 'USDC', 'USDT', 'WBTC', 'ARB', 'OP'];
-    const allPools: Pool[] = [];
+    // We search for popular tokens on the chain — terms adapted per chain
+    const chainTerms: Record<string, string[]> = {
+      ethereum:  ['ETH', 'USDC', 'USDT', 'WBTC', 'DAI', 'WETH'],
+      arbitrum:  ['ETH', 'USDC', 'USDT', 'WBTC', 'ARB', 'GMX'],
+      base:      ['ETH', 'USDC', 'USDT', 'cbETH', 'cbBTC', 'WETH'],
+      polygon:   ['ETH', 'USDC', 'USDT', 'WBTC', 'MATIC', 'POL'],
+      optimism:  ['ETH', 'USDC', 'USDT', 'WBTC', 'OP', 'WETH'],
+    };
+    const searchTerms = chainTerms[chain] ?? ['ETH', 'USDC', 'USDT', 'WBTC'];
     const seen = new Set<string>();
-    
-    for (const term of searchTerms) {
-      try {
-        const response = await fetchWithRetry(
+
+    // Paraleliza todas as buscas simultaneamente em vez de sequencial
+    const results = await Promise.all(
+      searchTerms.map(term =>
+        fetchWithRetry(
           this.name,
           async () => {
             const res = await axios.get(BASE_URL + '/dex/search', {
@@ -85,27 +92,25 @@ export class DexScreenerAdapter extends BaseAdapter {
             });
             return res.data;
           }
-        );
-        
-        const pairs: DexScreenerPair[] = response.pairs || [];
-        
-        for (const pair of pairs) {
-          if (
-            pair.chainId === chain &&
-            !seen.has(pair.pairAddress) &&
-            pair.liquidity?.usd >= config.thresholds.minLiquidity
-          ) {
-            seen.add(pair.pairAddress);
-            allPools.push(this.mapToPool(pair));
-          }
+        ).catch(() => ({ pairs: [] }))
+      )
+    );
+
+    const allPools: Pool[] = [];
+    for (const response of results) {
+      const pairs: DexScreenerPair[] = response.pairs || [];
+      for (const pair of pairs) {
+        if (
+          pair.chainId === chain &&
+          !seen.has(pair.pairAddress) &&
+          pair.liquidity?.usd >= config.thresholds.minLiquidity
+        ) {
+          seen.add(pair.pairAddress);
+          allPools.push(this.mapToPool(pair));
         }
-      } catch {
-        // Continue with other search terms
       }
-      
-      if (allPools.length >= limit) break;
     }
-    
+
     return allPools
       .sort((a, b) => b.tvl - a.tvl)
       .slice(0, limit);
@@ -130,6 +135,12 @@ export class DexScreenerAdapter extends BaseAdapter {
       price: this.parseNumber(data.priceUsd),
       tvl: data.liquidity?.usd || 0,
       volume24h: data.volume?.h24 || 0,
+      priceChange24h: data.priceChange?.h24,
+      dataConfidence: {
+        price: { method: 'observed' as const, confidence: 'high' as const },
+        volume: { method: 'observed' as const, confidence: 'high' as const },
+        fees: { method: 'derived_volume' as const, confidence: 'low' as const },
+      },
     };
   }
   

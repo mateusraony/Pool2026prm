@@ -1,6 +1,11 @@
 import { AlertType, AlertEvent, Pool } from '../types/index.js';
 import { logService } from './log.service.js';
 import { config } from '../config/index.js';
+import { webhookService } from './webhook.service.js'; // mantido para uso futuro via event bus listener
+import { eventBus } from './event-bus.service.js';
+import { memoryStore } from './memory-store.service.js';
+import { getPrisma } from '../routes/prisma.js';
+import { Prisma } from '@prisma/client';
 
 interface AlertRule {
   type: AlertType;
@@ -25,7 +30,7 @@ export class AlertService {
   constructor() {
     this.alertConfig = {
       cooldownMinutes: 60,
-      maxAlertsPerHour: 10,
+      maxAlertsPerHour: 30,
       dedupeWindowMinutes: 30,
     };
   }
@@ -34,13 +39,54 @@ export class AlertService {
     this.alertConfig = { ...this.alertConfig, ...config };
   }
 
+  getAlertConfig(): AlertConfig {
+    return { ...this.alertConfig };
+  }
+
   // Add or update alert rule
   addRule(id: string, rule: Omit<AlertRule, 'triggerCount'>): void {
     this.rules.set(id, { ...rule, triggerCount: 0 });
+    this.saveToDb();
+  }
+
+  hasRule(id: string): boolean {
+    return this.rules.has(id);
   }
 
   removeRule(id: string): void {
     this.rules.delete(id);
+    this.saveToDb();
+  }
+
+  async loadFromDb(): Promise<void> {
+    try {
+      const prisma = getPrisma();
+      const config = await prisma.appConfig.findUnique({ where: { key: 'alertRules' } });
+      if (config?.value && Array.isArray(config.value)) {
+        for (const entry of (config.value as unknown) as Array<{ id: string; rule: AlertRule }>) {
+          if (entry?.id && entry?.rule) {
+            this.rules.set(entry.id, { ...entry.rule, triggerCount: entry.rule.triggerCount ?? 0 });
+          }
+        }
+        logService.info('SYSTEM', `Loaded ${this.rules.size} alert rules from DB`);
+      }
+    } catch (err) {
+      logService.warn('SYSTEM', 'Could not load alert rules from DB', { error: (err as Error)?.message });
+    }
+  }
+
+  private async saveToDb(): Promise<void> {
+    try {
+      const prisma = getPrisma();
+      const data = Array.from(this.rules.entries()).map(([id, rule]) => ({ id, rule }));
+      await prisma.appConfig.upsert({
+        where: { key: 'alertRules' },
+        update: { value: data as unknown as Prisma.InputJsonValue },
+        create: { key: 'alertRules', value: data as unknown as Prisma.InputJsonValue },
+      });
+    } catch (err) {
+      logService.warn('SYSTEM', 'Could not save alert rules to DB', { error: (err as Error)?.message });
+    }
   }
 
   // Check all rules against current data
@@ -74,6 +120,15 @@ export class AlertService {
 
     // Cleanup old alerts
     this.cleanupRecentAlerts();
+
+    // Emitir eventos via bus (fire and forget — webhooks e outros listeners são acionados pelo bus)
+    if (events.length > 0) {
+      for (const event of events) {
+        eventBus.emit('ALERT_FIRED', event).catch(err => {
+          logService.warn('ALERT', 'Event bus emit failed', { err });
+        });
+      }
+    }
 
     return events;
   }
@@ -112,18 +167,21 @@ export class AlertService {
         }
         break;
 
-      case 'VOLUME_DROP':
-        if (previousPool && pool.volume24h < previousPool.volume24h * 0.5) {
+      case 'VOLUME_DROP': {
+        const dropThreshold = rule.value != null && rule.value > 0 ? 1 - (rule.value / 100) : 0.5;
+        if (previousPool && previousPool.volume24h > 0 && pool.volume24h < previousPool.volume24h * dropThreshold) {
           return this.createEvent(rule.type, pool,
-            'Queda de volume em ' + pool.token0.symbol + '/' + pool.token1.symbol + ': -' + 
+            'Queda de volume em ' + pool.token0.symbol + '/' + pool.token1.symbol + ': -' +
             ((1 - pool.volume24h / previousPool.volume24h) * 100).toFixed(0) + '%',
             { currentVolume: pool.volume24h, previousVolume: previousPool.volume24h }
           );
         }
         break;
+      }
 
-      case 'LIQUIDITY_FLIGHT':
-        if (previousPool && pool.tvl < previousPool.tvl * 0.7) {
+      case 'LIQUIDITY_FLIGHT': {
+        const flightThreshold = rule.value != null && rule.value > 0 ? 1 - (rule.value / 100) : 0.7;
+        if (previousPool && previousPool.tvl > 0 && pool.tvl < previousPool.tvl * flightThreshold) {
           return this.createEvent(rule.type, pool,
             'ALERTA: Fuga de liquidez em ' + pool.token0.symbol + '/' + pool.token1.symbol + ': -' +
             ((1 - pool.tvl / previousPool.tvl) * 100).toFixed(0) + '%',
@@ -131,10 +189,57 @@ export class AlertService {
           );
         }
         break;
+      }
 
       case 'VOLATILITY_SPIKE':
-        // Would need metrics data
+        if (previousPool?.volatilityAnn && pool.volatilityAnn) {
+          const volChange = ((pool.volatilityAnn - previousPool.volatilityAnn) / previousPool.volatilityAnn) * 100;
+          // Trigger if volatility increased by 50%+ (e.g. from 10% to 15%+)
+          if (volChange > (rule.value ?? 50)) {
+            return this.createEvent(rule.type, pool,
+              'Pico de volatilidade em ' + pool.token0.symbol + '/' + pool.token1.symbol +
+              ': +' + volChange.toFixed(0) + '% (de ' + (previousPool.volatilityAnn * 100).toFixed(1) +
+              '% para ' + (pool.volatilityAnn * 100).toFixed(1) + '%)',
+              { currentVolatility: pool.volatilityAnn, previousVolatility: previousPool.volatilityAnn, changePercent: volChange }
+            );
+          }
+        }
         break;
+
+      case 'OUT_OF_RANGE': {
+        const rangeLower = rule.condition?.rangeLower as number | undefined;
+        const rangeUpper = rule.condition?.rangeUpper as number | undefined;
+        if (rangeLower != null && rangeUpper != null && pool.price != null) {
+          if (pool.price < rangeLower || pool.price > rangeUpper) {
+            return this.createEvent(rule.type, pool,
+              'Preço de ' + pool.token0.symbol + '/' + pool.token1.symbol +
+              ' saiu do range ($' + rangeLower.toFixed(4) + ' - $' + rangeUpper.toFixed(4) + ')',
+              { currentPrice: pool.price, rangeLower, rangeUpper }
+            );
+          }
+        }
+        break;
+      }
+
+      case 'NEAR_RANGE_EXIT': {
+        const rangeLower = rule.condition?.rangeLower as number | undefined;
+        const rangeUpper = rule.condition?.rangeUpper as number | undefined;
+        const proximityPct = rule.value ?? 5; // default: alertar quando a 5% do limite
+        if (rangeLower != null && rangeUpper != null && pool.price != null && pool.price > 0) {
+          const distToLower = ((pool.price - rangeLower) / pool.price) * 100;
+          const distToUpper = ((rangeUpper - pool.price) / pool.price) * 100;
+          if (distToLower < proximityPct || distToUpper < proximityPct) {
+            const nearLower = distToLower < distToUpper;
+            const dist = nearLower ? distToLower : distToUpper;
+            return this.createEvent(rule.type, pool,
+              'Preço de ' + pool.token0.symbol + '/' + pool.token1.symbol +
+              ' a ' + dist.toFixed(1) + '% do limite ' + (nearLower ? 'inferior' : 'superior') + ' do range',
+              { currentPrice: pool.price, rangeLower, rangeUpper, distToLower, distToUpper }
+            );
+          }
+        }
+        break;
+      }
     }
 
     return null;
@@ -144,6 +249,23 @@ export class AlertService {
     rule: AlertRule,
     pools: Map<string, { pool: Pool; previousPool?: Pool }>
   ): AlertEvent | null {
+    // NEW_RECOMMENDATION: verificado via memoryStore (não depende de pools individuais)
+    if (rule.type === 'NEW_RECOMMENDATION') {
+      const minScore = rule.value ?? 70;
+      const recs = memoryStore.getRecommendations();
+      if (recs && recs.length > 0) {
+        const topRec = recs.find(r => r.score?.total != null && r.score.total >= minScore);
+        if (topRec) {
+          return this.createEvent(rule.type, topRec.pool,
+            'Nova recomendação de alta qualidade: ' + topRec.pool.token0.symbol + '/' +
+            topRec.pool.token1.symbol + ' (score: ' + topRec.score.total + ')',
+            { score: topRec.score.total, poolId: topRec.pool.externalId, rank: topRec.rank }
+          );
+        }
+      }
+      return null;
+    }
+
     // Check for any pool matching condition
     for (const [, { pool, previousPool }] of pools) {
       switch (rule.type) {

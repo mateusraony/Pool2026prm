@@ -26,8 +26,14 @@ export interface Pool {
   tickSpacing?: number;
   bluechip?: boolean;
   volatilityAnn?: number; // Annualized volatility for live calculations
-  aprReward?: number;     // Incentive/reward APR from protocol (DefiLlama apyReward)
-  tvlPeak24h?: number;    // Peak TVL in last 24h (from TheGraph poolHourData)
+  /** Variação de preço 24h em % (ex: 5.2 = +5.2%, -3.1 = -3.1%). Populado pelo GeckoTerminal. */
+  priceChange24h?: number;
+  // Data confidence metadata (populated by adapters)
+  dataConfidence?: {
+    price?: { method: 'observed' | 'estimated_stable' | 'estimated_tvl' | 'unavailable'; confidence: 'high' | 'medium' | 'low' };
+    volume?: { method: 'observed' | 'supplement_gecko' | 'estimated_apy'; confidence: 'high' | 'medium' | 'low' };
+    fees?: { method: 'observed' | 'derived_volume' | 'estimated_apy'; confidence: 'high' | 'medium' | 'low' };
+  };
 }
 
 export interface Token {
@@ -77,6 +83,7 @@ export interface UnifiedPool {
 
   // Volatility & Risk
   volatilityAnn: number;         // annualized volatility
+  priceChange24h?: number;       // % price change in 24h (from GeckoTerminal when available)
   ratio: number;                 // volume1h / tvl (capital efficiency proxy)
 
   // Health Score (institutional formula)
@@ -88,16 +95,14 @@ export interface UnifiedPool {
   warnings: string[];
   updatedAt: string;             // ISO string
 
-  // TVL drop tracking (from tvlTrackerService — 24h rolling window)
-  tvlPeak24h?: number;          // peak TVL in last 24h
-  tvlDropPercent?: number;      // drop from peak (0-100%)
-
-  // Consensus data
-  consensusSources?: number;    // number of data sources compared
-  consensusDivergence?: number; // max divergence % between sources
-
-  // Execution cost
-  executionCostImpact?: number; // estimated $1K price impact (%)
+  // Data confidence metadata
+  dataConfidence?: {
+    volatility: { method: 'log_returns' | 'proxy'; dataPoints: number; confidence: 'high' | 'medium' | 'low' };
+    apr: { method: 'real_fees' | 'adapter_apy' | 'unavailable'; confidence: 'high' | 'medium' | 'low' };
+    price: { method: 'observed' | 'estimated_stable' | 'estimated_tvl' | 'unavailable'; confidence: 'high' | 'medium' | 'low' };
+    volume: { method: 'observed' | 'supplement_gecko' | 'estimated_apy'; confidence: 'high' | 'medium' | 'low' };
+    fees: { method: 'observed' | 'derived_volume' | 'estimated_apy'; confidence: 'high' | 'medium' | 'low' };
+  };
 
   // Raw fields for compatibility
   apr?: number;
@@ -180,25 +185,21 @@ export interface Recommendation {
   mode: Mode;
   dataTimestamp: Date;
   validUntil: Date;
+  // Fase 4 additions
+  riskAssessment?: RiskAssessment;
+  regimeAnalysis?: RegimeAnalysis;
+  noOperate?: boolean;
+  noOperateReason?: string;
 }
 
 // ============================================
 // ALERT TYPES
 // ============================================
 
-export type AlertType =
-  | 'PRICE_ABOVE'
-  | 'PRICE_BELOW'
-  | 'RSI_ABOVE'
-  | 'RSI_BELOW'
-  | 'MACD_CROSS_UP'
-  | 'MACD_CROSS_DOWN'
-  | 'VOLUME_DROP'
-  | 'LIQUIDITY_FLIGHT'
-  | 'VOLATILITY_SPIKE'
-  | 'OUT_OF_RANGE'
-  | 'NEAR_RANGE_EXIT'
-  | 'NEW_RECOMMENDATION';
+import { ALERT_TYPE_VALUES } from '../constants/alert-events.js';
+
+/** União derivada da fonte canônica — ver constants/alert-events.ts */
+export type AlertType = typeof ALERT_TYPE_VALUES[number];
 
 export interface AlertTrigger {
   type: AlertType;
@@ -313,5 +314,53 @@ export interface SystemHealth {
   staleDataCount: number;
 }
 
-export type LogLevel = 'INFO' | 'WARN' | 'ERROR' | 'CRITICAL';
-export type LogComponent = 'RADAR' | 'WATCHLIST' | 'SCORE' | 'RECOMMENDATION' | 'ALERT' | 'PROVIDER' | 'SYSTEM';
+export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'CRITICAL';
+export type LogComponent = 'RADAR' | 'WATCHLIST' | 'SCORE' | 'RECOMMENDATION' | 'ALERT' | 'PROVIDER' | 'SYSTEM' | 'METRICS' | 'HISTORY' | 'RANGE' | 'POOLS' | 'BOOT' | 'SHUTDOWN';
+
+// ============================================
+// RISK ASSESSMENT TYPES (Fase 4 — 5.1)
+// ============================================
+
+export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+export interface RiskFactor {
+  code: string;
+  severity: RiskLevel;
+  message: string;
+}
+
+export interface RiskAssessment {
+  level: RiskLevel;
+  score: number;       // 0-100 (100 = most risky)
+  factors: RiskFactor[];
+  shouldOperate: boolean;
+  summary: string;
+}
+
+// ============================================
+// MARKET REGIME TYPES (Fase 4 — 5.2 / 5.3)
+// ============================================
+
+export type MarketRegime =
+  | 'RANGING'
+  | 'TRENDING_UP'
+  | 'TRENDING_DOWN'
+  | 'HIGH_VOLATILITY'
+  | 'LOW_LIQUIDITY'
+  | 'UNKNOWN';
+
+export interface RegimeAnalysis {
+  regime: MarketRegime;
+  lpFriendly: boolean;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  reason: string;
+}
+
+export interface MarketConditions {
+  globalRegime: MarketRegime;
+  noOperateGlobal: boolean;
+  noOperateReason?: string;
+  poolCount: number;
+  highRiskCount: number;
+  updatedAt: Date;
+}

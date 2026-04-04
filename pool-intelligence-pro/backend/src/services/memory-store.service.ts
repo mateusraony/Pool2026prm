@@ -19,7 +19,7 @@ import { logService } from './log.service.js';
 const MAX_POOLS = 500;               // cap máximo de pools em memória
 const POOL_TTL_MS  = 15 * 60 * 1000; // 15 min — mesma frequência do radar
 const SCORE_TTL_MS = 15 * 60 * 1000;
-const REC_TTL_MS   =  5 * 60 * 1000; // 5 min — mesma frequência das recomendações
+const REC_TTL_MS   = 30 * 60 * 1000; // 30 min — manter recomendações entre ciclos do radar
 
 interface Entry<T> {
   data: T;
@@ -39,6 +39,10 @@ class MemoryStore {
 
   // Watchlist — apenas IDs; os dados ficam em `pools`
   private watchlistIds = new Set<string>();
+
+  // TVL snapshots for liquidity drop detection (poolId → tvl[])
+  private tvlHistory = new Map<string, { tvl: number; timestamp: number }[]>();
+  private static TVL_MAX_SNAPSHOTS = 48; // ~24h of snapshots at 30min radar interval
 
   // Estatísticas internas
   private stats = { reads: 0, hits: 0, misses: 0, writes: 0 };
@@ -187,7 +191,69 @@ class MemoryStore {
       writes:          this.stats.writes,
       hitRatePct:      Math.round(this.stats.hits / totalReads * 100),
       estimatedKB:     Math.round(this.pools.size * 1.2 + this.scores.size * 0.5),
+      tvlTracked:      this.tvlHistory.size,
     };
+  }
+
+  // ─── Pool Metrics History (in-memory buffer, máx 48 snapshots por pool) ───────
+  private readonly METRICS_HISTORY_MAX = 48; // 48 snapshots → 2 dias em intervalos de 1h
+  private metricsHistory: Map<string, Array<{
+    timestamp: number;
+    tvl: number;
+    apr: number;
+    score: number | null;
+    volume24h: number;
+  }>> = new Map();
+
+  recordMetrics(poolId: string, tvl: number, apr: number, score: number | null, volume24h: number): void {
+    let history = this.metricsHistory.get(poolId);
+    if (!history) {
+      history = [];
+      this.metricsHistory.set(poolId, history);
+    }
+    history.push({ timestamp: Date.now(), tvl, apr, score, volume24h });
+    if (history.length > this.METRICS_HISTORY_MAX) {
+      history.splice(0, history.length - this.METRICS_HISTORY_MAX);
+    }
+  }
+
+  getMetricsHistory(poolId: string): Array<{ timestamp: number; tvl: number; apr: number; score: number | null; volume24h: number }> {
+    return this.metricsHistory.get(poolId) ?? [];
+  }
+
+  // ─── TVL History (liquidity drop detection) ──────────────────────────────
+
+  /** Record a TVL snapshot for a pool (called during radar/watchlist jobs) */
+  recordTvl(poolId: string, tvl: number): void {
+    let history = this.tvlHistory.get(poolId);
+    if (!history) {
+      history = [];
+      this.tvlHistory.set(poolId, history);
+    }
+    history.push({ tvl, timestamp: Date.now() });
+    // Keep only last N snapshots
+    if (history.length > MemoryStore.TVL_MAX_SNAPSHOTS) {
+      history.splice(0, history.length - MemoryStore.TVL_MAX_SNAPSHOTS);
+    }
+  }
+
+  /** Get TVL drop percentage (0 = no drop, 50 = dropped 50%) */
+  getTvlDrop(poolId: string): number {
+    const history = this.tvlHistory.get(poolId);
+    if (!history || history.length < 2) return 0;
+
+    // Compare current TVL vs max TVL in last 24h
+    const now = Date.now();
+    const h24ago = now - 24 * 60 * 60 * 1000;
+    const recent = history.filter(h => h.timestamp >= h24ago);
+    if (recent.length < 2) return 0;
+
+    const maxTvl = Math.max(...recent.map(h => h.tvl));
+    const currentTvl = recent[recent.length - 1].tvl;
+    if (maxTvl <= 0) return 0;
+
+    const dropPct = ((maxTvl - currentTvl) / maxTvl) * 100;
+    return Math.max(0, dropPct);
   }
 }
 

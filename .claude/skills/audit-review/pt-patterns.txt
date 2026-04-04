@@ -1,0 +1,45 @@
+# Dicionário de erros comuns de português — Pool Intelligence Pro
+# Usado pelo Agente E da skill /audit-review
+# Formato: REGEX|SUGESTÃO CORRETA
+# Scope: comentários e strings em *.ts, *.tsx e arquivos *.md
+# Exclusões: node_modules/, dist/, .git/, arquivos de lock
+
+\bnao\b|não
+\bse nao\b|se não
+\bmas nao\b|mas não
+\bnao é\b|não é
+\bnao esta\b|não está
+\bnao tem\b|não tem
+\btambem\b|também
+\bvoce\b|você
+\besta\b(?! [a-z])|está (verifique contexto)
+\bsera\b|será
+\bConfiguracao\b|Configuração
+\bconfiguracao\b|configuração
+\bInformacao\b|Informação
+\binformacao\b|informação
+\bOperacao\b|Operação
+\boperacao\b|operação
+\bConexao\b|Conexão
+\bconexao\b|conexão
+\bAdicao\b|Adição
+\badicao\b|adição
+\bRemocao\b|Remoção
+\bremocao\b|remoção
+\bAtualizacao\b|Atualização
+\batualizacao\b|atualização
+\bAutorizacao\b|Autorização
+\bautorizacao\b|autorização
+\bNotificacao\b|Notificação
+\bnotificacao\b|notificação
+\bCalculacao\b|Calculação (prefira: cálculo)
+\bcalculacao\b|calculação (prefira: cálculo)
+\bVisualizacao\b|Visualização
+\bvisualizacao\b|visualização
+# OK — \bCancelamento\b (palavra correta em português, não é erro)
+\berro nao\b|erro não
+\bvalor nao\b|valor não
+\bdados nao\b|dados não
+\bpool nao\b|pool não
+# OK — \bnenhum dado\b (expressão correta, não precisa de acento)
+# OK — \bpor favor\b (expressão correta, não precisa de acento)

@@ -26,6 +26,13 @@ interface DefiLlamaPool {
   volumeUsd7d?: number;
 }
 
+interface DefillamaPrice {
+  price?: number;
+  symbol?: string;
+  decimals?: number;
+  confidence?: number;
+}
+
 export class DefiLlamaAdapter extends BaseAdapter {
   name = 'defillama';
   
@@ -107,8 +114,9 @@ export class DefiLlamaAdapter extends BaseAdapter {
       const prices = new Map<string, number>();
       for (const [key, val] of Object.entries(res.data?.coins || {})) {
         const addr = key.split(':')[1]?.toLowerCase();
-        if (addr && (val as any).price) {
-          prices.set(addr, (val as any).price);
+        const coin = val as DefillamaPrice;
+        if (addr && typeof coin.price === 'number') {
+          prices.set(addr, coin.price);
         }
       }
       return prices;
@@ -149,13 +157,13 @@ export class DefiLlamaAdapter extends BaseAdapter {
           `https://api.geckoterminal.com/api/v2/networks/${geckoChain}/pools/multi/${addresses}`,
           { timeout: 15000, headers: { Accept: 'application/json' } }
         );
-        const geckoData: any[] = res.data?.data || [];
+        const geckoData: Array<{ attributes?: { address?: string; volume_usd?: { h24?: string }; reserve_in_usd?: string } }> = res.data?.data || [];
 
         for (const gp of geckoData) {
           const addr = gp.attributes?.address?.toLowerCase();
           if (!addr) continue;
 
-          const vol24h = parseFloat(gp.attributes?.volume_usd?.h24) || 0;
+          const vol24h = parseFloat(gp.attributes?.volume_usd?.h24 ?? '0') || 0;
           if (vol24h <= 0) continue;
 
           const match = batch.find(p => p.poolAddress.toLowerCase() === addr);
@@ -165,6 +173,12 @@ export class DefiLlamaAdapter extends BaseAdapter {
             if (!match.fees24h && match.feeTier) {
               match.fees24h = vol24h * match.feeTier;
             }
+            // Update dataConfidence to reflect GeckoTerminal supplement
+            match.dataConfidence = {
+              ...match.dataConfidence,
+              volume: { method: 'supplement_gecko', confidence: 'medium' },
+              fees: { method: 'derived_volume', confidence: 'medium' },
+            };
             enriched++;
           }
         }
@@ -182,9 +196,8 @@ export class DefiLlamaAdapter extends BaseAdapter {
       if (!pool.apr || pool.apr <= 0 || !pool.tvl || pool.tvl <= 0) continue;
 
       const fees24hEstimate = (pool.apr / 100 / 365) * pool.tvl;
-      // Only estimate volume if we know the real fee tier — don't assume 0.3%
-      if (!pool.feeTier || pool.feeTier <= 0) continue;
-      const volumeEstimate = fees24hEstimate / pool.feeTier;
+      const feeTier = pool.feeTier || 0.003;
+      const volumeEstimate = fees24hEstimate / feeTier;
 
       // Sanity check: volume should be reasonable (not 100x TVL)
       if (volumeEstimate > 0 && volumeEstimate < pool.tvl * 50) {
@@ -192,6 +205,12 @@ export class DefiLlamaAdapter extends BaseAdapter {
         if (!pool.fees24h) {
           pool.fees24h = Math.round(fees24hEstimate * 100) / 100;
         }
+        // Update dataConfidence to reflect APY-based estimation
+        pool.dataConfidence = {
+          ...pool.dataConfidence,
+          volume: { method: 'estimated_apy', confidence: 'low' },
+          fees: { method: 'estimated_apy', confidence: 'low' },
+        };
         enriched++;
       }
     }
@@ -227,19 +246,29 @@ export class DefiLlamaAdapter extends BaseAdapter {
     const token1Price = priceMap.get(token1Addr.toLowerCase()) || 0;
 
     // Pool price: prefer token0 price from API; if both available, use token0/token1 ratio
-    let price: number;
+    let price: number | undefined;
+    let priceConfidence: { method: 'observed' | 'estimated_stable' | 'estimated_tvl' | 'unavailable'; confidence: 'high' | 'medium' | 'low' };
     if (token0Price > 0 && token1Price > 0) {
       price = token0Price / token1Price; // relative price token0 in terms of token1
+      priceConfidence = { method: 'observed', confidence: 'high' };
     } else if (token0Price > 0) {
       price = token0Price;
+      priceConfidence = { method: 'observed', confidence: 'medium' };
     } else if (token1Price > 0) {
       price = token1Price;
+      priceConfidence = { method: 'observed', confidence: 'medium' };
     } else {
-      // Fallback: stablecoin pairs → 1, otherwise use TVL-based estimate
+      // Fallback: stablecoin pairs → 1, otherwise leave price undefined
       const isStablePair = ['USDC', 'USDT', 'DAI', 'BUSD', 'FRAX'].some(
         s => token0Symbol.includes(s) || token1Symbol.includes(s)
       );
-      price = isStablePair ? 1 : Math.max(1, data.tvlUsd / 100000);
+      if (isStablePair) {
+        price = 1;
+        priceConfidence = { method: 'estimated_stable', confidence: 'medium' };
+      } else {
+        price = undefined;
+        priceConfidence = { method: 'unavailable', confidence: 'low' };
+      }
     }
 
     // Detect feeTier from project name (e.g. "uniswap-v3" → likely CL pool)
@@ -252,13 +281,23 @@ export class DefiLlamaAdapter extends BaseAdapter {
     const volume24h = data.volumeUsd1d || 0;
     const volume7d = data.volumeUsd7d;
     const apr = data.apyBase ?? data.apy; // Prefer base APY (fees only); fall back to total APY
-    const aprReward = data.apyReward ?? undefined; // Incentive/reward APR from protocol
 
     // Estimate fees24h when volume is available but fees aren't
     let fees24h: number | undefined;
     if (volume24h > 0 && feeTier) {
       fees24h = volume24h * feeTier;
     }
+
+    // dataConfidence for volume/fees from DefiLlama direct data
+    const volumeConfidence: { method: 'observed' | 'supplement_gecko' | 'estimated_apy'; confidence: 'high' | 'medium' | 'low' } =
+      volume24h > 0
+        ? { method: 'observed', confidence: 'high' }
+        : { method: 'estimated_apy', confidence: 'low' }; // will be overwritten by supplementVolumeData if enriched
+
+    const feesConfidence: { method: 'observed' | 'derived_volume' | 'estimated_apy'; confidence: 'high' | 'medium' | 'low' } =
+      volume24h > 0
+        ? { method: 'derived_volume', confidence: 'medium' }
+        : { method: 'estimated_apy', confidence: 'low' };
 
     return {
       externalId: data.pool,
@@ -284,7 +323,11 @@ export class DefiLlamaAdapter extends BaseAdapter {
       volume7d,
       fees24h,
       apr,
-      aprReward,
+      dataConfidence: {
+        price: priceConfidence,
+        volume: volumeConfidence,
+        fees: feesConfidence,
+      },
     };
   }
   
@@ -295,46 +338,17 @@ export class DefiLlamaAdapter extends BaseAdapter {
   
   async healthCheck(): Promise<boolean> {
     try {
-      const response = await axios.get(BASE_URL + '/pools', {
-        timeout: 10000,
-        params: { limit: 1 },
-      });
-      return response.status === 200;
+      // Verificação leve: buscar preço de um token conhecido em vez de baixar todos os pools
+      const response = await fetch(
+        'https://coins.llama.fi/prices/current/ethereum:0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+        { signal: AbortSignal.timeout(5000) }
+      );
+      return response.ok;
     } catch {
       return false;
     }
   }
   
-  /**
-   * Fetch historical TVL/APY chart for a pool from DefiLlama yields API.
-   * Returns daily snapshots. poolId should be the DefiLlama UUID (externalId).
-   */
-  async getPoolChart(poolId: string): Promise<{ timestamp: Date; tvl: number; apy: number }[]> {
-    const cacheKey = `defillama:chart:${poolId}`;
-    const cached = cacheService.get<{ timestamp: Date; tvl: number; apy: number }[]>(cacheKey);
-    if (cached.data) return cached.data;
-
-    try {
-      const res = await axios.get(`${BASE_URL}/chart/${poolId}`, { timeout: 15000 });
-      const raw: { timestamp: string; tvlUsd: number; apy: number }[] = res.data?.data || [];
-
-      const result = raw
-        .slice(-30) // last 30 days max
-        .map(d => ({
-          timestamp: new Date(d.timestamp),
-          tvl: d.tvlUsd || 0,
-          apy: d.apy || 0,
-        }));
-
-      if (result.length > 0) {
-        cacheService.set(cacheKey, result, 600); // 10 min cache
-      }
-      return result;
-    } catch {
-      return [];
-    }
-  }
-
   // DefiLlama specific: Get yields/APY data
   async getYields(chain?: string): Promise<DefiLlamaPool[]> {
     const response = await fetchWithRetry(

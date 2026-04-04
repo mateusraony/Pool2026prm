@@ -1,6 +1,7 @@
 import { Pool, Score, Recommendation, Mode } from '../types/index.js';
 import { config } from '../config/index.js';
 import { logService } from './log.service.js';
+import { marketRegimeService } from './market-regime.service.js';
 
 interface RecommendationInput {
   pool: Pool;
@@ -20,21 +21,29 @@ export class RecommendationService {
     // Generate recommendations for ALL modes to allow filtering later
     const allRecommendations: Recommendation[] = [];
 
-    // Sort by score
-    const sorted = poolsWithScores
+    // Separate non-suspect (priority) and suspect (fallback)
+    const nonSuspect = poolsWithScores
       .filter(({ score }) => !score.isSuspect)
       .sort((a, b) => b.score.total - a.score.total);
 
-    // Generate for each pool with its recommended mode
+    // Suspect pools with decent score as fallback to avoid empty results
+    const suspectFallback = poolsWithScores
+      .filter(({ score }) => score.isSuspect && score.total >= 30)
+      .sort((a, b) => b.score.total - a.score.total);
+
+    // Prioritize non-suspect, use suspect as fallback if < 3 clean pools
+    const sorted = nonSuspect.length >= 3 ? nonSuspect : [...nonSuspect, ...suspectFallback];
+
+    // Usar o modo solicitado pelo caller para gerar cada recomendação
+    // (item.score.recommendedMode é o modo sugerido pelo pool, não o escolhido pelo usuário)
     for (let i = 0; i < Math.min(sorted.length, limit * 3); i++) {
       const item = sorted[i];
-      const poolMode = item.score.recommendedMode;
 
       allRecommendations.push(
         this.generateRecommendation({
           pool: item.pool,
           score: item.score,
-          mode: poolMode,
+          mode,   // usar o modo passado pelo caller
           capital,
         }, i + 1)
       );
@@ -72,7 +81,14 @@ export class RecommendationService {
     
     // Set validity (24 hours for recommendations)
     const validUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    
+
+    // Classificar regime da pool
+    const regimeAnalysis = marketRegimeService.classifyPool(pool);
+    const noOperate = !regimeAnalysis.lpFriendly && score.total < 50;
+    const noOperateReason = noOperate
+      ? `Regime ${regimeAnalysis.regime}: ${regimeAnalysis.reason}`
+      : undefined;
+
     return {
       rank,
       pool,
@@ -88,6 +104,9 @@ export class RecommendationService {
       mode,
       dataTimestamp: new Date(),
       validUntil,
+      regimeAnalysis,
+      noOperate,
+      noOperateReason,
     };
   }
 
@@ -114,28 +133,53 @@ export class RecommendationService {
     capital: number,
     mode: Mode
   ): { gainPercent: number; gainUsd: number } {
-    // Use APR from score breakdown or estimate
+    // APR bruto (fee APR apenas — não inclui IL)
     const baseApr = score.breakdown.return.aprEstimate || this.estimateAprFromPool(pool);
-    
-    // Weekly return (APR / 52)
-    const weeklyReturn = baseApr / 52;
-    
-    // Adjust by mode
+
+    // Retorno semanal bruto (APR / 52)
+    const weeklyGross = baseApr / 52;
+
+    // Multiplicador por modo (ajusta exposição ao risco)
     const modeMultiplier: Record<Mode, number> = {
-      DEFENSIVE: 0.7,  // Lower but more consistent
+      DEFENSIVE: 0.7,   // range largo = menos fees mas menos IL
       NORMAL: 1.0,
-      AGGRESSIVE: 1.3, // Higher but riskier
+      AGGRESSIVE: 1.3,  // range estreito = mais fees e mais IL
     };
-    
-    const adjustedReturn = weeklyReturn * modeMultiplier[mode];
-    
-    // Apply score as confidence factor
-    const confidenceFactor = score.total / 100;
-    const expectedReturn = adjustedReturn * confidenceFactor;
-    
+    const grossAdjusted = weeklyGross * modeMultiplier[mode];
+
+    // Deduzir IL semanal esperado
+    // IL ≈ 0.5 × σ² × fatorConcentracao (primeira ordem para pequenos movimentos)
+    // σ = volatilidade anualizada do pool (decimal); fallback 0.35 se ausente
+    const volAnn = pool.volatilityAnn ?? 0.35;
+    const sigmaWeekly = volAnn * Math.sqrt(7 / 365);
+
+    // Range width dinâmico: usa mesmos z-scores do calcRangeRecommendation
+    // para consistência entre recomendação de range e estimativa de ganhos
+    const zMap: Record<Mode, number> = {
+      DEFENSIVE: 1.8,
+      NORMAL: 1.2,
+      AGGRESSIVE: 0.8,
+    };
+    const rangeWidth = zMap[mode] * volAnn * Math.sqrt(7 / 365);
+    // fatorConcentracao: range estreito amplifica IL (referência = NORMAL range, cap em 4x)
+    const normalRangeWidth = 1.2 * volAnn * Math.sqrt(7 / 365);
+    const concentrationFactor = Math.min(4.0, normalRangeWidth / Math.max(rangeWidth, 0.001));
+
+    // IL semanal esperado (em %)
+    const weeklyIL = 0.5 * sigmaWeekly * sigmaWeekly * concentrationFactor * 100;
+
+    // Retorno líquido = fees ajustadas - IL esperado
+    // confidenceFactor NÃO é aplicado nos fees: o score já representa qualidade da pool;
+    // o retorno financeiro deve refletir o que você REALMENTE ganharia/perderia na posição.
+    // O score/probabilidade é a dimensão de confiança — não deve distorcer o cálculo de P&L.
+    const netReturn = grossAdjusted - weeklyIL;
+
+    // Arredondar com 2 casas — pode ser negativo (informação real para o usuário)
+    const gainPercent = Math.round(netReturn * 100) / 100;
+
     return {
-      gainPercent: Math.round(expectedReturn * 100) / 100,
-      gainUsd: Math.round(capital * (expectedReturn / 100) * 100) / 100,
+      gainPercent,
+      gainUsd: Math.round(capital * (gainPercent / 100) * 100) / 100,
     };
   }
 
@@ -143,10 +187,9 @@ export class RecommendationService {
     if (pool.apr) return pool.apr;
     if (pool.tvl === 0) return 0;
 
-    // Only estimate if we know the actual fee tier
-    if (!pool.feeTier || pool.feeTier <= 0) return 0;
-
-    const dailyFees = pool.volume24h * pool.feeTier;
+    // feeTier is in decimal form: 0.003 = 0.3%
+    const feeRate = pool.feeTier || 0.003;
+    const dailyFees = pool.volume24h * feeRate;
     return (dailyFees * 365) / pool.tvl * 100;
   }
 
@@ -267,6 +310,11 @@ export class RecommendationService {
       commentary += 'Atencao: ' + risks[0] + '. ';
     }
     
+    // Suspect warning
+    if (score.isSuspect && score.suspectReason) {
+      commentary += 'ATENCAO: ' + score.suspectReason + '. ';
+    }
+
     // Disclaimer
     commentary += 'Esta analise e baseada em dados historicos e nao constitui garantia de resultados futuros.';
     

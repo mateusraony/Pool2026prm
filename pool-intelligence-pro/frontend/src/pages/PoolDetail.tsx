@@ -11,7 +11,10 @@ import {
   fetchPoolDetail, fetchFavorites, addFavorite, removeFavorite,
   fetchNotes, createNote, deleteNote,
   calcRange, UnifiedPool, RangeResult, FeeEstimate, ILRiskResult,
+  fetchOhlcv, fetchLiquidityDistribution,
 } from '../api/client';
+import { UniswapRangeChart } from '@/components/charts/UniswapRangeChart';
+import { feeTierToBps, feeTierToPercent } from '../data/constants';
 
 // ============================================================
 // HELPERS
@@ -71,9 +74,11 @@ function ModeSelector({ value, onChange }: { value: RiskMode; onChange: (m: Risk
 // ============================================================
 
 function RangeDisplay({ range, price, mode }: { range: RangeResult; price: number; mode: RiskMode }) {
-  const distToLower = ((price - range.lower) / price) * 100;
-  const distToUpper = ((range.upper - price) / price) * 100;
-  const pctInRange = (price - range.lower) / (range.upper - range.lower);
+  const safePrice = price > 0 ? price : 1;
+  const distToLower = ((safePrice - range.lower) / safePrice) * 100;
+  const distToUpper = ((range.upper - safePrice) / safePrice) * 100;
+  const rangeWidth = range.upper - range.lower;
+  const pctInRange = rangeWidth > 0 ? (safePrice - range.lower) / rangeWidth : 0.5;
   const barPct = Math.max(5, Math.min(95, pctInRange * 100));
 
   const modeColors: Record<RiskMode, string> = {
@@ -280,6 +285,22 @@ export default function PoolDetailPage() {
     staleTime: 30000,
   });
 
+  // OHLCV price history for UniswapRangeChart
+  const { data: ohlcvData } = useQuery({
+    queryKey: ['ohlcv', chain, address],
+    queryFn: () => fetchOhlcv(chain!, address!, 'hour', 168),
+    enabled: !!chain && !!address,
+    staleTime: 300000,
+  });
+
+  // Liquidity distribution for UniswapRangeChart
+  const { data: liquidityData } = useQuery({
+    queryKey: ['liquidity-dist', chain, address],
+    queryFn: () => fetchLiquidityDistribution(chain!, address!),
+    enabled: !!chain && !!address,
+    staleTime: 300000,
+  });
+
   const toggleFav = useCallback(async () => {
     if (!chain || !address || !data?.pool) return;
     const pool = data.pool;
@@ -338,22 +359,14 @@ export default function PoolDetailPage() {
   const warnings = pool.warnings || [];
   const healthScore = pool.healthScore ?? 0;
 
-  // Build chart data — keep nulls to detect "no data" per metric
-  const rawHistory = (data.history ?? []).slice(0, 48).reverse();
-  const chartData = rawHistory.map((h) => ({
+  // Build chart data
+  const chartData = (data.history ?? []).slice(0, 48).map((h) => ({
     ts: new Date(h.timestamp).toISOString(),
-    price: (h.price && h.price > 0) ? h.price : null,
-    tvl: (h.tvl && h.tvl > 0) ? h.tvl : null,
-    volume: (h.volume24h && h.volume24h > 0) ? h.volume24h : null,
-    fees: (h.fees24h && h.fees24h > 0) ? h.fees24h : null,
+    price: h.price ?? 0,
+    tvl: h.tvl ?? 0,
+    volume: h.volume24h ?? 0,
+    fees: h.fees24h ?? 0,
   }));
-  // Check which tabs have real data
-  const hasData = {
-    price: chartData.some(d => d.price != null),
-    tvl: chartData.some(d => d.tvl != null),
-    volume: chartData.some(d => d.volume != null),
-    fees: chartData.some(d => d.fees != null),
-  };
 
   const chartTabs = [
     { key: 'price', label: 'Preço', color: '#6366f1' },
@@ -371,10 +384,10 @@ export default function PoolDetailPage() {
     optimism: 'optimism',
   };
   const uniChain = chainMap[poolChain.toLowerCase()] || 'mainnet';
-  // feeTier should be in basis points (500, 3000, 10000) - convert from percentage if needed
-  const feeTierBps = feeTier >= 1 ? Math.round(feeTier * 10000) : feeTier;
-  const token0Addr = pool.token0?.address || 'ETH';
-  const token1Addr = pool.token1?.address || 'ETH';
+  // feeTier normalized to bps (handles both fraction and bps input)
+  const feeTierBps = feeTierToBps(feeTier);
+  const token0Addr = pool.token0?.address || '';
+  const token1Addr = pool.token1?.address || '';
 
   const addLiquidityUrl = poolProtocol.toLowerCase().includes('uniswap')
     ? `https://app.uniswap.org/add/${token0Addr}/${token1Addr}/${feeTierBps}?chain=${uniChain}`
@@ -420,11 +433,13 @@ export default function PoolDetailPage() {
             <Bell className="w-4 h-4" />
             Monitorar
           </button>
-          <a href={addLiquidityUrl} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg text-sm transition-colors">
-            <ExternalLink className="w-4 h-4" />
-            Add Liquidity
-          </a>
+          {token0Addr && token1Addr && (
+            <a href={addLiquidityUrl} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg text-sm transition-colors">
+              <ExternalLink className="w-4 h-4" />
+              Add Liquidity
+            </a>
+          )}
         </div>
       </div>
 
@@ -445,7 +460,7 @@ export default function PoolDetailPage() {
         <MetricCard label="Fees 24h" value={fmt(pool.fees24hUSD)} color="text-green-400" />
         <MetricCard label="Volume 1h" value={fmt(pool.volume1hUSD)} />
         <MetricCard label="Volatilidade Anual" value={fmtPct(volatilityAnn * 100, 0)} color={volatilityAnn > 0.5 ? 'text-red-400' : 'text-yellow-400'} />
-        <MetricCard label="Fee Tier" value={`${(feeTier * 100).toFixed(2)}%`} sub="por swap" />
+        <MetricCard label="Fee Tier" value={`${feeTierToPercent(feeTier).toFixed(2)}%`} sub="por swap" />
       </div>
 
       {/* Charts */}
@@ -467,15 +482,11 @@ export default function PoolDetailPage() {
         <div className="p-4">
           {chartData.length === 0 ? (
             <div className="h-28 flex items-center justify-center text-dark-500 text-sm">
-              Dados historicos nao disponiveis para esta pool.
-            </div>
-          ) : !hasData[activeTab] ? (
-            <div className="h-28 flex items-center justify-center text-dark-500 text-sm">
-              Sem dados de {chartTabs.find(t => t.key === activeTab)?.label.toLowerCase()} para esta pool.
+              Dados históricos não disponíveis para esta pool.
             </div>
           ) : (
             <MiniChart
-              data={chartData.filter(d => d[activeTab] != null)}
+              data={chartData}
               dataKey={activeTab}
               color={chartTabs.find(t => t.key === activeTab)?.color ?? '#6366f1'}
             />
@@ -514,8 +525,9 @@ export default function PoolDetailPage() {
               <label className="block text-xs text-dark-400 mb-1.5">Capital (USD)</label>
               <input
                 type="number"
+                min={0}
                 value={capital}
-                onChange={e => setCapital(parseFloat(e.target.value) || 1000)}
+                onChange={e => setCapital(Math.max(0, parseFloat(e.target.value) || 0))}
                 className="w-28 bg-dark-700 border border-dark-600 rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none focus:border-primary-500"
               />
             </div>
@@ -525,6 +537,19 @@ export default function PoolDetailPage() {
           {calcLoading && <div className="text-center py-4"><RefreshCw className="w-5 h-5 animate-spin mx-auto text-primary-500" /></div>}
           {selectedRange && pool.price && (
             <RangeDisplay range={selectedRange} price={pool.price} mode={riskMode} />
+          )}
+
+          {/* UniswapRangeChart — visual range + price history */}
+          {selectedRange && pool.price && (
+            <UniswapRangeChart
+              currentPrice={pool.price}
+              rangeLower={selectedRange.lower}
+              rangeUpper={selectedRange.upper}
+              priceHistory={ohlcvData?.candles?.map(c => ({ timestamp: c.timestamp < 1e12 ? c.timestamp * 1000 : c.timestamp, price: c.close })) ?? []}
+              liquidityData={liquidityData?.bars?.map(b => ({ price: b.price, liquidity: b.liquidity })) ?? undefined}
+              height={260}
+              className="rounded-lg border border-dark-700"
+            />
           )}
 
           {/* IL Risk + Fee Estimate */}

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { TrendingUp, Eye, AlertTriangle, ArrowRight, Check, Loader2, Star } from 'lucide-react';
 import { fetchPools, addToWatchlist, fetchWatchlist, Pool, Score } from '../api/client';
+import { toast } from 'sonner';
+import { MainLayout } from '@/components/layout/MainLayout';
 import clsx from 'clsx';
 
 function formatNum(num: number): string {
@@ -36,8 +38,7 @@ function PoolCard({ pool, score, index, isWatched, isAdding, onAddToWatchlist }:
   onAddToWatchlist: () => void;
 }) {
   const navigate = useNavigate();
-  // Defensive: use externalId as fallback if poolAddress is undefined
-  const poolAddress = pool.poolAddress || pool.externalId || 'unknown';
+  const poolAddress = pool.poolAddress || 'unknown';
   const poolPath = '/simulation/' + pool.chain + '/' + poolAddress;
 
   return (
@@ -70,10 +71,10 @@ function PoolCard({ pool, score, index, isWatched, isAdding, onAddToWatchlist }:
         {/* Token Prices - for verification */}
         <div className="flex gap-2 mb-3 text-xs">
           <span className="px-2 py-1 rounded bg-dark-700 font-mono">
-            {pool.token0?.symbol}: {pool.token0?.priceUsd ? '$' + pool.token0.priceUsd.toFixed(2) : <span className="text-warning-400">sem preço</span>}
+            {pool.token0?.symbol}: {pool.token0?.priceUsd != null ? '$' + pool.token0.priceUsd.toFixed(2) : <span className="text-warning-400">sem preço</span>}
           </span>
           <span className="px-2 py-1 rounded bg-dark-700 font-mono">
-            {pool.token1?.symbol}: {pool.token1?.priceUsd ? '$' + pool.token1.priceUsd.toFixed(2) : <span className="text-warning-400">sem preço</span>}
+            {pool.token1?.symbol}: {pool.token1?.priceUsd != null ? '$' + pool.token1.priceUsd.toFixed(2) : <span className="text-warning-400">sem preço</span>}
           </span>
         </div>
 
@@ -158,18 +159,14 @@ export default function RadarPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['watchlist'] });
     },
-    onError: (error) => {
-      console.error('Failed to add to watchlist:', error);
+    onError: () => {
+      toast.error('Falha ao adicionar à watchlist. Tente novamente.');
     },
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">📡 Radar de Pools</h1>
-          <p className="text-dark-400 mt-1">Descoberta automatica de oportunidades em DeFi</p>
-        </div>
+    <MainLayout title="Radar de Pools" subtitle="Descoberta automatica de oportunidades em DeFi">
+      <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2 text-sm text-dark-400">
           <TrendingUp className="w-4 h-4 text-success-500" />
           {(pools?.length || 0) + ' pools encontradas'}
@@ -192,14 +189,14 @@ export default function RadarPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {pools.map((item, index) => (
             <PoolCard
-              key={item.pool.externalId}
+              key={item.pool.poolAddress || item.pool.externalId || `pool-${index}`}
               pool={item.pool}
               score={item.score}
               index={index}
-              isWatched={watchedIds.has(item.pool.externalId)}
-              isAdding={addMutation.isPending && addMutation.variables?.poolId === item.pool.externalId}
+              isWatched={watchedIds.has(item.pool.poolAddress || item.pool.externalId)}
+              isAdding={addMutation.isPending && addMutation.variables?.poolId === (item.pool.poolAddress || item.pool.externalId)}
               onAddToWatchlist={() => addMutation.mutate({
-                poolId: item.pool.externalId,
+                poolId: item.pool.poolAddress || item.pool.externalId,
                 chain: item.pool.chain,
                 address: item.pool.poolAddress,
               })}
@@ -213,6 +210,6 @@ export default function RadarPage() {
           <p className="text-dark-400">O radar esta buscando pools...</p>
         </div>
       )}
-    </div>
+    </MainLayout>
   );
 }

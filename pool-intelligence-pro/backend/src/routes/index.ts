@@ -1,42 +1,36 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { getPoolsWithFallback, getPoolWithFallback, getAllProvidersHealth, theGraphAdapter } from '../adapters/index.js';
-import { geckoTerminalAdapter } from '../adapters/geckoterminal.adapter.js';
-import { defiLlamaAdapter } from '../adapters/defillama.adapter.js';
-import { scoreService } from '../services/score.service.js';
+import { getAllProvidersHealth } from '../adapters/index.js';
 import { cacheService } from '../services/cache.service.js';
-import { logService } from '../services/log.service.js';
 import { alertService } from '../services/alert.service.js';
-import { rangeMonitorService } from '../services/range.service.js';
-import { notificationSettingsService } from '../services/notification-settings.service.js';
+import { metricsService } from '../services/metrics.service.js';
+import { logService } from '../services/log.service.js';
+import { getMemoryStoreStats } from '../jobs/index.js';
 import { telegramBot } from '../bot/telegram.js';
-import {
-  getLatestRadarResults,
-  getLatestRecommendations,
-  getWatchlist,
-  addToWatchlist,
-  removeFromWatchlist,
-  getMemoryStoreStats,
-  getConsensusResults,
-} from '../jobs/index.js';
-import { tvlTrackerService } from '../services/tvl-tracker.service.js';
-import { gasService, GasEstimate } from '../services/gas.service.js';
-import { calculateExecutionCost } from '../services/execution-cost.service.js';
-import { memoryStore } from '../services/memory-store.service.js';
-import { config } from '../config/index.js';
-import { poolIntelligenceService } from '../services/pool-intelligence.service.js';
-import { calcRangeRecommendation, calcUserFees, calcILRisk } from '../services/calc.service.js';
-import { Pool, UnifiedPool } from '../types/index.js';
 
-const prisma = new PrismaClient();
+import poolsRouter from './pools.routes.js';
+import settingsRouter from './settings.routes.js';
+import alertsRouter from './alerts.routes.js';
+import rangesRouter from './ranges.routes.js';
+import dataRouter from './data.routes.js';
+import docsRouter from './docs.routes.js';
+import historyRouter from './history.routes.js';
+import integrationsRouter from './integrations.routes.js';
+import aiInsightsRouter from './ai-insights.routes.js';
+import pushRouter from './push.routes.js';
+import walletRouter from './wallet.routes.js';
+import { macroCalendarService } from '../services/macro-calendar.service.js';
+import { marketRegimeService } from '../services/market-regime.service.js';
+import { memoryStore } from '../services/memory-store.service.js';
+import type { Pool } from '../types/index.js';
+import { decisionLogService } from '../services/decision-log.service.js';
+import { weightOptimizerService } from '../services/weight-optimizer.service.js';
 
 const router = Router();
 
-// Health check
+// Health check — comprehensive system status
 router.get('/health', async (req, res) => {
   const providers = await getAllProvidersHealth();
 
-  // Somente providers obrigatórios (isOptional=false) afetam o status geral
   const mandatory = providers.filter(p => !p.isOptional);
   const healthyMandatory = mandatory.filter(p => p.isHealthy).length;
 
@@ -49,930 +43,221 @@ router.get('/health', async (req, res) => {
     status = 'UNHEALTHY';
   }
 
+  const metrics = metricsService.getSnapshot();
+
   res.json({
     status,
+    uptime: metrics.uptime,
+    memory: metrics.memory,
     providers,
     cache: cacheService.getStats(),
     memoryStore: getMemoryStoreStats(),
     alerts: alertService.getStats(),
+    requests: metrics.requests,
+    jobs: metrics.jobs,
+    logs: logService.getSummary(60),
     timestamp: new Date(),
   });
 });
 
-// Get pools (radar results) — lê do MemoryStore primeiro (sem recalcular)
-router.get('/pools', async (req, res) => {
-  try {
-    const {
-      chain, protocol, token, bluechip, poolType,
-      sortBy = 'tvl', sortDirection = 'desc',
-      page, limit: limitStr,
-      minTVL, minHealth,
-    } = req.query;
-
-    // ── 1. Tenta servir do MemoryStore (path rápido — sem API externa) ──
-    let pools = memoryStore.getAllPools();
-    let fromMemory = pools.length > 0;
-
-    if (!fromMemory) {
-      // ── 2. Cold-start: MemoryStore vazio → monta de radarResults + TheGraph ──
-      const radarResults = getLatestRadarResults();
-
-      // TheGraph supplement (background, non-blocking)
-      const theGraphKey = `thegraph_unified_${chain || 'all'}`;
-      let theGraphUnified = cacheService.get<UnifiedPool[]>(theGraphKey).data;
-      if (!theGraphUnified && !cacheService.get(`thegraph_fetching_${chain || 'all'}`).data) {
-        cacheService.set(`thegraph_fetching_${chain || 'all'}`, true, 60);
-        const chainsToFetch = chain ? [chain as string] : ['ethereum', 'arbitrum', 'base'];
-        Promise.all(chainsToFetch.map(c => theGraphAdapter.getPools(c, 50))).then(results => {
-          const allPools = results.flat();
-          const unified = allPools.map(p => poolIntelligenceService.enrichToUnifiedPool(p, { updatedAt: new Date() }));
-          // Persiste no MemoryStore para os próximos requests
-          memoryStore.setPools(unified);
-          cacheService.set(theGraphKey, unified, 300);
-        }).catch(() => {});
-      }
-
-      const radarUnified: UnifiedPool[] = radarResults.map(r =>
-        poolIntelligenceService.enrichToUnifiedPool(r.pool, { updatedAt: new Date() })
-      );
-
-      const tgUnified = theGraphUnified ?? [];
-      const mergedMap = new Map<string, UnifiedPool>();
-      for (const p of radarUnified) mergedMap.set(p.id, p);
-      for (const p of tgUnified) {
-        if (!mergedMap.has(p.id) || p.volume1hUSD != null) mergedMap.set(p.id, p);
-      }
-      pools = Array.from(mergedMap.values());
-
-      // Salva no MemoryStore para os próximos requests não precisarem recalcular
-      if (pools.length > 0) memoryStore.setPools(pools);
-    }
-
-    // ── 3. Filtros e ordenação (mesmo dado, sem re-enriquecer) ──
-    pools = poolIntelligenceService.applyPoolFilters(pools, {
-      chain: chain as string | undefined,
-      protocol: protocol as string | undefined,
-      token: token as string | undefined,
-      bluechip: bluechip === 'true' ? true : undefined,
-      minTVL: minTVL ? parseFloat(minTVL as string) : undefined,
-      minHealth: minHealth ? parseFloat(minHealth as string) : undefined,
-      poolType: poolType as string | undefined,
-    });
-
-    const validSortKeys = ['tvl', 'apr', 'aprFee', 'aprAdjusted', 'volume1h', 'volume5m', 'fees1h', 'fees5m', 'healthScore', 'volatilityAnn', 'ratio'] as const;
-    type SortKey = typeof validSortKeys[number];
-    const sortKey = (validSortKeys.includes(sortBy as SortKey) ? sortBy : 'tvl') as SortKey;
-    pools = poolIntelligenceService.sortPools(pools, sortKey, (sortDirection as string) === 'asc' ? 'asc' : 'desc');
-
-    // ── 4. Enrich with TVL drop + consensus data ──
-    const consensusResults = getConsensusResults();
-    for (const pool of pools) {
-      // TVL drop from 24h snapshots
-      const tvlDrop = tvlTrackerService.getTvlDrop(pool.id, pool.tvlUSD);
-      if (tvlDrop.dataPoints > 0) {
-        pool.tvlPeak24h = tvlDrop.tvlPeak24h;
-        pool.tvlDropPercent = tvlDrop.dropPercent;
-      }
-      // Consensus data
-      const consensus = consensusResults.get(pool.poolAddress.toLowerCase());
-      if (consensus) {
-        pool.consensusSources = consensus.sources.length;
-        pool.consensusDivergence = Math.round(consensus.maxDivergence * 10) / 10;
-      }
-      // Execution cost impact
-      const execCost = calculateExecutionCost(pool.tvlUSD, pool.volume24hUSD, pool.poolType);
-      pool.executionCostImpact = execCost.impact1000;
-    }
-
-    // ── 5. Paginação ──
-    const total = pools.length;
-    const lim = limitStr ? Math.min(parseInt(limitStr as string), 200) : 50;
-    const pg = page ? parseInt(page as string) : null;
-    pools = pg != null
-      ? pools.slice((pg - 1) * lim, pg * lim)
-      : pools.slice(0, lim);
-
-    res.json({
-      pools,
-      total,
-      page: pg,
-      limit: lim,
-      fromMemory,
-      syncing: !!cacheService.get(`thegraph_fetching_${chain || 'all'}`).data,
-      tokenFilters: notificationSettingsService.getTokenFilters(),
-      timestamp: new Date(),
-    });
-  } catch (error) {
-    logService.error('SYSTEM', 'GET /pools failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
-  }
-});
-
-// Get single pool
-router.get('/pools/:chain/:address', async (req, res) => {
-  try {
-    const { chain, address } = req.params;
-
-    // First check if we have this pool in radar results (most common case)
-    const radarResults = getLatestRadarResults();
-    const fromRadar = radarResults.find(r =>
-      r.pool.chain === chain &&
-      (r.pool.poolAddress === address || r.pool.externalId === address)
-    );
-
-    if (fromRadar) {
-      return res.json({
-        success: true,
-        data: { pool: fromRadar.pool, score: fromRadar.score },
-        provider: 'radar-cache',
-        usedFallback: false,
-        timestamp: new Date(),
-      });
-    }
-
-    // Check MemoryStore (may have pools loaded from /pools endpoint)
-    const memUnified = memoryStore.getAllPools().find(p =>
-      p.chain === chain && (p.poolAddress === address || p.id === address)
-    );
-    if (memUnified) {
-      const pool: Pool = {
-        externalId: memUnified.id,
-        chain: memUnified.chain,
-        protocol: memUnified.protocol,
-        poolAddress: memUnified.poolAddress,
-        token0: memUnified.token0,
-        token1: memUnified.token1,
-        feeTier: memUnified.feeTier,
-        price: memUnified.price,
-        tvl: memUnified.tvlUSD,
-        volume24h: memUnified.volume24hUSD || 0,
-        volume7d: (memUnified as any).volume7d,
-        fees24h: memUnified.fees24hUSD ?? 0,
-        apr: memUnified.aprTotal ?? memUnified.aprFee ?? (memUnified as any).apr ?? 0,
-        volatilityAnn: memUnified.volatilityAnn, // For live IL/range calculations
-      } as Pool;
-      const cachedScore = memoryStore.getScore(memUnified.id);
-      const score = cachedScore || scoreService.calculateScore(pool);
-      return res.json({
-        success: true,
-        data: { pool, score },
-        provider: 'memory-store',
-        usedFallback: false,
-        timestamp: new Date(),
-      });
-    }
-
-    // If not in radar or memory, try external providers
-    const { pool, provider, usedFallback } = await getPoolWithFallback(chain, address);
-
-    if (!pool) {
-      return res.status(404).json({ success: false, error: 'Pool not found' });
-    }
-
-    const score = scoreService.calculateScore(pool);
-
-    res.json({
-      success: true,
-      data: { pool, score },
-      provider,
-      usedFallback,
-      timestamp: new Date(),
-    });
-  } catch (error) {
-    logService.error('SYSTEM', 'GET /pools/:chain/:address failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
-  }
-});
-
-// Get recommendations — lê do MemoryStore (fresco) ou fallback para state legado
-router.get('/recommendations', async (req, res) => {
-  try {
-    const { mode, limit, tokens, useTokenFilter } = req.query;
-    // Prefere MemoryStore (atualizado pelo recommendationJobRunner)
-    let recommendations = memoryStore.getRecommendations() ?? getLatestRecommendations();
-
-    // Apply token filter from settings if useTokenFilter=true or if no tokens query param
-    const shouldUseSettingsFilter = useTokenFilter === 'true' || useTokenFilter === '1';
-    const tokenFilterFromQuery = tokens ? (tokens as string).split(',').map(t => t.trim().toUpperCase()) : null;
-
-    if (shouldUseSettingsFilter && notificationSettingsService.hasTokenFilter()) {
-      recommendations = recommendations.filter(r =>
-        notificationSettingsService.matchesTokenFilter(r.pool.token0.symbol, r.pool.token1.symbol)
-      );
-    } else if (tokenFilterFromQuery && tokenFilterFromQuery.length > 0) {
-      recommendations = recommendations.filter(r => {
-        const t0 = r.pool.token0.symbol.toUpperCase();
-        const t1 = r.pool.token1.symbol.toUpperCase();
-        return tokenFilterFromQuery.some(f => f === t0 || f === t1);
-      });
-    }
-
-    // Filter by mode if specified
-    if (mode && typeof mode === 'string') {
-      recommendations = recommendations.filter(r => r.mode === mode.toUpperCase());
-    }
-
-    // Limit results
-    const maxLimit = Math.min(parseInt(limit as string) || 10, 20);
-    recommendations = recommendations.slice(0, maxLimit);
-
-    res.json({
-      success: true,
-      data: recommendations,
-      total: getLatestRecommendations().length,
-      filteredTotal: recommendations.length,
-      mode: config.defaults.mode,
-      capital: config.defaults.capital,
-      tokenFilters: notificationSettingsService.getTokenFilters(),
-      timestamp: new Date(),
-    });
-  } catch (error) {
-    logService.error('SYSTEM', 'GET /recommendations failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
-  }
-});
-
-// Get watchlist
-router.get('/watchlist', async (req, res) => {
-  try {
-    const watchlist = getWatchlist();
-    
-    res.json({
-      success: true,
-      data: watchlist,
-      count: watchlist.length,
-      timestamp: new Date(),
-    });
-  } catch (error) {
-    logService.error('SYSTEM', 'GET /watchlist failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
-  }
-});
-
-// Add to watchlist
-router.post('/watchlist', async (req, res) => {
-  try {
-    const { poolId, chain, address } = req.body;
-    
-    if (!poolId || !chain || !address) {
-      return res.status(400).json({ success: false, error: 'Missing required fields' });
-    }
-    
-    addToWatchlist({ poolId, chain, address });
-    
-    res.json({
-      success: true,
-      message: 'Added to watchlist',
-      timestamp: new Date(),
-    });
-  } catch (error) {
-    logService.error('SYSTEM', 'POST /watchlist failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
-  }
-});
-
-// Remove from watchlist
-router.delete('/watchlist/:poolId', async (req, res) => {
-  try {
-    const { poolId } = req.params;
-    removeFromWatchlist(poolId);
-    
-    res.json({
-      success: true,
-      message: 'Removed from watchlist',
-      timestamp: new Date(),
-    });
-  } catch (error) {
-    logService.error('SYSTEM', 'DELETE /watchlist/:poolId failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
-  }
-});
-
-// Get system logs
-router.get('/logs', async (req, res) => {
-  const { level, component, limit } = req.query;
-  
-  const logs = logService.getRecentLogs(
-    parseInt(limit as string) || 100,
-    level as any,
-    component as any
-  );
-  
-  res.json({
-    success: true,
-    data: logs,
-    count: logs.length,
-    timestamp: new Date(),
-  });
-});
-
-// Get settings (system + notification)
-router.get('/settings', async (req, res) => {
-  res.json({
-    success: true,
-    data: {
-      system: {
-        mode: config.defaults.mode,
-        capital: config.defaults.capital,
-        chains: config.defaults.chains,
-        thresholds: config.thresholds,
-        scoreWeights: config.scoreWeights,
-      },
-      notifications: notificationSettingsService.getSettings(),
-      telegram: {
-        enabled: telegramBot.isEnabled(),
-        chatId: config.telegram.chatId ? '***' + config.telegram.chatId.slice(-4) : null,
-      },
-    },
-    timestamp: new Date(),
-  });
-});
-
-// Update notification settings
-router.put('/settings/notifications', async (req, res) => {
-  try {
-    const updated = notificationSettingsService.updateSettings(req.body);
-    res.json({
-      success: true,
-      data: updated,
-      message: 'Notification settings updated',
-      timestamp: new Date(),
-    });
-  } catch (error) {
-    logService.error('SYSTEM', 'PUT /settings/notifications failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
-  }
-});
-
-// Send test Telegram message (simple connection test)
-router.post('/settings/telegram/test', async (req, res) => {
-  try {
-    const appUrl = notificationSettingsService.getAppUrl();
-    const posLink = notificationSettingsService.getPositionsLink();
-    const msg =
-      `✅ <b>Teste de Notificação</b>\n\n` +
-      `Pool Intelligence Pro está funcionando!\n` +
-      `URL do App: ${appUrl}\n\n` +
-      `🔗 <a href="${posLink}">Abrir Posições</a>`;
-    const sent = await telegramBot.sendMessage(msg);
-    if (sent) {
-      res.json({ success: true, message: 'Test message sent' });
-    } else {
-      res.status(400).json({ success: false, error: 'Telegram not configured or failed to send' });
-    }
-  } catch (error) {
-    logService.error('SYSTEM', 'POST /settings/telegram/test failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
-  }
-});
-
-// Send top recommendations via Telegram (real data test)
-router.post('/settings/telegram/test-recommendations', async (req, res) => {
-  try {
-    const { limit = 5, useTokenFilter = true } = req.body;
-    let recommendations = getLatestRecommendations();
-
-    if (recommendations.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Nenhuma recomendação disponível. Aguarde o sistema coletar dados das pools.',
-      });
-    }
-
-    // Apply token filter from settings
-    if (useTokenFilter && notificationSettingsService.hasTokenFilter()) {
-      recommendations = recommendations.filter(r =>
-        notificationSettingsService.matchesTokenFilter(r.pool.token0.symbol, r.pool.token1.symbol)
-      );
-    }
-
-    if (recommendations.length === 0) {
-      const tokens = notificationSettingsService.getTokenFilters();
-      return res.status(400).json({
-        success: false,
-        error: `Nenhuma pool encontrada com os tokens filtrados: ${tokens.join(', ')}. Adicione mais tokens ou remova o filtro.`,
-        tokenFilters: tokens,
-      });
-    }
-
-    // Limit
-    const top = recommendations.slice(0, Math.min(limit, 10));
-    const tokenFilters = notificationSettingsService.getTokenFilters();
-    const filterText = tokenFilters.length > 0 ? `Filtros: ${tokenFilters.join(', ')}` : 'Sem filtros de token';
-
-    // Build message
-    let msg = `🏆 <b>TOP ${top.length} RECOMENDAÇÕES DE POOLS</b>\n`;
-    msg += `📅 ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}\n`;
-    msg += `🔍 ${filterText}\n\n`;
-
-    for (const rec of top) {
-      const pool = rec.pool;
-      const score = rec.score;
-      const poolName = `${pool.token0.symbol}/${pool.token1.symbol}`;
-      const modeEmoji = rec.mode === 'DEFENSIVE' ? '🛡️' : rec.mode === 'AGGRESSIVE' ? '🔥' : '⚖️';
-      const scoreEmoji = score.total >= 70 ? '🟢' : score.total >= 50 ? '🟡' : '🔴';
-      const simLink = notificationSettingsService.getSimulationLink(pool.chain, pool.poolAddress);
-
-      msg += `${scoreEmoji} <b>#${rec.rank} ${poolName}</b> ${modeEmoji}\n`;
-      msg += `   📊 Score: <code>${score.total.toFixed(0)}/100</code> | ${pool.protocol} (${pool.chain})\n`;
-      msg += `   💰 TVL: $${(pool.tvl / 1e6).toFixed(2)}M | Vol: $${(pool.volume24h / 1e3).toFixed(0)}K\n`;
-      msg += `   📈 APR Est: <code>${rec.estimatedGainPercent.toFixed(2)}%/semana</code> (${rec.probability}% prob)\n`;
-      msg += `   🔗 <a href="${simLink}">Simular</a>\n\n`;
-    }
-
-    msg += `──────────────────\n`;
-    msg += `💡 <i>Clique em "Simular" para ver detalhes e adicionar ao monitoramento</i>\n`;
-    msg += `<a href="${notificationSettingsService.getAppUrl()}">Abrir Pool Intelligence Pro →</a>`;
-
-    const sent = await telegramBot.sendMessage(msg);
-    if (sent) {
-      res.json({
-        success: true,
-        message: `Enviado TOP ${top.length} recomendações para o Telegram`,
-        count: top.length,
-        tokenFilters,
-      });
-    } else {
-      res.status(400).json({ success: false, error: 'Telegram não configurado ou falhou ao enviar' });
-    }
-  } catch (error) {
-    logService.error('SYSTEM', 'POST /settings/telegram/test-recommendations failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
-  }
-});
-
-// Trigger portfolio report manually
-router.post('/ranges/report', async (req, res) => {
-  try {
-    await rangeMonitorService.sendPortfolioReport();
-    res.json({
-      success: true,
-      message: 'Portfolio report sent via Telegram',
-      timestamp: new Date(),
-    });
-  } catch (error) {
-    logService.error('SYSTEM', 'POST /ranges/report failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
-  }
-});
-
-// Get all alert rules
-router.get('/alerts', async (req, res) => {
-  try {
-    const rules = alertService.getRules();
-    const recent = alertService.getRecentAlerts();
-
-    res.json({
-      success: true,
-      data: {
-        rules,
-        recentAlerts: recent.slice(0, 20),
-      },
-      timestamp: new Date(),
-    });
-  } catch (error) {
-    logService.error('SYSTEM', 'GET /alerts failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
-  }
-});
-
-// Create alert rule
-router.post('/alerts', async (req, res) => {
-  try {
-    const { poolId, type, threshold } = req.body;
-
-    if (!type || threshold === undefined) {
-      return res.status(400).json({ success: false, error: 'Missing required fields' });
-    }
-
-    const id = Date.now().toString();
-    alertService.addRule(id, {
-      type,
-      poolId,
-      value: threshold,
-    });
-
-    res.json({
-      success: true,
-      data: { id },
-      message: 'Alert rule created',
-      timestamp: new Date(),
-    });
-  } catch (error) {
-    logService.error('SYSTEM', 'POST /alerts failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
-  }
-});
-
-// Delete alert rule
-router.delete('/alerts/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    alertService.removeRule(id);
-
-    res.json({
-      success: true,
-      message: 'Alert rule deleted',
-      timestamp: new Date(),
-    });
-  } catch (error) {
-    logService.error('SYSTEM', 'DELETE /alerts/:id failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
-  }
-});
+// Mount sub-routers
+router.use(poolsRouter);
+router.use(settingsRouter);
+router.use(alertsRouter);
+router.use(rangesRouter);
+router.use(dataRouter);
+router.use(docsRouter);
+router.use(historyRouter);
+router.use(integrationsRouter);
+router.use(aiInsightsRouter);
+router.use(pushRouter);
+router.use(walletRouter);
 
 // ============================================
-// RANGE MONITORING ROUTES
+// MACRO CALENDAR ROUTES
 // ============================================
 
-// Get all range positions
-router.get('/ranges', async (req, res) => {
+// GET /api/macro — Get macro context (risk level + upcoming events)
+router.get('/macro', (req, res) => {
   try {
-    const positions = rangeMonitorService.getPositions();
-    const stats = rangeMonitorService.getStats();
-
-    res.json({
-      success: true,
-      data: positions,
-      stats,
-      timestamp: new Date(),
-    });
+    const context = macroCalendarService.getMacroContext();
+    res.json({ success: true, data: context, timestamp: new Date() });
   } catch (error) {
-    logService.error('SYSTEM', 'GET /ranges failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
+    logService.error('SYSTEM', 'GET /macro failed', { error });
+    res.status(500).json({ success: false, error: 'Failed to fetch macro context', timestamp: new Date() });
   }
 });
 
-// Create range position to monitor
-router.post('/ranges', async (req, res) => {
+// GET /api/macro/events — List upcoming events
+router.get('/macro/events', (req, res) => {
   try {
-    const {
-      poolId,
-      chain,
-      poolAddress,
-      token0Symbol,
-      token1Symbol,
-      rangeLower,
-      rangeUpper,
-      entryPrice,
-      capital,
-      mode,
-      alertThreshold,
-    } = req.body;
+    const daysParsed = parseInt(req.query.days as string, 10);
+    const days = (!Number.isNaN(daysParsed) && daysParsed > 0) ? daysParsed : 7;
+    const events = macroCalendarService.getUpcomingEvents(Math.min(days, 90));
+    res.json({ success: true, data: events, timestamp: new Date() });
+  } catch (error) {
+    logService.error('SYSTEM', 'GET /macro/events failed', { error });
+    res.status(500).json({ success: false, error: 'Failed to fetch macro events', timestamp: new Date() });
+  }
+});
 
-    if (!poolId || !rangeLower || !rangeUpper) {
-      return res.status(400).json({ success: false, error: 'Missing required fields: poolId, rangeLower, rangeUpper' });
+// POST /api/macro/events — Add custom macro event
+router.post('/macro/events', (req, res) => {
+  try {
+    const { name, date, type, impact, description, source, liquidityEffect } = req.body;
+    const validTypes = ['ECONOMIC', 'RATE_DECISION', 'CRYPTO_EVENT', 'VOLATILITY', 'EARNINGS', 'REGULATORY'];
+    if (!name || !date || !type) {
+      return res.status(400).json({ success: false, error: 'name, date, and type are required', timestamp: new Date() });
     }
-
-    const position = rangeMonitorService.createPosition({
-      poolId,
-      chain: chain || 'ethereum',
-      poolAddress: poolAddress || poolId,
-      token0Symbol: token0Symbol || 'TOKEN0',
-      token1Symbol: token1Symbol || 'TOKEN1',
-      rangeLower: Number(rangeLower),
-      rangeUpper: Number(rangeUpper),
-      entryPrice: Number(entryPrice) || (Number(rangeLower) + Number(rangeUpper)) / 2,
-      capital: Number(capital) || 1000,
-      mode: mode || 'NORMAL',
-      alertThreshold: Number(alertThreshold) || 5, // Default 5% from edge
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ success: false, error: `type must be one of: ${validTypes.join(', ')}`, timestamp: new Date() });
+    }
+    if (isNaN(new Date(date).getTime())) {
+      return res.status(400).json({ success: false, error: 'date must be a valid ISO date string', timestamp: new Date() });
+    }
+    const event = macroCalendarService.addEvent({
+      name,
+      date: new Date(date),
+      type: type,
+      impact: impact || 'MEDIUM',
+      description: description || '',
+      source: source || 'user',
+      liquidityEffect: liquidityEffect ?? -10,
     });
-
-    res.json({
-      success: true,
-      data: position,
-      message: 'Range monitoring started! You will be notified when price approaches the edges.',
-      timestamp: new Date(),
-    });
+    res.json({ success: true, data: event, timestamp: new Date() });
   } catch (error) {
-    logService.error('SYSTEM', 'POST /ranges failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
+    logService.error('SYSTEM', 'POST /macro/events failed', { error });
+    res.status(500).json({ success: false, error: 'Failed to add macro event', timestamp: new Date() });
   }
 });
 
-// Delete range position
-router.delete('/ranges/:id', async (req, res) => {
+// DELETE /api/macro/events/:id — Remove custom macro event
+router.delete('/macro/events/:id', (req, res) => {
   try {
-    const { id } = req.params;
-    const deleted = rangeMonitorService.deletePosition(id);
-
+    const deleted = macroCalendarService.removeEvent(req.params.id);
     if (!deleted) {
-      return res.status(404).json({ success: false, error: 'Position not found' });
+      return res.status(404).json({ success: false, error: 'Event not found', timestamp: new Date() });
     }
-
-    res.json({
-      success: true,
-      message: 'Range monitoring stopped',
-      timestamp: new Date(),
-    });
+    res.json({ success: true, message: 'Event removed', timestamp: new Date() });
   } catch (error) {
-    logService.error('SYSTEM', 'DELETE /ranges/:id failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
-  }
-});
-
-// Manually trigger range check (for testing)
-router.post('/ranges/check', async (req, res) => {
-  try {
-    await rangeMonitorService.checkAllPositions();
-
-    res.json({
-      success: true,
-      message: 'Range check completed',
-      stats: rangeMonitorService.getStats(),
-      timestamp: new Date(),
-    });
-  } catch (error) {
-    logService.error('SYSTEM', 'POST /ranges/check failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
+    logService.error('SYSTEM', 'DELETE /macro/events failed', { error });
+    res.status(500).json({ success: false, error: 'Failed to remove event', timestamp: new Date() });
   }
 });
 
 // ============================================
-// GAS ESTIMATES
+// MARKET REGIME ROUTES
 // ============================================
 
-router.get('/gas', async (req, res) => {
+// GET /api/market-conditions — condições globais de mercado para LP
+router.get('/market-conditions', (_req, res) => {
   try {
-    const { chain } = req.query;
-    if (chain && typeof chain === 'string') {
-      const estimate = await gasService.getGasEstimate(chain);
-      return res.json({ success: true, data: estimate });
-    }
-    const allEstimates = await gasService.getAllGasEstimates();
-    res.json({ success: true, data: allEstimates });
+    const unifiedPools = memoryStore.getAllPools();
+    // UnifiedPool é estruturalmente compatível com Pool nos campos usados pelo MarketRegimeService
+    const conditions = marketRegimeService.getGlobalConditions(unifiedPools as unknown as Pool[]);
+    res.json({ success: true, data: conditions, timestamp: new Date() });
   } catch (error) {
-    logService.error('SYSTEM', 'GET /gas failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
+    logService.error('SYSTEM', 'GET /market-conditions failed', { error });
+    res.status(500).json({ success: false, error: 'Failed to get market conditions', timestamp: new Date() });
   }
 });
 
 // ============================================
-// POOL INTELLIGENCE — NEW ENDPOINTS
+// WEB VITALS METRICS ENDPOINT
 // ============================================
 
-// GET /api/tokens — token list for autocomplete
-router.get('/tokens', async (req, res) => {
+// ============================================
+// TELEGRAM WEBHOOK ENDPOINT
+// ============================================
+
+// POST /api/telegram/webhook — recebe updates do Telegram (via webhook mode)
+router.post('/telegram/webhook', async (req, res) => {
   try {
-    const tokens = poolIntelligenceService.getTokenList();
-    // Also pull from DB if available
-    try {
-      const dbTokens = await prisma.token.findMany({ select: { symbol: true }, distinct: ['symbol'], take: 500 });
-      const extra = dbTokens.map((t: { symbol: string }) => t.symbol.toUpperCase());
-      const merged = Array.from(new Set([...tokens, ...extra])).sort();
-      return res.json(merged);
-    } catch {
-      return res.json(tokens);
-    }
+    await telegramBot.processWebhookUpdate(req.body as Record<string, unknown>);
+    res.json({ ok: true });
   } catch (error) {
-    logService.error('SYSTEM', 'GET /tokens failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
-  }
-});
-
-// GET /api/pools/:chain/:address — enhanced with history and range data
-// (This replaces the existing single pool endpoint with richer data)
-router.get('/pools-detail/:chain/:address', async (req, res) => {
-  try {
-    const { chain, address } = req.params;
-    const { horizonDays = '7', riskMode = 'NORMAL', capital = '1000' } = req.query;
-
-    // Try TheGraph first for richest data
-    let pool = await theGraphAdapter.getPool(chain, address);
-    let history = pool ? await theGraphAdapter.getPoolHistory(chain, address, 7) : [];
-    let provider = 'thegraph';
-
-    // Fallback to existing providers
-    if (!pool) {
-      const result = await getPoolWithFallback(chain, address);
-      pool = result.pool;
-      provider = result.provider;
-    }
-
-    // ── History fallback: if TheGraph gave no usable history, build from GeckoTerminal + DefiLlama ──
-    const hasUsableHistory = history.length >= 2 && history.some(h => (h.price && h.price > 0) || h.tvl > 0);
-    if (!hasUsableHistory && pool) {
-      try {
-        // Fetch price+volume from GeckoTerminal daily OHLCV (7 days)
-        const geckoHistory = pool.poolAddress.startsWith('0x')
-          ? await geckoTerminalAdapter.getPoolHistory(chain, pool.poolAddress, 7)
-          : [];
-
-        // Fetch TVL history from DefiLlama chart (uses pool UUID)
-        const llamaChart = pool.externalId
-          ? await defiLlamaAdapter.getPoolChart(pool.externalId)
-          : [];
-
-        // Build a TVL lookup by date (YYYY-MM-DD) from DefiLlama
-        const tvlByDate = new Map<string, number>();
-        for (const entry of llamaChart) {
-          const dateKey = new Date(entry.timestamp).toISOString().slice(0, 10);
-          tvlByDate.set(dateKey, entry.tvl);
-        }
-
-        if (geckoHistory.length >= 2) {
-          // Merge: price+volume from GeckoTerminal, TVL from DefiLlama
-          history = geckoHistory.map(gh => {
-            const dateKey = new Date(gh.timestamp).toISOString().slice(0, 10);
-            const tvlFromLlama = tvlByDate.get(dateKey);
-            return {
-              timestamp: gh.timestamp,
-              price: gh.price,
-              tvl: tvlFromLlama ?? gh.tvl,
-              volume24h: gh.volume24h,
-              fees24h: gh.fees24h ?? (gh.volume24h && pool!.feeTier ? gh.volume24h * pool!.feeTier : undefined),
-            };
-          });
-        } else if (llamaChart.length >= 2) {
-          // GeckoTerminal failed but DefiLlama has TVL — use TVL-only chart
-          history = llamaChart.map(lc => ({
-            timestamp: lc.timestamp,
-            price: undefined,
-            tvl: lc.tvl,
-            volume24h: 0,
-            fees24h: undefined,
-          }));
-        }
-      } catch (err) {
-        logService.warn('SYSTEM', 'History fallback failed', { chain, address, error: String(err) });
-      }
-    }
-
-    if (!pool) {
-      return res.status(404).json({ success: false, error: 'Pool not found' });
-    }
-
-    // Enrich with real volatility from GeckoTerminal hourly OHLCV if adapter didn't provide it
-    if (!pool.volatilityAnn && pool.poolAddress.startsWith('0x')) {
-      const realVol = await geckoTerminalAdapter.fetchVolatility(chain, pool.poolAddress);
-      if (realVol != null) {
-        pool.volatilityAnn = realVol;
-      }
-    }
-
-    const unified = poolIntelligenceService.enrichToUnifiedPool(pool, { updatedAt: new Date() });
-    const score = scoreService.calculateScore(pool);
-
-    // Range recommendations for all 3 modes
-    const horizonD = parseInt(horizonDays as string) || 7;
-    const capUSD = parseFloat(capital as string) || 1000;
-    const p = pool.price || 1;
-    const vol = unified.volatilityAnn;
-    const tickSpacing = (pool as Pool & { tickSpacing?: number }).tickSpacing;
-
-    const ranges = {
-      DEFENSIVE: calcRangeRecommendation({ price: p, volAnn: vol, horizonDays: horizonD, riskMode: 'DEFENSIVE', tickSpacing, poolType: unified.poolType }),
-      NORMAL: calcRangeRecommendation({ price: p, volAnn: vol, horizonDays: horizonD, riskMode: 'NORMAL', tickSpacing, poolType: unified.poolType }),
-      AGGRESSIVE: calcRangeRecommendation({ price: p, volAnn: vol, horizonDays: horizonD, riskMode: 'AGGRESSIVE', tickSpacing, poolType: unified.poolType }),
-    };
-
-    const selectedRange = ranges[(riskMode as string).toUpperCase() as 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE'] || ranges.NORMAL;
-
-    // Fee estimates
-    const feeEstimates = {
-      DEFENSIVE: calcUserFees({ tvl: pool.tvl, fees24h: pool.fees24h, fees1h: (pool as Pool & { fees1h?: number }).fees1h, userCapital: capUSD, riskMode: 'DEFENSIVE' }),
-      NORMAL: calcUserFees({ tvl: pool.tvl, fees24h: pool.fees24h, fees1h: (pool as Pool & { fees1h?: number }).fees1h, userCapital: capUSD, riskMode: 'NORMAL' }),
-      AGGRESSIVE: calcUserFees({ tvl: pool.tvl, fees24h: pool.fees24h, fees1h: (pool as Pool & { fees1h?: number }).fees1h, userCapital: capUSD, riskMode: 'AGGRESSIVE' }),
-    };
-
-    // IL risk for selected range
-    const ilRisk = calcILRisk({
-      price: p,
-      rangeLower: selectedRange.lower,
-      rangeUpper: selectedRange.upper,
-      volAnn: vol,
-      horizonDays: horizonD,
-    });
-
-    res.json({
-      success: true,
-      data: {
-        pool: unified,
-        score,
-        history: history.slice(0, 168), // max 7 days hourly
-        ranges,
-        selectedRange,
-        feeEstimates,
-        ilRisk,
-        recommendations: poolIntelligenceService.buildTop3Recommendations([unified]),
-      },
-      provider,
-      timestamp: new Date(),
-    });
-  } catch (error) {
-    logService.error('SYSTEM', 'GET /pools-detail/:chain/:address failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
-  }
-});
-
-// POST /api/range-calc — standalone range calculator
-router.post('/range-calc', async (req, res) => {
-  try {
-    const { price, volAnn = 0.40, horizonDays = 7, riskMode = 'NORMAL', tickSpacing, poolType = 'CL', capital = 1000, tvl, fees24h } = req.body;
-
-    if (!price || price <= 0) {
-      return res.status(400).json({ success: false, error: 'price is required and must be > 0' });
-    }
-
-    const ranges = {
-      DEFENSIVE: calcRangeRecommendation({ price, volAnn, horizonDays, riskMode: 'DEFENSIVE', tickSpacing, poolType }),
-      NORMAL: calcRangeRecommendation({ price, volAnn, horizonDays, riskMode: 'NORMAL', tickSpacing, poolType }),
-      AGGRESSIVE: calcRangeRecommendation({ price, volAnn, horizonDays, riskMode: 'AGGRESSIVE', tickSpacing, poolType }),
-    };
-
-    const selected = ranges[(riskMode as string).toUpperCase() as 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE'] || ranges.NORMAL;
-
-    const feeEstimate = calcUserFees({ tvl: tvl || 0, fees24h, userCapital: capital, riskMode: riskMode as 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE' });
-    const ilRisk = calcILRisk({ price, rangeLower: selected.lower, rangeUpper: selected.upper, volAnn, horizonDays });
-
-    res.json({ success: true, data: { ranges, selected, feeEstimate, ilRisk } });
-  } catch (error) {
-    logService.error('SYSTEM', 'POST /range-calc failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
+    logService.error('SYSTEM', 'Telegram webhook endpoint error', { error });
+    res.status(500).json({ ok: false });
   }
 });
 
 // ============================================
-// FAVORITES
+// WEB VITALS METRICS ENDPOINT
 // ============================================
 
-router.get('/favorites', async (req, res) => {
-  try {
-    const favorites = await prisma.favorite.findMany({ orderBy: { addedAt: 'desc' } });
-    res.json({ success: true, data: favorites });
-  } catch (error) {
-    // DB might not be configured or table doesn't exist — return empty array gracefully
-    logService.warn('SYSTEM', 'GET /favorites - DB unavailable, returning empty', { error });
-    res.json({ success: true, data: [], note: 'Database não configurada ou tabela não existe' });
-  }
+// ============================================
+// DECISION LOG (Fase 6 — 6.3)
+// ============================================
+
+// GET /api/decision-log — retorna histórico de decisões
+router.get('/decision-log', (req, res) => {
+  const limit = Math.min(parseInt(String(req.query.limit ?? '50')), 200);
+  const type = req.query.type as string | undefined;
+  const entries = decisionLogService.getEntries(limit, type as Parameters<typeof decisionLogService.getEntries>[1]);
+  const stats = decisionLogService.getStats();
+  res.json({ success: true, data: { entries, stats }, timestamp: new Date() });
 });
 
-router.post('/favorites', async (req, res) => {
+// POST /api/decision-log — adiciona entrada manual
+router.post('/decision-log', (req, res) => {
+  const { summary, data, poolId, poolName } = req.body as {
+    summary?: string;
+    data?: Record<string, unknown>;
+    poolId?: string;
+    poolName?: string;
+  };
+  if (!summary) {
+    res.status(400).json({ success: false, error: 'summary is required' });
+    return;
+  }
+  const entry = decisionLogService.addEntry({
+    type: 'MANUAL',
+    summary,
+    data: data ?? {},
+    poolId,
+    poolName,
+  });
+  res.json({ success: true, data: entry, timestamp: new Date() });
+});
+
+// ============================================
+// SCORE WEIGHTS (Fase 6 — 6.4)
+// ============================================
+
+// GET /api/score-weights — pesos atuais
+router.get('/score-weights', (_req, res) => {
+  const weights = weightOptimizerService.getCurrentWeights();
+  const lastAdjustedAt = weightOptimizerService.getLastAdjustedAt();
+  res.json({ success: true, data: { weights, lastAdjustedAt }, timestamp: new Date() });
+});
+
+// POST /api/score-weights/auto-adjust — ajuste baseado no regime atual
+router.post('/score-weights/auto-adjust', (_req, res) => {
+  const result = weightOptimizerService.autoAdjust();
+  res.json({ success: true, data: result, timestamp: new Date() });
+});
+
+// POST /api/score-weights/reset — volta para defaults
+router.post('/score-weights/reset', (_req, res) => {
+  const weights = weightOptimizerService.resetToDefaults();
+  res.json({ success: true, data: { weights }, timestamp: new Date() });
+});
+
+// POST /api/metrics/vitals — Receive Web Vitals from frontend
+router.post('/metrics/vitals', (req, res) => {
   try {
-    const { poolId, chain, poolAddress, token0Symbol = '', token1Symbol = '', protocol = '' } = req.body;
-    if (!poolId || !chain || !poolAddress) {
-      return res.status(400).json({ success: false, error: 'poolId, chain, poolAddress are required' });
+    const { name, value, rating } = req.body;
+    if (name && typeof value === 'number') {
+      logService.info('METRICS', `Web Vital: ${name}=${value.toFixed(2)} (${rating || 'unknown'})`, {
+        component: 'WEB_VITALS',
+        vital: name,
+        value,
+        rating,
+      });
     }
-    const fav = await prisma.favorite.upsert({
-      where: { poolId },
-      create: { poolId, chain, poolAddress, token0Symbol, token1Symbol, protocol },
-      update: { addedAt: new Date() },
-    });
-    res.json({ success: true, data: fav });
-  } catch (error) {
-    logService.error('SYSTEM', 'POST /favorites failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
-  }
-});
-
-router.delete('/favorites/:poolId', async (req, res) => {
-  try {
-    const { poolId } = req.params;
-    await prisma.favorite.deleteMany({ where: { poolId } });
-    res.json({ success: true });
-  } catch (error) {
-    logService.error('SYSTEM', 'DELETE /favorites failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
-  }
-});
-
-// ============================================
-// NOTES
-// ============================================
-
-router.get('/notes', async (req, res) => {
-  try {
-    const { poolId } = req.query;
-    const where = poolId ? { poolId: poolId as string } : {};
-    const notes = await prisma.note.findMany({ where, orderBy: { createdAt: 'desc' } });
-    res.json({ success: true, data: notes });
-  } catch (error) {
-    logService.error('SYSTEM', 'GET /notes failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
-  }
-});
-
-router.post('/notes', async (req, res) => {
-  try {
-    const { poolId, text, tags = [] } = req.body;
-    if (!poolId || !text) {
-      return res.status(400).json({ success: false, error: 'poolId and text are required' });
-    }
-    const note = await prisma.note.create({ data: { poolId, text, tags } });
-    res.json({ success: true, data: note });
-  } catch (error) {
-    logService.error('SYSTEM', 'POST /notes failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
-  }
-});
-
-router.delete('/notes/:id', async (req, res) => {
-  try {
-    await prisma.note.delete({ where: { id: req.params.id } });
-    res.json({ success: true });
-  } catch (error) {
-    logService.error('SYSTEM', 'DELETE /notes/:id failed', { error });
-    res.status(500).json({ success: false, error: 'Internal error' });
+    res.status(204).end();
+  } catch {
+    res.status(204).end(); // Never fail — monitoring should be transparent
   }
 });
 

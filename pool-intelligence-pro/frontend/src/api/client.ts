@@ -1,10 +1,73 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
+import { toast } from 'sonner';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://pool-intelligence-api.onrender.com';
+// Resolve API base URL (the part BEFORE /api):
+// In production (Render single-service): empty string → relative /api paths
+// In development: uses Vite proxy, so also empty string
+// Only use VITE_API_URL if explicitly set to a DIFFERENT external service
+function resolveApiUrl(): string {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (
+    envUrl &&
+    envUrl !== '/' &&
+    !envUrl.includes('localhost') &&
+    !envUrl.includes('127.0.0.1') &&
+    !envUrl.includes('pool-intelligence-api') // old service name — ignore
+  ) {
+    // Strip trailing slashes to prevent double-slash (e.g. "https://x.com/" + "/api" → "https://x.com//api")
+    return envUrl.replace(/\/+$/, '');
+  }
+  // Same-origin: frontend is served by the backend Express server
+  // Relative paths (/api/...) go to the same host automatically
+  return '';
+}
+
+const API_URL = resolveApiUrl();
+
+// Export for diagnostics (shown in error messages)
+export const API_BASE_URL = API_URL || '(same-origin)';
 
 const api = axios.create({
   baseURL: API_URL + '/api',
-  timeout: 30000,
+  timeout: 60000, // 60s for Render free tier cold starts
+});
+
+// Retry interceptor: handles cold starts (Render free tier sleeps after 15min)
+api.interceptors.response.use(undefined, async (error: AxiosError) => {
+  const config = error.config;
+  if (!config) return Promise.reject(error);
+
+  const retryCount = (config as any).__retryCount || 0;
+  const isRetryable =
+    !error.response || // network error (backend sleeping)
+    error.response.status === 502 || // bad gateway (waking up)
+    // 503 só é retentável se não vier com corpo de erro (cold-start do Render, não erro de negócio)
+    (error.response.status === 503 && !(error.response.data as any)?.error) ||
+    error.code === 'ECONNABORTED'; // timeout
+
+  if (isRetryable && retryCount < 2) {
+    (config as any).__retryCount = retryCount + 1;
+    // Wait before retry: 3s first, 8s second (gives cold start time)
+    await new Promise(r => setTimeout(r, retryCount === 0 ? 3000 : 8000));
+    return api.request(config);
+  }
+
+  // Show user-friendly toast for unrecoverable errors
+  const status = error.response?.status;
+  const serverMsg = (error.response?.data as any)?.error;
+  if (status === 401 || status === 403) {
+    toast.error('Acesso negado', { description: serverMsg || 'Você não tem permissão para esta ação.' });
+  } else if (status === 404) {
+    // 404 is common for missing optional resources — don't toast
+  } else if (status === 422 || status === 400) {
+    toast.error('Dados inválidos', { description: serverMsg || 'Verifique os campos e tente novamente.' });
+  } else if (status && status >= 500) {
+    toast.error('Erro no servidor', { description: serverMsg || 'Tente novamente em instantes.' });
+  } else if (!error.response) {
+    toast.error('Sem conexão', { description: 'Não foi possível conectar ao servidor após 2 tentativas.' });
+  }
+
+  return Promise.reject(error);
 });
 
 // Types
@@ -56,15 +119,76 @@ export interface Recommendation {
   mode: 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE';
   dataTimestamp: string;
   validUntil: string;
+  // Análise de regime de mercado
+  regimeAnalysis?: {
+    regime: string;
+    confidence: number;
+    signal: string;
+  };
+  // Avaliação de risco detalhada
+  riskAssessment?: {
+    level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    factors: string[];
+    maxDrawdown?: number;
+  };
+  // Flag de não-operação (condições adversas de mercado)
+  noOperate?: boolean;
+  noOperateReason?: string;
 }
 
 export interface HealthData {
   status: 'HEALTHY' | 'DEGRADED' | 'UNHEALTHY';
+  uptime?: { seconds: number; formatted: string };
+  memory?: { rssBytes: number; heapUsedBytes: number; heapTotalBytes: number; rssMB: number; heapUsedMB: number };
   providers: { name: string; isHealthy: boolean; isCircuitOpen: boolean; consecutiveFailures: number; isOptional?: boolean; note?: string }[];
   cache: { hits: number; misses: number; sets: number; keys: number; hitRate: number };
   memoryStore?: { pools: number; scores: number; watchlist: number; hasRecs: boolean; recsFresh: boolean; reads: number; hits: number; misses: number; writes: number; hitRatePct: number; estimatedKB: number };
   alerts: { rulesCount: number; recentAlertsCount: number; triggersToday: number };
+  requests?: {
+    totalRequests: number;
+    totalErrors: number;
+    errorRate: number;
+    avgDurationMs: number;
+    byEndpoint: Record<string, { count: number; avgMs: number; p95Ms: number; maxMs: number; errors: number }>;
+  };
+  jobs?: Record<string, { totalRuns: number; successes: number; failures: number; avgDurationMs: number; lastRunAt: string | null; lastDurationMs: number | null }>;
+  logs?: { INFO: number; WARN: number; ERROR: number; CRITICAL: number };
   timestamp: string;
+}
+
+// ============================================
+// RESPONSE VALIDATION
+// ============================================
+
+/** Check essential fields on a pool object. Returns warnings for missing data. */
+function validatePool(pool: any, source: string): string[] {
+  const warnings: string[] = [];
+  if (!pool) {
+    warnings.push(`[${source}] pool object is null/undefined`);
+    return warnings;
+  }
+  if (!pool.chain) warnings.push(`[${source}] missing chain`);
+  if (!pool.poolAddress && !pool.externalId) warnings.push(`[${source}] missing poolAddress and externalId`);
+  if (pool.tvl == null && pool.tvlUSD == null) warnings.push(`[${source}] missing tvl`);
+  if (!pool.token0 && !pool.baseToken) warnings.push(`[${source}] missing token0 info`);
+  if (!pool.token1 && !pool.quoteToken) warnings.push(`[${source}] missing token1 info`);
+  if (warnings.length > 0) {
+    if (import.meta.env.DEV) console.warn('Pool validation warnings:', warnings);
+  }
+  return warnings;
+}
+
+/** Ensure pool has safe defaults for essential fields to prevent crashes. */
+function safePool<T extends Record<string, any>>(pool: T): T {
+  return {
+    ...pool,
+    chain: pool.chain || 'unknown',
+    poolAddress: pool.poolAddress || pool.externalId || '',
+    tvl: pool.tvl ?? pool.tvlUSD ?? 0,
+    volume24h: pool.volume24h ?? pool.volume24hUSD ?? 0,
+    token0: pool.token0 || { symbol: pool.baseToken || '?', address: '', decimals: 18 },
+    token1: pool.token1 || { symbol: pool.quoteToken || '?', address: '', decimals: 18 },
+  };
 }
 
 // API functions
@@ -79,96 +203,60 @@ export async function fetchPools(chain?: string): Promise<{ pool: Pool; score: S
   const pools = data?.pools || data?.data || [];
   // Converte UnifiedPool para o formato legado se necessário
   return pools.map((p: any) => {
-    if (p.pool && p.score) return p;
+    if (p.pool && p.score) {
+      validatePool(p.pool, 'fetchPools');
+      p.pool = safePool(p.pool);
+      return p;
+    }
     // UnifiedPool → { pool, score }
-    // Mirrors backend scoreService.calculateScore() logic exactly
+    // Use aprTotal (computed from fees) → aprFee → apr (adapter APY e.g. DefiLlama) → 0
     const aprEstimate = p.aprTotal || p.aprFee || p.apr || 0;
+    // Derive score breakdown from real data, not hardcoded
     const tvl = p.tvlUSD || p.tvl || 0;
     const vol24h = p.volume24hUSD || p.volume24h || 0;
-    const fees24h = p.fees24hUSD || p.fees24h || 0;
+    const volTvlRatio = tvl > 0 ? Math.min(100, (vol24h / tvl) * 100 * 5) : 0;
+    const feeEff = (p.fees24hUSD || p.fees24h || 0) > 0 && tvl > 0
+      ? Math.min(100, ((p.fees24hUSD || p.fees24h || 0) / tvl) * 365 * 100)
+      : (aprEstimate > 0 ? Math.min(100, aprEstimate) : 0);
+    const liqScore = tvl >= 10e6 ? 100 : tvl >= 1e6 ? 75 : tvl >= 100000 ? 40 : 20;
+    const volConsist = tvl > 0 ? Math.min(100, (vol24h / tvl) * 1000) : 0;
 
-    // --- Score breakdown components (mirrors backend score.service.ts) ---
-
-    // Health breakdown
-    const liqScore = tvl >= 10e6 ? 100 : tvl >= 5e6 ? 90 : tvl >= 1e6 ? 75 : tvl >= 500000 ? 60 : tvl >= 100000 ? 40 : 20;
-    const ageScore = Math.min(100, 30
-      + (tvl >= 10e6 ? 30 : tvl >= 1e6 ? 20 : tvl >= 100000 ? 10 : 0)
-      + (tvl > 0 && vol24h > 0 ? (vol24h / tvl >= 0.01 ? 20 : vol24h / tvl >= 0.005 ? 10 : 0) : 0)
-      + (p.bluechip ? 20 : 0));
-    const volRatio = tvl > 0 ? vol24h / tvl : 0;
-    const volConsist = volRatio >= 0.1 ? 100 : volRatio >= 0.05 ? 80 : volRatio >= 0.01 ? 60 : volRatio >= 0.005 ? 40 : 20;
-
-    // Return breakdown
-    const vtRatio = tvl > 0 ? vol24h / tvl * 100 : 0;
-    const volTvlRatio = vtRatio >= 20 ? 100 : vtRatio >= 10 ? 80 : vtRatio >= 5 ? 60 : vtRatio >= 1 ? 40 : 20;
-    const feeEff = fees24h > 0 && tvl > 0
-      ? Math.min(100, (() => { const r = fees24h / tvl * 365 * 100; return r >= 50 ? 100 : r >= 30 ? 80 : r >= 15 ? 60 : r >= 5 ? 40 : 20; })())
-      : (p.feeTier && vol24h > 0 && tvl > 0
-        ? Math.min(100, (vol24h * p.feeTier * 365) / tvl * 100)
-        : (aprEstimate > 0 ? Math.min(100, aprEstimate) : 20));
-
-    // Risk breakdown — use real volatility data when available
-    const vol100 = (p.volatilityAnn || 0) * 100; // annualized vol in %
-    const volatilityPenalty = p.volatilityAnn
-      ? (vol100 >= 30 ? 25 : vol100 >= 20 ? 20 : vol100 >= 10 ? 12 : vol100 >= 5 ? 5 : 0)
-      : 5; // conservative default when unknown
-    // liquidityDropPenalty: now available from API (tvlPeak24h + dropPercent)
-    const dropPct = p.tvlDropPercent || 0;
-    const liquidityDropPenalty = dropPct >= 50 ? 20 : dropPct >= 30 ? 15 : dropPct >= 20 ? 10 : dropPct >= 10 ? 5 : 0;
-
-    // Consensus inconsistency penalty (from API — multi-provider comparison)
-    const inconsistencyPenalty = (p.consensusDivergence || 0) > 10
-      ? ((p.consensusDivergence || 0) > 50 ? 15 : (p.consensusDivergence || 0) > 30 ? 10 : (p.consensusDivergence || 0) > 20 ? 7 : 3)
-      : 0;
-    // Execution cost penalty (AMM price impact — from API)
-    const executionCostPenalty = (p.executionCostImpact || 0) < 0.1 ? 0
-      : (p.executionCostImpact || 0) < 0.5 ? 2 : (p.executionCostImpact || 0) < 1 ? 4
-      : (p.executionCostImpact || 0) < 3 ? 6 : (p.executionCostImpact || 0) < 5 ? 8 : 10;
-
-    // --- Weighted scores (mirrors backend weights: health=40, return=35, risk=25) ---
-    const healthComponent = 40 * ((liqScore / 100) * 0.4 + (ageScore / 100) * 0.2 + (volConsist / 100) * 0.4);
-    const normalizedApr = Math.min(aprEstimate, 100);
-    const returnComponent = 35 * ((volTvlRatio / 100) * 0.3 + (feeEff / 100) * 0.3 + (normalizedApr / 100) * 0.4);
-    const riskPenalty = Math.min(25, volatilityPenalty + liquidityDropPenalty + inconsistencyPenalty + executionCostPenalty);
-    const totalScore = Math.max(0, Math.min(100, healthComponent + returnComponent - riskPenalty));
-
-    // Recommended mode: mirrors backend determineMode()
-    let recommendedMode: 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE' = 'DEFENSIVE';
-    if (totalScore >= 70 && vol100 <= 30) recommendedMode = 'AGGRESSIVE';
-    else if (totalScore >= 50 && vol100 <= 15) recommendedMode = 'NORMAL';
-
+    validatePool(p, 'fetchPools/unified');
+    const poolObj = safePool({
+      externalId: p.id || p.poolAddress,
+      chain: p.chain,
+      protocol: p.protocol,
+      poolAddress: p.poolAddress,
+      token0: p.token0 || { symbol: p.baseToken, address: '', decimals: 18 },
+      token1: p.token1 || { symbol: p.quoteToken, address: '', decimals: 18 },
+      tvl,
+      volume24h: vol24h,
+      fees24h: p.fees24hUSD || p.fees24h || 0,
+      apr: aprEstimate,
+      price: p.price,
+      feeTier: p.feeTier || 0.003,
+      volatilityAnn: p.volatilityAnn || undefined,
+    });
+    // Derive recommendedMode from actual data: low volatility + high score → AGGRESSIVE
+    const vol_pct = (p.volatilityAnn ?? 0) * 100; // convert decimal to percent
+    const hScore = p.healthScore || 50;
+    const derivedMode: 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE' =
+      hScore >= 70 && vol_pct <= 15 ? 'AGGRESSIVE'
+      : hScore >= 50 && vol_pct <= 30 ? 'NORMAL'
+      : 'DEFENSIVE';
     return {
-      pool: {
-        externalId: p.id || p.poolAddress,
-        chain: p.chain,
-        protocol: p.protocol,
-        poolAddress: p.poolAddress,
-        token0: p.token0 || { symbol: p.baseToken, address: '', decimals: 18 },
-        token1: p.token1 || { symbol: p.quoteToken, address: '', decimals: 18 },
-        tvl,
-        volume24h: vol24h,
-        fees24h,
-        apr: aprEstimate,
-        price: p.price,
-        feeTier: p.feeTier || undefined,
-        volatilityAnn: p.volatilityAnn || undefined,
-      },
+      pool: poolObj,
       score: {
-        total: Math.round(totalScore * 10) / 10,
-        health: Math.round(healthComponent * 10) / 10,
-        return: Math.round(returnComponent * 10) / 10,
-        risk: Math.round(riskPenalty * 10) / 10,
-        recommendedMode,
-        isSuspect: (p.warnings?.length || 0) > 0 || (aprEstimate > 500) || (vol24h > tvl * 10),
+        total: p.healthScore || 50,
+        health: p.healthScore || 50,
+        return: 0,
+        risk: 0,
+        recommendedMode: derivedMode,
+        isSuspect: (p.warnings?.length || 0) > 0,
         breakdown: {
-          health: { liquidityStability: liqScore, ageScore, volumeConsistency: volConsist },
+          health: { liquidityStability: liqScore, ageScore: 50, volumeConsistency: volConsist },
           return: { volumeTvlRatio: volTvlRatio, feeEfficiency: feeEff, aprEstimate },
-          risk: {
-            volatilityPenalty,
-            liquidityDropPenalty,
-            inconsistencyPenalty,
-            spreadPenalty: executionCostPenalty,
-          },
+          risk: { volatilityPenalty: 0, liquidityDropPenalty: 0, inconsistencyPenalty: 0, spreadPenalty: 0 },
         },
       },
     };
@@ -177,12 +265,35 @@ export async function fetchPools(chain?: string): Promise<{ pool: Pool; score: S
 
 export async function fetchPool(chain: string, address: string): Promise<{ pool: Pool; score: Score } | null> {
   const { data } = await api.get('/pools/' + chain + '/' + address);
-  return data.data;
+  const result = data.data;
+  if (result?.pool) {
+    validatePool(result.pool, 'fetchPool');
+    result.pool = safePool(result.pool);
+  }
+  return result;
 }
 
 export async function fetchRecommendations(mode?: string, limit?: number): Promise<Recommendation[]> {
   const { data } = await api.get('/recommendations', { params: { mode, limit } });
   return data.data || [];
+}
+
+export interface PoolMetricsPoint {
+  timestamp: number;
+  tvl: number;
+  apr: number;
+  score: number | null;
+  volume24h: number;
+}
+
+export async function fetchPoolMetricsHistory(chain: string, address: string): Promise<PoolMetricsPoint[]> {
+  try {
+    const { data } = await api.get(`/pools/${chain}/${address}/metrics-history`);
+    return data.data || [];
+  } catch (err) {
+    if (import.meta.env.DEV) console.error('[metrics-history]', err);
+    return [];
+  }
 }
 
 // ============================================
@@ -213,12 +324,20 @@ export interface UnifiedPool {
   aprTotal: number | null;
   aprAdjusted: number | null;
   volatilityAnn: number;
+  priceChange24h?: number;
   ratio: number;
   healthScore: number;
   penaltyTotal: number;
   bluechip: boolean;
   warnings: string[];
   updatedAt: string;
+  dataConfidence?: {
+    price?: { method: 'observed' | 'estimated_stable' | 'estimated_tvl' | 'unavailable'; confidence: 'high' | 'medium' | 'low' };
+    volume?: { method: 'observed' | 'supplement_gecko' | 'estimated_apy'; confidence: 'high' | 'medium' | 'low' };
+    fees?: { method: 'observed' | 'derived_volume' | 'estimated_apy'; confidence: 'high' | 'medium' | 'low' };
+    volatility?: { method: 'log_returns' | 'proxy'; dataPoints: number; confidence: 'high' | 'medium' | 'low' };
+    apr?: { method: 'real_fees' | 'adapter_apy' | 'unavailable'; confidence: 'high' | 'medium' | 'low' };
+  };
   // backward compat
   tvl: number;
   volume24h: number;
@@ -267,6 +386,11 @@ export interface FavoritePool {
   token1Symbol: string;
   protocol: string;
   addedAt: string;
+  // Live data enriched by backend from memory store (null = not yet loaded)
+  tvl: number | null;
+  apr: number | null;
+  score: number | null;
+  feeTier: number | null;
 }
 
 export interface PoolNote {
@@ -291,23 +415,19 @@ export async function fetchUnifiedPools(params?: {
   minTVL?: number;
   minHealth?: number;
 }): Promise<PoolsResponse> {
-  try {
-    const { data } = await api.get('/pools', { params });
-    // Support both old format (data.data) and new format
-    if (data?.pools) return data;
-    return { pools: data?.data || [], total: data?.count || 0, page: null, limit: 50, syncing: false };
-  } catch (e) {
-    console.error('fetchUnifiedPools error:', e);
-    return { pools: [], total: 0, page: null, limit: 50, syncing: false };
-  }
+  const { data } = await api.get('/pools', { params });
+  // Support both old format (data.data) and new format
+  if (data?.pools) return data;
+  return { pools: data?.data || [], total: data?.count || 0, page: null, limit: 50, syncing: false };
 }
 
 export async function fetchTokens(): Promise<string[]> {
   try {
     const { data } = await api.get('/tokens');
-    return Array.isArray(data) ? data : [];
+    const tokens = data?.data;
+    return Array.isArray(tokens) ? tokens : [];
   } catch (e) {
-    console.error('fetchTokens error:', e);
+    if (import.meta.env.DEV) console.error('fetchTokens error:', e);
     return [];
   }
 }
@@ -327,9 +447,14 @@ export async function fetchPoolDetail(chain: string, address: string, params?: {
 } | null> {
   try {
     const { data } = await api.get(`/pools-detail/${chain}/${address}`, { params });
-    return data?.data || null;
+    const result = data?.data || null;
+    if (result?.pool) {
+      validatePool(result.pool, 'fetchPoolDetail');
+      result.pool = safePool(result.pool);
+    }
+    return result;
   } catch (e) {
-    console.error('fetchPoolDetail error:', e);
+    if (import.meta.env.DEV) console.error('fetchPoolDetail error:', e);
     return null;
   }
 }
@@ -344,17 +469,251 @@ export async function calcRange(params: {
   capital?: number;
   tvl?: number;
   fees24h?: number;
+  chain?: string;
 }): Promise<{
   ranges: { DEFENSIVE: RangeResult; NORMAL: RangeResult; AGGRESSIVE: RangeResult };
   selected: RangeResult;
   feeEstimate: FeeEstimate;
   ilRisk: ILRiskResult;
+  tokenQuantities?: { amount0: number; amount1: number; amount0Usd: number; amount1Usd: number; ratio0Pct: number; ratio1Pct: number; zone: string };
+  capitalEfficiency?: { multiplier: number; v2EquivalentCapital: number; warning: string | null };
+  gasBreakeven?: { breakEvenDays: number; dailyFeeEstimate: number; totalGasCost: number; viable: boolean; warning: string | null };
+  healthFactor?: { factor: number; distToLower: number; distToUpper: number; status: string };
 } | null> {
   try {
     const { data } = await api.post('/range-calc', params);
     return data?.data || null;
   } catch (e) {
-    console.error('calcRange error:', e);
+    if (import.meta.env.DEV) console.error('calcRange error:', e);
+    return null;
+  }
+}
+
+// Liquidity Distribution
+export interface LiquidityBar {
+  price: number;
+  liquidity: number; // 0-100 normalized
+}
+
+export interface LiquidityDistribution {
+  bars: LiquidityBar[];
+  currentPrice: number;
+  tvl: number;
+  volatility: number;
+  rangeMin: number;
+  rangeMax: number;
+}
+
+export async function fetchLiquidityDistribution(chain: string, address: string, bars?: number): Promise<LiquidityDistribution | null> {
+  try {
+    const { data } = await api.get(`/pools-liquidity/${chain}/${address}`, { params: { bars } });
+    return data.data || null;
+  } catch {
+    return null;
+  }
+}
+
+// Monte Carlo Simulation
+export interface MonteCarloOutcome {
+  finalPrice: number;
+  priceChange: number;
+  feesEarned: number;
+  ilLoss: number;
+  pnl: number;
+  pnlPercent: number;
+  isInRange: boolean;
+}
+
+export interface MonteCarloResult {
+  scenarios: number;
+  horizonDays: number;
+  percentiles: {
+    p5: MonteCarloOutcome;
+    p25: MonteCarloOutcome;
+    p50: MonteCarloOutcome;
+    p75: MonteCarloOutcome;
+    p95: MonteCarloOutcome;
+  };
+  probProfit: number;
+  probOutOfRange: number;
+  avgPnl: number;
+  worstCase: MonteCarloOutcome;
+  bestCase: MonteCarloOutcome;
+  distribution: { bucket: string; count: number }[];
+  pool: { price: number; tvl: number; fees24h: number; volatility: number; rangeLower: number; rangeUpper: number };
+}
+
+export async function runMonteCarlo(params: {
+  chain: string;
+  address: string;
+  capital?: number;
+  horizonDays?: number;
+  scenarios?: number;
+  mode?: string;
+}): Promise<MonteCarloResult | null> {
+  try {
+    const { data } = await api.post('/monte-carlo', params);
+    return data.data || null;
+  } catch {
+    return null;
+  }
+}
+
+// Backtest
+export interface BacktestResult {
+  periodDays: number;
+  totalFees: number;
+  totalIL: number;
+  netPnl: number;
+  netPnlPercent: number;
+  maxDrawdown: number;
+  timeInRange: number;
+  rebalances: number;
+  dailyReturns: { day: number; cumPnl: number; fees: number; il: number }[];
+  pool: { price: number; tvl: number; fees24h: number; volatility: number; rangeLower: number; rangeUpper: number };
+}
+
+export async function runBacktest(params: {
+  chain: string;
+  address: string;
+  capital?: number;
+  periodDays?: number;
+  mode?: string;
+}): Promise<BacktestResult | null> {
+  try {
+    const { data } = await api.post('/backtest', params);
+    return data.data || null;
+  } catch {
+    return null;
+  }
+}
+
+// LVR (Loss-Versus-Rebalancing)
+export interface LVRResult {
+  lvrDaily: number;
+  lvrAnnualized: number;
+  lvrPercent: number;
+  feeToLvrRatio: number;
+  netAfterLvr: number;
+  verdict: 'profitable' | 'marginal' | 'unprofitable';
+  pool: { tvl: number; fees24h: number; volatility: number };
+}
+
+export async function fetchLVR(params: {
+  chain: string;
+  address: string;
+  capital?: number;
+  mode?: string;
+}): Promise<LVRResult | null> {
+  try {
+    const { data } = await api.post('/lvr', params);
+    return data.data || null;
+  } catch {
+    return null;
+  }
+}
+
+// Fee Tier Comparison
+export interface FeeTierComparison {
+  poolAddress: string;
+  feeTier: number;
+  feeTierBps: number;
+  tvl: number;
+  volume24h: number;
+  fees24h: number;
+  apr: number;
+  volatility: number;
+  healthScore: number;
+  feeEstimate30d: number;
+  ilRisk: number;
+  lvr: number;
+  lvrVerdict: string;
+  rangeWidth: number;
+  protocol: string;
+}
+
+export async function fetchFeeTiers(chain: string, token0: string, token1: string, capital?: number, mode?: string): Promise<FeeTierComparison[]> {
+  try {
+    const { data } = await api.get(`/fee-tiers/${chain}/${token0}/${token1}`, { params: { capital, mode } });
+    return data.data || [];
+  } catch {
+    return [];
+  }
+}
+
+// Portfolio Analytics
+export interface PortfolioAnalytics {
+  totalCapital: number;
+  totalPnl: number;
+  totalPnlPercent: number;
+  weightedApr: number;
+  sharpeRatio: number;
+  sortinoRatio: number;
+  maxDrawdown: number;
+  riskAdjustedApr: number;
+  diversificationScore: number;
+  allocationByChain: { chain: string; capital: number; percent: number }[];
+  allocationByProtocol: { protocol: string; capital: number; percent: number }[];
+  allocationByToken: { token: string; exposure: number; percent: number }[];
+  riskBand: 'conservative' | 'balanced' | 'aggressive';
+}
+
+export async function fetchPortfolioAnalytics(): Promise<PortfolioAnalytics | null> {
+  try {
+    const { data } = await api.get('/portfolio-analytics');
+    return data.data || null;
+  } catch {
+    return null;
+  }
+}
+
+// Auto-Compound Simulator
+export interface AutoCompoundResult {
+  withoutCompound: number;
+  withCompound: number;
+  compoundBenefit: number;
+  compoundBenefitPercent: number;
+  schedule: { period: number; valueSimple: number; valueCompound: number; feesEarned: number }[];
+  optimalFrequency: string;
+  gasCostEstimate: number;
+  pool: { apr: number; chain: string; address: string };
+}
+
+export async function runAutoCompound(params: {
+  chain: string;
+  address: string;
+  capital?: number;
+  periodDays?: number;
+  compoundFrequency?: string;
+  gasPerCompound?: number;
+}): Promise<AutoCompoundResult | null> {
+  try {
+    const { data } = await api.post('/auto-compound', params);
+    return data.data || null;
+  } catch {
+    return null;
+  }
+}
+
+// Token Correlation
+export interface TokenCorrelationResult {
+  token0: string;
+  token1: string;
+  correlation: number;
+  correlationLabel: string;
+  ilImpact: string;
+  pairType: 'stablecoin' | 'correlated' | 'uncorrelated' | 'inverse';
+  riskAssessment: string;
+  volToken0: number;
+  volToken1: number;
+  combinedVol: number;
+}
+
+export async function fetchTokenCorrelation(chain: string, address: string): Promise<TokenCorrelationResult | null> {
+  try {
+    const { data } = await api.get(`/token-correlation/${chain}/${address}`);
+    return data.data || null;
+  } catch {
     return null;
   }
 }
@@ -399,22 +758,9 @@ export async function deleteNote(id: string): Promise<void> {
   await api.delete(`/notes/${id}`);
 }
 
-export interface GasEstimate {
-  gasPriceGwei: number;
-  roundTripUsd: number;
-  isLive: boolean;
-  chain: string;
-  nativeTokenPriceUsd: number;
-  fetchedAt: number;
-}
-
-export async function fetchGasEstimates(): Promise<Record<string, GasEstimate>> {
-  try {
-    const { data } = await api.get('/gas');
-    return data.data || {};
-  } catch {
-    return {};
-  }
+export async function updateNote(id: string, text: string, tags?: string[]): Promise<PoolNote> {
+  const { data } = await api.put(`/notes/${id}`, { text, tags });
+  return data.data;
 }
 
 export async function fetchWatchlist(): Promise<{ poolId: string; chain: string; address: string }[]> {
@@ -448,9 +794,24 @@ export interface NotificationSettings {
 export async function fetchSettings(): Promise<{
   system: { mode: string; capital: number; chains: string[] };
   notifications: NotificationSettings;
-  telegram: { enabled: boolean; chatId: string | null };
+  telegram: { enabled: boolean; chatId: string | null; hasChatId?: boolean; hasBot?: boolean };
+  riskConfig?: any;
+  alertConfig?: { cooldownMinutes: number; maxAlertsPerHour: number; dedupeWindowMinutes: number };
 }> {
   const { data } = await api.get('/settings');
+  return data.data;
+}
+
+export async function updateTelegramConfig(params: {
+  chatId?: string;
+  botToken?: string;
+}): Promise<{
+  enabled: boolean;
+  chatId: string | null;
+  hasChatId: boolean;
+  hasBot: boolean;
+}> {
+  const { data } = await api.put('/settings/telegram', params);
   return data.data;
 }
 
@@ -459,7 +820,12 @@ export async function updateNotificationSettings(settings: Partial<NotificationS
   return data.data;
 }
 
-export async function testTelegramConnection(): Promise<{ success: boolean }> {
+export async function saveRiskConfig(riskConfig: any): Promise<any> {
+  const { data } = await api.put('/settings/risk-config', riskConfig);
+  return data.data;
+}
+
+export async function testTelegramConnection(): Promise<{ success: boolean; message?: string; error?: string }> {
   const { data } = await api.post('/settings/telegram/test');
   return data;
 }
@@ -505,8 +871,13 @@ export async function fetchAlerts(): Promise<{
   return data.data || { rules: [], recentAlerts: [] };
 }
 
-export async function createAlert(poolId: string | undefined, type: string, threshold: number): Promise<{ id: string }> {
-  const { data } = await api.post('/alerts', { poolId, type, threshold });
+export async function createAlert(
+  poolId: string | undefined,
+  type: string,
+  threshold: number,
+  condition?: { rangeLower: number; rangeUpper: number },
+): Promise<{ id: string }> {
+  const { data } = await api.post('/alerts', { poolId, type, threshold, condition });
   return data.data;
 }
 
@@ -517,6 +888,17 @@ export async function deleteAlert(id: string): Promise<void> {
 // ============================================
 // RANGE MONITORING
 // ============================================
+
+export interface PositionPnL {
+  feesAccrued: number;
+  ilActual: number;
+  pnl: number;
+  pnlPercent: number;
+  daysActive: number;
+  feeAPR: number;
+  hodlValue: number;
+  lpValue: number;
+}
 
 export interface RangePosition {
   id: string;
@@ -534,6 +916,11 @@ export interface RangePosition {
   createdAt: string;
   lastCheckedAt?: string;
   isActive: boolean;
+  // Enriched P&L data from backend
+  currentPrice?: number;
+  poolScore?: number | null;
+  poolApr?: number | null;
+  pnl?: PositionPnL | null;
 }
 
 export async function fetchRangePositions(): Promise<RangePosition[]> {
@@ -561,3 +948,279 @@ export async function createRangePosition(params: {
 export async function deleteRangePosition(id: string): Promise<void> {
   await api.delete('/ranges/' + id);
 }
+
+// ============================================
+// HISTORY
+// ============================================
+
+export interface PositionHistoryEntry {
+  id: string;
+  poolId: string;
+  chain: string;
+  poolAddress: string;
+  token0: string;
+  token1: string;
+  type: 'ENTRY' | 'EXIT' | 'REBALANCE' | 'FEE_COLLECT';
+  mode?: string;
+  capital?: number;
+  pnl?: number;
+  rangeLower?: number;
+  rangeUpper?: number;
+  price?: number;
+  note?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export async function fetchHistory(params?: {
+  poolId?: string; chain?: string; type?: string; limit?: number; offset?: number;
+}): Promise<{ data: PositionHistoryEntry[]; total: number }> {
+  try {
+    const { data } = await api.get('/history', { params });
+    return { data: data.data || [], total: data.total || 0 };
+  } catch {
+    return { data: [], total: 0 };
+  }
+}
+
+export async function createHistoryEntry(entry: Omit<PositionHistoryEntry, 'id' | 'createdAt'>): Promise<PositionHistoryEntry> {
+  const { data } = await api.post('/history', entry);
+  return data.data;
+}
+
+export async function deleteHistoryEntry(id: string): Promise<void> {
+  await api.delete('/history/' + id);
+}
+
+// ============================================================
+// INTEGRATIONS API — ETAPA 14
+// ============================================================
+
+export interface Integration {
+  id: string;
+  type: 'discord' | 'slack' | 'webhook';
+  name: string;
+  url: string;
+  enabled: boolean;
+  events: string[];
+  createdAt: string;
+  lastTriggeredAt?: string;
+  successCount: number;
+  errorCount: number;
+  lastError?: string;
+}
+
+function adminHeaders(adminKey?: string): Record<string, string> | undefined {
+  return adminKey ? { 'X-Admin-Key': adminKey } : undefined;
+}
+
+export async function fetchIntegrations(adminKey?: string): Promise<Integration[]> {
+  const res = await api.get<{ success: boolean; data: Integration[] }>('/integrations', { headers: adminHeaders(adminKey) });
+  return res.data.data ?? [];
+}
+
+export async function createIntegration(params: {
+  name: string;
+  type: 'discord' | 'slack' | 'webhook';
+  url: string;
+  enabled?: boolean;
+  events?: string[];
+}, adminKey?: string): Promise<Integration> {
+  const res = await api.post<{ success: boolean; data: Integration }>('/integrations', params, { headers: adminHeaders(adminKey) });
+  return res.data.data;
+}
+
+export async function updateIntegration(id: string, params: Partial<Pick<Integration, 'name' | 'url' | 'enabled' | 'events'>>, adminKey?: string): Promise<Integration> {
+  const res = await api.put<{ success: boolean; data: Integration }>(`/integrations/${id}`, params, { headers: adminHeaders(adminKey) });
+  return res.data.data;
+}
+
+export async function deleteIntegration(id: string, adminKey?: string): Promise<void> {
+  await api.delete(`/integrations/${id}`, { headers: adminHeaders(adminKey) });
+}
+
+export async function testIntegration(id: string, adminKey?: string): Promise<{ ok: boolean; statusCode?: number; error?: string }> {
+  const res = await api.post<{ success: boolean; data: { ok: boolean; statusCode?: number; error?: string } }>(`/integrations/${id}/test`, undefined, { headers: adminHeaders(adminKey) });
+  return res.data.data;
+}
+
+export async function testIntegrationUrl(url: string, type: string, adminKey?: string): Promise<{ ok: boolean; statusCode?: number; error?: string }> {
+  const res = await api.post<{ success: boolean; data: { ok: boolean; statusCode?: number; error?: string } }>('/integrations/test-url', { url, type }, { headers: adminHeaders(adminKey) });
+  return res.data.data;
+}
+
+// ============================================================
+// PRICE HISTORY (OHLCV) API — ETAPA 15
+// ============================================================
+
+export interface OhlcvCandle {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface OhlcvResult {
+  chain: string;
+  address: string;
+  timeframe: 'day' | 'hour' | 'minute';
+  candles: OhlcvCandle[];
+  currency: 'usd';
+  token: 'base' | 'quote';
+  fetchedAt: string;
+  synthetic?: boolean;
+}
+
+export async function fetchOhlcv(
+  chain: string,
+  address: string,
+  timeframe: 'day' | 'hour' | 'minute' = 'hour',
+  limit = 168
+): Promise<OhlcvResult | null> {
+  try {
+    const res = await api.get<{ success: boolean; data: OhlcvResult }>(
+      `/pools/${chain}/${address}/ohlcv?timeframe=${timeframe}&limit=${limit}`
+    );
+    return res.data.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ============================================================
+// RAW AXIOS CLIENT — ETAPA 17
+// Exported for hooks that need direct axios access (e.g. push notifications)
+// ============================================================
+// ============================================================
+// MARKET CONDITIONS — Fase 4
+// ============================================================
+
+export type MarketRegime =
+  | 'RANGING'
+  | 'TRENDING_UP'
+  | 'TRENDING_DOWN'
+  | 'HIGH_VOLATILITY'
+  | 'LOW_LIQUIDITY'
+  | 'UNKNOWN';
+
+export interface MarketConditions {
+  globalRegime: MarketRegime;
+  noOperateGlobal: boolean;
+  noOperateReason?: string;
+  poolCount: number;
+  highRiskCount: number;
+  updatedAt: string;
+}
+
+export async function fetchMarketConditions(): Promise<MarketConditions | null> {
+  try {
+    const { data } = await api.get<{ success: boolean; data: MarketConditions }>('/market-conditions');
+    return data.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ============================================================
+// DEEP ANALYSIS — Technical Indicators
+// ============================================================
+
+export interface DeepAnalysisData {
+  rsi: {
+    value: number;
+    signal: 'oversold' | 'neutral' | 'overbought';
+    periods: number;
+  };
+  macd: {
+    macdLine: number;
+    signalLine: number;
+    histogram: number;
+    signal: 'bullish' | 'neutral' | 'bearish';
+    crossover: 'bullish_cross' | 'bearish_cross' | 'none';
+  };
+  bollinger: {
+    upper: number;
+    middle: number;
+    lower: number;
+    bandwidth: number;
+    percentB: number;
+    signal: string;
+  };
+  volumeProfile: {
+    avgVolume: number;
+    currentVolume: number;
+    volumeTrend: number;
+    volumeTvlRatio: number;
+    isAbnormal: boolean;
+  };
+  momentum: {
+    score: number;
+    label: 'Strong Sell' | 'Sell' | 'Neutral' | 'Buy' | 'Strong Buy';
+    components: {
+      rsiSignal: number;
+      macdSignal: number;
+      bollingerSignal: number;
+      volumeSignal: number;
+      trendSignal: number;
+      smaSignal: number;
+    };
+  };
+  vwap: {
+    value: number;
+    deviation: number;
+    signal: 'above' | 'at' | 'below';
+  } | null;
+  sma: {
+    values: { period: number; value: number }[];
+    trend: 'bullish' | 'bearish' | 'neutral';
+    goldenCross: boolean;
+    deathCross: boolean;
+  } | null;
+  supportResistance: {
+    supports: number[];
+    resistances: number[];
+    nearestSupport: number | null;
+    nearestResistance: number | null;
+    distanceToSupport: number;
+    distanceToResistance: number;
+  } | null;
+  trend: {
+    direction: 'strong_up' | 'up' | 'sideways' | 'down' | 'strong_down';
+    strength: number;
+    priceChange: number;
+    higherHighs: boolean;
+    higherLows: boolean;
+  };
+  meta: {
+    chain: string;
+    address: string;
+    timeframe: string;
+    candlesUsed: number;
+    calculatedAt: string;
+  };
+}
+
+export async function fetchDeepAnalysis(
+  chain: string,
+  address: string,
+  timeframe: 'hour' | 'day' = 'hour'
+): Promise<DeepAnalysisData | null> {
+  try {
+    const { data } = await api.get(`/pools/${chain}/${address.toLowerCase()}/deep-analysis`, {
+      params: { timeframe },
+    });
+    return data.success ? data.data : null;
+  } catch (err: unknown) {
+    // 404 = insufficient data → return null (not an error, just no data)
+    if (err && typeof err === 'object' && 'response' in err) {
+      const axiosErr = err as { response?: { status?: number } };
+      if (axiosErr.response?.status === 404) return null;
+    }
+    // Other errors (500, network) → throw so React Query can retry
+    throw err;
+  }
+}
+
+export { api as apiClient };

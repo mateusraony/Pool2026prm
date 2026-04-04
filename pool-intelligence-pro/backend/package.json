@@ -5,18 +5,24 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js",
+    "build:frontend": "if [ -d ../frontend ] && [ ! -f public/index.html ]; then echo '[BUILD] Building frontend...' && cd ../frontend && NODE_ENV=development npm install --include=dev && npm run build && cd ../backend && rm -rf public && cp -r ../frontend/dist public && echo '[BUILD] Frontend built OK -> backend/public'; else echo '[BUILD] Skipped (public/index.html exists or no ../frontend)'; fi",
+    "build": "npm run build:frontend && npx prisma generate && tsc -p tsconfig.build.json",
+    "start": "prisma db push --accept-data-loss || echo '[WARN] prisma db push failed - schema may already be applied'; node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
-    "prisma:push": "prisma db push"
+    "prisma:push": "prisma db push",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
     "@prisma/client": "^5.7.0",
     "@types/compression": "^1.7.5",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
-    "@types/node": "^20.10.4",
+    "@types/node": "^20.19.35",
     "@types/node-cron": "^3.0.11",
     "@types/node-telegram-bot-api": "^0.64.1",
     "@types/uuid": "^9.0.7",
@@ -26,16 +32,30 @@
     "date-fns": "^2.30.0",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "express-rate-limit": "^8.3.1",
     "helmet": "^7.1.0",
     "node-cache": "^5.1.2",
     "node-cron": "^3.0.3",
-    "node-telegram-bot-api": "^0.64.0",
+    "node-telegram-bot-api": "^0.67.0",
     "prisma": "^5.7.0",
+    "request-promise-core": "^1.1.4",
+    "socket.io": "^4.8.3",
     "typescript": "^5.3.3",
     "uuid": "^9.0.1",
+    "web-push": "^3.6.7",
+    "@types/web-push": "^3.6.4",
     "zod": "^3.22.4"
   },
   "devDependencies": {
-    "tsx": "^4.6.2"
+    "@types/supertest": "^7.2.0",
+    "@vitest/coverage-v8": "^4.1.0",
+    "supertest": "^7.2.2",
+    "tsx": "^4.6.2",
+    "vitest": "^4.1.0"
+  },
+  "overrides": {
+    "form-data": "^4.0.4",
+    "qs": "^6.14.1",
+    "tough-cookie": "^5.0.0"
   }
 }

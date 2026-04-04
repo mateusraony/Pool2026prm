@@ -1,8 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import { RangePosition, Pool } from '../types/index.js';
 import { logService } from './log.service.js';
 import { telegramBot } from '../bot/telegram.js';
 import { getLatestRadarResults } from '../jobs/index.js';
 import { notificationSettingsService } from './notification-settings.service.js';
+import { getPrisma } from '../routes/prisma.js';
 
 // ============================================================
 // AI Suggestion Engine (rule-based with scoring)
@@ -98,9 +100,46 @@ class RangeMonitorService {
   private positions: Map<string, RangePosition> = new Map();
   private lastAlertTimes: Map<string, Date> = new Map();
   private alertCooldown = 30 * 60 * 1000; // 30 minutes between alerts
+  private dbLoaded = false;
+
+  /** Load positions from DB into memory on first access */
+  async loadFromDb(): Promise<void> {
+    if (this.dbLoaded) return;
+    try {
+      const prisma = getPrisma();
+      const records = await prisma.rangePositionRecord.findMany({ where: { isActive: true } });
+      for (const r of records) {
+        const pos: RangePosition = {
+          id: r.id,
+          poolId: r.poolId,
+          chain: r.chain,
+          poolAddress: r.poolAddress,
+          token0Symbol: r.token0Symbol,
+          token1Symbol: r.token1Symbol,
+          rangeLower: r.rangeLower,
+          rangeUpper: r.rangeUpper,
+          entryPrice: r.entryPrice,
+          capital: r.capital,
+          mode: r.mode as RangePosition['mode'],
+          alertThreshold: r.alertThreshold,
+          createdAt: r.createdAt,
+          lastCheckedAt: r.lastCheckedAt ?? undefined,
+          isActive: r.isActive,
+        };
+        this.positions.set(r.id, pos);
+      }
+      this.dbLoaded = true;
+      logService.info('RANGE', `Loaded ${records.length} range positions from DB`);
+    } catch (err) {
+      logService.error('RANGE', 'CRITICAL: Could not load range positions from DB — active alerts may not fire', {
+        error: String(err),
+      });
+      this.dbLoaded = true; // continua sem crash
+    }
+  }
 
   createPosition(position: Omit<RangePosition, 'id' | 'createdAt' | 'isActive'>): RangePosition {
-    const id = Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9);
+    const id = randomUUID();
     const fullPosition: RangePosition = {
       ...position,
       id,
@@ -109,6 +148,17 @@ class RangeMonitorService {
     };
 
     this.positions.set(id, fullPosition);
+
+    // Persist to DB asynchronously (non-blocking)
+    this.persistPosition(fullPosition).catch(err => {
+      logService.error('RANGE', 'CRITICAL: Failed to persist new range position to DB — position may be lost on restart', {
+        id,
+        poolAddress: position.poolAddress,
+        chain: position.chain,
+        error: String(err),
+      });
+    });
+
     logService.info('ALERT', 'Range position created', {
       id,
       pool: position.token0Symbol + '/' + position.token1Symbol,
@@ -116,6 +166,27 @@ class RangeMonitorService {
     });
 
     return fullPosition;
+  }
+
+  private async persistPosition(pos: RangePosition): Promise<void> {
+    const prisma = getPrisma();
+    await prisma.rangePositionRecord.create({
+      data: {
+        id: pos.id,
+        poolId: pos.poolId,
+        chain: pos.chain,
+        poolAddress: pos.poolAddress,
+        token0Symbol: pos.token0Symbol,
+        token1Symbol: pos.token1Symbol,
+        rangeLower: pos.rangeLower,
+        rangeUpper: pos.rangeUpper,
+        entryPrice: pos.entryPrice,
+        capital: pos.capital,
+        mode: pos.mode,
+        alertThreshold: pos.alertThreshold,
+        isActive: true,
+      },
+    });
   }
 
   getPositions(): RangePosition[] {
@@ -135,12 +206,32 @@ class RangeMonitorService {
     if (position) {
       position.isActive = false;
       logService.info('ALERT', 'Range position deactivated', { id });
+
+      // Persist deactivation to DB asynchronously
+      getPrisma().rangePositionRecord.update({
+        where: { id },
+        data: { isActive: false },
+      }).catch((err: unknown) => {
+        logService.warn('RANGE', 'Failed to persist position deactivation to DB', { id, error: String(err) });
+      });
+
       return true;
     }
     return false;
   }
 
+  /** Remove entradas de lastAlertTimes com mais de 24h */
+  private cleanupAlertTimes(): void {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    for (const [id, date] of this.lastAlertTimes.entries()) {
+      if (date.getTime() < cutoff) {
+        this.lastAlertTimes.delete(id);
+      }
+    }
+  }
+
   async checkAllPositions(): Promise<void> {
+    this.cleanupAlertTimes();
     const activePositions = this.getPositions();
     if (activePositions.length === 0) return;
 
@@ -175,6 +266,11 @@ class RangeMonitorService {
   ): Promise<void> {
     const { rangeLower, rangeUpper, alertThreshold, token0Symbol, token1Symbol } = position;
 
+    if (!currentPrice || currentPrice <= 0) {
+      logService.warn('RANGE', 'Cannot calculate distance — price is zero', { positionId: position.id });
+      return;
+    }
+
     const distanceToLower = ((currentPrice - rangeLower) / currentPrice) * 100;
     const distanceToUpper = ((rangeUpper - currentPrice) / currentPrice) * 100;
     const nearLowerEdge = distanceToLower <= alertThreshold && distanceToLower > 0;
@@ -183,9 +279,19 @@ class RangeMonitorService {
 
     position.lastCheckedAt = new Date();
 
+    // Skip if Telegram is not configured
+    if (!telegramBot.isEnabled()) {
+      logService.info('RANGE', 'Alert skipped — Telegram not configured', { positionId: position.id });
+      return;
+    }
+
     // Cooldown check
     const lastAlert = this.lastAlertTimes.get(position.id);
     if (lastAlert && Date.now() - lastAlert.getTime() < this.alertCooldown) {
+      logService.info('RANGE', 'Alert in cooldown', {
+        positionId: position.id,
+        cooldownRemainingMs: this.alertCooldown - (Date.now() - lastAlert.getTime()),
+      });
       return;
     }
 
@@ -243,6 +349,10 @@ class RangeMonitorService {
   async sendPortfolioReport(): Promise<void> {
     const positions = this.getPositions();
     if (positions.length === 0) return;
+    if (!telegramBot.isEnabled()) {
+      logService.warn('ALERT', 'Portfolio report skipped: Telegram not configured');
+      return;
+    }
 
     const radarResults = getLatestRadarResults();
     const settings = notificationSettingsService.getSettings();

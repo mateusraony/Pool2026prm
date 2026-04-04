@@ -1,10 +1,18 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { TrendingUp, TrendingDown, Clock, Fuel, DollarSign, AlertTriangle, ArrowLeft, ExternalLink, Bell, BellRing, Check } from 'lucide-react';
-import { fetchPool, fetchPools, createRangePosition, fetchRangePositions, deleteRangePosition, Pool, Score, fetchGasEstimates } from '../api/client';
-import InteractiveChart from '../components/charts/InteractiveChart';
+import { TrendingUp, TrendingDown, Clock, Fuel, DollarSign, AlertTriangle, ArrowLeft, ExternalLink, Bell, BellRing, Check, BarChart3 } from 'lucide-react';
+import { fetchPool, fetchPools, createRangePosition, fetchRangePositions, deleteRangePosition, calcRange, fetchOhlcv, fetchLiquidityDistribution, Pool, Score } from '../api/client';
+import { feeTierToBps, feeTierToPercent } from '../data/constants';
+import { UniswapRangeChart } from '@/components/charts/UniswapRangeChart';
 import clsx from 'clsx';
+
+type Period = '7D' | '30D' | 'YTD';
+const periodConfig: Record<Period, { timeframe: 'hour' | 'day'; limit: number; days: number; label: string }> = {
+  '7D': { timeframe: 'hour', limit: 168, days: 7, label: '7 Dias' },
+  '30D': { timeframe: 'day', limit: 30, days: 30, label: '30 Dias' },
+  'YTD': { timeframe: 'day', limit: 365, days: 365, label: 'Ano' },
+};
 
 function formatNum(num: number): string {
   if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
@@ -14,38 +22,11 @@ function formatNum(num: number): string {
 
 type Mode = 'DEFENSIVE' | 'NORMAL' | 'AGGRESSIVE';
 
-// Static fallback config (used only when volatility unavailable)
-const modeConfigStatic = {
+const modeConfig = {
   DEFENSIVE: { emoji: '🛡️', label: 'Defensivo', rangePercent: 15, color: 'success' },
   NORMAL: { emoji: '⚖️', label: 'Normal', rangePercent: 10, color: 'warning' },
   AGGRESSIVE: { emoji: '🎯', label: 'Agressivo', rangePercent: 5, color: 'danger' },
 };
-
-/**
- * Compute dynamic range width from real pool volatility.
- * Mirrors backend calcRangeRecommendation: width = z * volAnn * sqrt(horizonDays/365)
- * Clamped to [0.3%, 45%] for CL pools, max 3% for stable pools.
- */
-function getDynamicModeConfig(volAnn: number | undefined, isStable: boolean) {
-  if (!volAnn || volAnn <= 0) return modeConfigStatic;
-
-  const zMap = { DEFENSIVE: 0.8, NORMAL: 1.2, AGGRESSIVE: 1.8 };
-  const horizonDays = 7;
-  const sqrtT = Math.sqrt(horizonDays / 365);
-
-  const calc = (z: number) => {
-    let w = z * volAnn * sqrtT * 100; // convert to %
-    w = Math.max(0.3, Math.min(45, w));
-    if (isStable) w = Math.min(3, w);
-    return Math.round(w * 10) / 10;
-  };
-
-  return {
-    DEFENSIVE: { ...modeConfigStatic.DEFENSIVE, rangePercent: calc(zMap.DEFENSIVE) },
-    NORMAL: { ...modeConfigStatic.NORMAL, rangePercent: calc(zMap.NORMAL) },
-    AGGRESSIVE: { ...modeConfigStatic.AGGRESSIVE, rangePercent: calc(zMap.AGGRESSIVE) },
-  };
-}
 
 function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
   const queryClient = useQueryClient();
@@ -53,25 +34,14 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
   const [capital, setCapital] = useState(100);
   const [customRange, setCustomRange] = useState<{ lower: number; upper: number } | null>(null);
   const [monitorSuccess, setMonitorSuccess] = useState(false);
+  const [period, setPeriod] = useState<Period>('7D');
 
-  // Fetch dynamic gas estimates from API
-  const { data: gasEstimates } = useQuery({
-    queryKey: ['gas'],
-    queryFn: fetchGasEstimates,
-    staleTime: 60000, // refresh every 60s
-  });
-
-  // Use real pool price from API. When unavailable, show warning instead of fabricating a price.
-  const hasRealPrice = pool.price != null && pool.price > 0;
-  const currentPrice = hasRealPrice ? pool.price! : 1; // placeholder for math when no price
-
-  // Detect stable pair for range clamping
-  const stableTokens = ['USDC', 'USDT', 'DAI', 'FRAX', 'LUSD', 'BUSD'];
-  const isStable = stableTokens.some(s => pool.token0?.symbol?.includes(s)) &&
-                   stableTokens.some(s => pool.token1?.symbol?.includes(s));
-
-  // Dynamic mode config based on real volatility
-  const modeConfig = getDynamicModeConfig(pool.volatilityAnn, isStable);
+  // Real price: use pool.price from backend, or derive from token prices ratio
+  const derivedPrice = (pool.token0?.priceUsd != null && pool.token1?.priceUsd != null && pool.token1.priceUsd > 0)
+    ? pool.token0.priceUsd / pool.token1.priceUsd
+    : undefined;
+  const currentPrice = pool.price || derivedPrice || 0;
+  const priceUnavailable = currentPrice === 0;
   const config = modeConfig[mode];
 
   // Check if this pool is already being monitored
@@ -80,12 +50,13 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
     queryFn: fetchRangePositions,
   });
 
-  const isMonitoring = rangePositions?.some(p => p.poolId === pool.externalId && p.isActive);
+  const poolId = pool.poolAddress || pool.externalId;
+  const isMonitoring = rangePositions?.some(p => p.poolId === poolId && p.isActive);
 
   // Create range monitor mutation
   const createMonitorMutation = useMutation({
     mutationFn: () => createRangePosition({
-      poolId: pool.externalId,
+      poolId,
       chain: pool.chain,
       poolAddress: pool.poolAddress,
       token0Symbol: pool.token0?.symbol ?? '???',
@@ -114,7 +85,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
 
   const handleMonitorRange = () => {
     if (isMonitoring) {
-      const position = rangePositions?.find(p => p.poolId === pool.externalId && p.isActive);
+      const position = rangePositions?.find(p => p.poolId === poolId && p.isActive);
       if (position) {
         deleteMonitorMutation.mutate(position.id);
       }
@@ -123,9 +94,9 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
     }
   };
 
-  // Calculate range based on mode or custom
-  const rangeLower = customRange?.lower ?? currentPrice * (1 - config.rangePercent / 100);
-  const rangeUpper = customRange?.upper ?? currentPrice * (1 + config.rangePercent / 100);
+  // Calculate range based on mode or custom (local fallback %)
+  const localRangeLower = currentPrice * (1 - config.rangePercent / 100);
+  const localRangeUpper = currentPrice * (1 + config.rangePercent / 100);
 
   const handleRangeChange = (lower: number, upper: number) => {
     setCustomRange({ lower, upper });
@@ -136,24 +107,108 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
     setCustomRange(null); // Reset custom range when mode changes
   };
 
+  // Server-side range calculation via /range-calc API
+  const { data: serverCalc } = useQuery({
+    queryKey: ['range-calc', pool.chain, pool.poolAddress, mode, capital, currentPrice],
+    queryFn: () => calcRange({
+      price: currentPrice,
+      volAnn: pool.volatilityAnn || 0.40,
+      horizonDays: 7,
+      riskMode: mode,
+      poolType: 'CL',
+      capital,
+      tvl: pool.tvl,
+      fees24h: pool.fees24h,
+      chain: pool.chain,
+    }),
+    enabled: currentPrice > 0,
+    staleTime: 60_000,
+  });
+
+  // Prefer server-calculated range, fallback to local %
+  const serverRange = serverCalc?.ranges?.[mode];
+  const rangeLower = customRange?.lower ?? serverRange?.lower ?? localRangeLower;
+  const rangeUpper = customRange?.upper ?? serverRange?.upper ?? localRangeUpper;
+
+  // OHLCV data for UniswapRangeChart price history (tied to period selector)
+  const pCfg = periodConfig[period];
+  const { data: ohlcvData } = useQuery({
+    queryKey: ['ohlcv-sim', pool.chain, pool.poolAddress, pCfg.timeframe, pCfg.limit],
+    queryFn: () => fetchOhlcv(pool.chain || '', pool.poolAddress || '', pCfg.timeframe, pCfg.limit),
+    enabled: !!(pool.chain && pool.poolAddress),
+    staleTime: 300_000,
+  });
+
+  const { data: liqData } = useQuery({
+    queryKey: ['liquidity-sim', pool.chain, pool.poolAddress],
+    queryFn: () => fetchLiquidityDistribution(pool.chain || '', pool.poolAddress || '', 50),
+    enabled: !!(pool.chain && pool.poolAddress),
+    staleTime: 300_000,
+  });
+
+  const priceHistoryData = useMemo(() => {
+    if (!ohlcvData?.candles) return [];
+    return ohlcvData.candles.map((c: any) => ({ timestamp: c.timestamp * 1000, price: c.close }));
+  }, [ohlcvData]);
+
+  const volumeHistoryData = useMemo(() => {
+    if (!ohlcvData?.candles) return [];
+    return ohlcvData.candles.map((c: any) => ({ timestamp: c.timestamp * 1000, volume: c.volume ?? 0 }));
+  }, [ohlcvData]);
+
+  // Color based on current mode
+  const modeChartColor = mode === 'DEFENSIVE' ? '#10b981' : mode === 'AGGRESSIVE' ? '#ef4444' : '#FF37C7';
+
   const metrics = useMemo(() => {
-    const rangeWidth = ((rangeUpper - rangeLower) / currentPrice) * 100;
+    const rangeWidth = currentPrice > 0 ? ((rangeUpper - rangeLower) / currentPrice) * 100 : 0;
+    const volAnn = pool.volatilityAnn || 0.40;
 
-    // --- LIVE CALCULATIONS BASED ON REAL POOL VOLATILITY ---
-    // Uses pool.volatilityAnn from backend (calculated from OHLCV price data).
-    // If unavailable, use type-aware estimate: stable pairs ~5%, crypto pairs ~50%
-    const volAnn = (pool.volatilityAnn && pool.volatilityAnn > 0)
-      ? pool.volatilityAnn
-      : (isStable ? 0.05 : 0.50);
+    // Gas costs: realistic L1/L2 values (entry + exit round trip)
+    const gasMap: Record<string, number> = {
+      ethereum: 30, arbitrum: 3, base: 1.5, optimism: 2, polygon: 0.5,
+    };
+    const gasEstimate = gasMap[pool.chain] ?? 5;
+    const gasPercent = capital > 0 ? (gasEstimate / capital) * 100 : 0;
 
-    // Time in range (7 days): probability price stays within [rangeLower, rangeUpper]
-    // Uses lognormal model: P(out) = 2 * (1 - Φ(d)), where d = ln(upper/price) / (σ√T)
+    // Prefer server-side calculations, fall back to local math
+    if (serverCalc) {
+      const selected = serverCalc.ranges[mode] || serverCalc.selected;
+      const timeInRange = Math.round((1 - (selected?.probOutOfRange ?? 0.3)) * 100);
+      const feesPercent = capital > 0 && serverCalc.feeEstimate
+        ? (serverCalc.feeEstimate.expectedFees7d / capital) * 100
+        : 0;
+      // ilRiskScore é probabilidade de sair do range (0..1), NÃO percentual de IL
+      // Calcular IL com a mesma fórmula do fallback local para consistência
+      const volAnn_srv = pool.volatilityAnn || 0.40;
+      const sqrtT_srv = Math.sqrt(7 / 365);
+      const weeklyVol_srv = volAnn_srv * sqrtT_srv;
+      const widthFraction_srv = rangeWidth > 0 ? rangeWidth / 100 : 0.10;
+      const concentrationFactor_srv = Math.min(5, 0.10 / widthFraction_srv);
+      const ilPercent = Math.max(0, 0.5 * weeklyVol_srv * weeklyVol_srv * concentrationFactor_srv * 100);
+      const netReturn = feesPercent - ilPercent - gasPercent;
+
+      return {
+        feesPercent,
+        feesUsd: (feesPercent / 100) * capital,
+        ilPercent,
+        ilUsd: (ilPercent / 100) * capital,
+        timeInRange: Math.max(0, Math.min(100, timeInRange)),
+        gasEstimate,
+        netReturnPercent: netReturn,
+        netReturnUsd: (netReturn / 100) * capital,
+        apr: netReturn * 52,
+        rangeWidth,
+        volAnn,
+        source: 'server' as const,
+      };
+    }
+
+    // --- LOCAL FALLBACK (when API is unavailable) ---
     const horizonDays = 7;
     const sqrtT = Math.sqrt(horizonDays / 365);
     const halfWidth = rangeUpper > currentPrice && currentPrice > 0
       ? Math.log(rangeUpper / currentPrice) / (volAnn * sqrtT)
-      : 2; // fallback: ~95% in range
-    // Standard normal CDF approximation (Abramowitz & Stegun)
+      : 2;
     const absCDF = (z: number): number => {
       const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741;
       const a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
@@ -166,27 +221,14 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
     const probOut = Math.max(0, Math.min(1, 2 * (1 - absCDF(halfWidth))));
     const timeInRange = Math.round((1 - probOut) * 100);
 
-    // Fee calculation: APR × portion of time in range
     const annualApr = score?.breakdown?.return?.aprEstimate ?? pool.apr ?? 0;
     const weeklyFeeRate = annualApr / 52;
     const feesPercent = weeklyFeeRate * (timeInRange / 100);
 
-    // Impermanent Loss (IL): uses real volatility, not hardcoded values
-    // Weekly IL ≈ 0.5 * (σ²) * T * concentration_factor
-    // concentration_factor scales with how narrow the range is
-    const widthFraction = rangeWidth / 100; // e.g. 0.10 for ±10%
+    const widthFraction = rangeWidth / 100;
     const concentrationFactor = widthFraction > 0 ? Math.min(5, 0.10 / widthFraction) : 1;
     const weeklyVol = volAnn * sqrtT;
     const ilPercent = Math.max(0, 0.5 * weeklyVol * weeklyVol * concentrationFactor * 100);
-
-    // Gas costs: dynamic from API (JSON-RPC eth_gasPrice) with static fallback
-    const staticGasMap: Record<string, number> = {
-      ethereum: 30, arbitrum: 3, base: 1.5, optimism: 2, polygon: 0.5,
-    };
-    const liveGas = gasEstimates?.[pool.chain];
-    const gasEstimate = liveGas?.roundTripUsd ?? staticGasMap[pool.chain] ?? 5;
-    const gasIsLive = liveGas?.isLive ?? false;
-    const gasPercent = (gasEstimate / capital) * 100;
 
     const netReturn = feesPercent - ilPercent - gasPercent;
 
@@ -201,18 +243,20 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
       netReturnUsd: (netReturn / 100) * capital,
       apr: netReturn * 52,
       rangeWidth,
-      volAnn, // expose for UI display
-      gasIsLive,
+      volAnn,
+      source: 'local' as const,
     };
-  }, [rangeLower, rangeUpper, capital, score, currentPrice, pool.chain, pool.volatilityAnn, mode, gasEstimates]);
+  }, [rangeLower, rangeUpper, capital, score, currentPrice, pool.chain, pool.volatilityAnn, mode, serverCalc]);
 
   const isPositive = metrics.netReturnPercent >= 0;
 
-  // Uniswap URL — feeTier needs to be in bps (e.g. 3000 for 0.3%)
-  const feeTierBps = pool.feeTier ? Math.round(pool.feeTier * 1000000) : undefined;
-  const uniswapUrl = feeTierBps
-    ? `https://app.uniswap.org/add/${pool.token0?.address ?? ''}/${pool.token1?.address ?? ''}/${feeTierBps}?chain=${pool.chain}`
-    : `https://app.uniswap.org/add/${pool.token0?.address ?? ''}/${pool.token1?.address ?? ''}?chain=${pool.chain}`;
+  // Uniswap URL — feeTier normalized to bps (handles both fraction and bps input)
+  const feeTierBps = feeTierToBps(pool.feeTier);
+  const token0Addr = pool.token0?.address ?? '';
+  const token1Addr = pool.token1?.address ?? '';
+  const uniswapUrl = token0Addr && token1Addr
+    ? `https://app.uniswap.org/add/${token0Addr}/${token1Addr}/${feeTierBps}?chain=${pool.chain}`
+    : null;
 
   return (
     <div className="space-y-6">
@@ -224,18 +268,18 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
             <div className="flex items-center gap-2">
               <span className="text-dark-400 text-sm">Preço {pool.token0?.symbol}:</span>
               <span className="font-mono font-semibold">
-                {pool.token0?.priceUsd ? '$' + pool.token0.priceUsd.toFixed(4) : <span className="text-warning-400">API sem dados</span>}
+                {pool.token0?.priceUsd != null ? '$' + pool.token0.priceUsd.toFixed(4) : <span className="text-warning-400">API sem dados</span>}
               </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-dark-400 text-sm">Preço {pool.token1?.symbol}:</span>
               <span className="font-mono font-semibold">
-                {pool.token1?.priceUsd ? '$' + pool.token1.priceUsd.toFixed(4) : <span className="text-warning-400">API sem dados</span>}
+                {pool.token1?.priceUsd != null ? '$' + pool.token1.priceUsd.toFixed(4) : <span className="text-warning-400">API sem dados</span>}
               </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-dark-400 text-sm">Fee Tier:</span>
-              <span className="font-mono font-semibold">{pool.feeTier ? (pool.feeTier * 100).toFixed(2) + '%' : 'N/A'}</span>
+              <span className="font-mono font-semibold">{pool.feeTier ? feeTierToPercent(pool.feeTier).toFixed(2) + '%' : 'N/A'}</span>
             </div>
           </div>
 
@@ -259,27 +303,60 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
             <div className="stat-card">
               <div className="stat-label">Preco Atual</div>
               <div className="stat-value font-mono">
-                {hasRealPrice
-                  ? '$' + currentPrice.toFixed(2)
-                  : <span className="text-warning-400 text-sm">Sem dados de preco</span>
-                }
+                {priceUnavailable
+                  ? <span className="text-warning-400">Indisponivel</span>
+                  : '$' + currentPrice.toFixed(2)}
               </div>
+              {derivedPrice && !pool.price && (
+                <div className="text-[10px] text-dark-500">via tokens</div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Interactive Chart */}
-      <InteractiveChart
-        currentPrice={currentPrice}
-        minPrice={currentPrice * 0.5}
-        maxPrice={currentPrice * 1.5}
-        rangeLower={rangeLower}
-        rangeUpper={rangeUpper}
-        onRangeChange={handleRangeChange}
-        token0Symbol={pool.token0?.symbol ?? '???'}
-        token1Symbol={pool.token1?.symbol ?? '???'}
-      />
+      {/* Price warning */}
+      {priceUnavailable && (
+        <div className="bg-danger-500/10 border border-danger-500/30 rounded-xl p-4 flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-danger-400 flex-shrink-0" />
+          <div>
+            <p className="font-medium text-danger-400">Preco indisponivel para esta pool</p>
+            <p className="text-sm text-dark-400">A simulacao nao pode ser realizada sem dados de preco reais. Tente novamente em alguns minutos.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Period selector + Uniswap-style Range Chart */}
+      {!priceUnavailable && (
+        <div className="flex items-center gap-2 mb-2">
+          {(['7D', '30D', 'YTD'] as Period[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              className={clsx(
+                'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
+                period === p ? 'bg-primary-600 text-white' : 'bg-dark-700 text-dark-400 hover:bg-dark-600'
+              )}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+      )}
+      {!priceUnavailable && (
+        <UniswapRangeChart
+          priceHistory={priceHistoryData}
+          currentPrice={currentPrice}
+          rangeLower={rangeLower}
+          rangeUpper={rangeUpper}
+          onRangeChange={handleRangeChange}
+          liquidityData={liqData?.bars?.map((b: any) => ({ price: b.price, liquidity: b.liquidity }))}
+          volumeData={volumeHistoryData}
+          timeInRange={metrics.timeInRange}
+          height={300}
+          accentColor={modeChartColor}
+        />
+      )}
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Controls */}
@@ -295,7 +372,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
                 <input
                   type="number"
                   value={capital}
-                  onChange={(e) => setCapital(Number(e.target.value) || 0)}
+                  onChange={(e) => { const n = parseFloat(e.target.value); if (!isNaN(n) && n >= 0) setCapital(n); else if (e.target.value === '' || e.target.value === '0') setCapital(0); }}
                   className="input text-2xl font-bold flex-1"
                   min={0}
                 />
@@ -318,7 +395,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
 
             <div>
               <label className="block text-sm text-dark-400 mb-3">Modo de Operacao</label>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {(Object.keys(modeConfig) as Mode[]).map((m) => {
                   const cfg = modeConfig[m];
                   const isRecommended = (score?.recommendedMode ?? 'NORMAL') === m;
@@ -411,12 +488,9 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
             {/* Data source indicator */}
             <div className="text-xs text-dark-500 flex items-center gap-2 px-1">
               <span>Vol. anual: {(metrics.volAnn * 100).toFixed(0)}%</span>
-              <span className={pool.volatilityAnn && pool.volatilityAnn > 0 ? 'text-success-500' : 'text-warning-500'}>
-                {pool.volatilityAnn && pool.volatilityAnn > 0 ? '(OHLCV real)' : '(estimativa por tipo)'}
-              </span>
-              <span>| Range: ±{config.rangePercent.toFixed(1)}%</span>
-              <span className={metrics.gasIsLive ? 'text-success-500' : ''}>
-                | Gas: {metrics.gasIsLive ? 'RPC ao vivo' : 'estimativa fixa'}
+              <span>{pool.volatilityAnn ? '(dados reais)' : '(estimativa)'}</span>
+              <span className={metrics.source === 'server' ? 'text-success-500' : 'text-warning-500'}>
+                {metrics.source === 'server' ? '● API' : '● Local'}
               </span>
             </div>
 
@@ -455,20 +529,96 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
               </div>
             )}
 
+            {/* Enhanced analysis from server */}
+            {serverCalc && (
+              <div className="space-y-3">
+                {/* Token Quantities */}
+                {serverCalc.tokenQuantities && (
+                  <div className="bg-dark-700/50 rounded-lg p-3">
+                    <div className="text-xs text-dark-400 mb-2 font-medium">Deposito Necessario</div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <span className="text-xs text-dark-500">{pool.token0?.symbol}</span>
+                        <div className="font-mono font-bold">{serverCalc.tokenQuantities.amount0.toFixed(6)}</div>
+                        <div className="text-xs text-dark-400">${serverCalc.tokenQuantities.amount0Usd.toFixed(2)} ({serverCalc.tokenQuantities.ratio0Pct}%)</div>
+                      </div>
+                      <div>
+                        <span className="text-xs text-dark-500">{pool.token1?.symbol}</span>
+                        <div className="font-mono font-bold">{serverCalc.tokenQuantities.amount1.toFixed(2)}</div>
+                        <div className="text-xs text-dark-400">${serverCalc.tokenQuantities.amount1Usd.toFixed(2)} ({serverCalc.tokenQuantities.ratio1Pct}%)</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Capital Efficiency + Gas Break-even + Health Factor */}
+                <div className="grid grid-cols-3 gap-2">
+                  {serverCalc.capitalEfficiency && (
+                    <div className="bg-dark-700/50 rounded-lg p-2 text-center">
+                      <div className="text-[10px] text-dark-400 mb-0.5">Eficiencia</div>
+                      <div className="font-mono font-bold text-primary-400">{serverCalc.capitalEfficiency.multiplier}x</div>
+                      <div className="text-[10px] text-dark-500">vs V2</div>
+                    </div>
+                  )}
+                  {serverCalc.gasBreakeven && (
+                    <div className="bg-dark-700/50 rounded-lg p-2 text-center">
+                      <div className="text-[10px] text-dark-400 mb-0.5">Break-even Gas</div>
+                      <div className={clsx('font-mono font-bold', serverCalc.gasBreakeven.viable ? 'text-success-400' : 'text-danger-400')}>
+                        {serverCalc.gasBreakeven.breakEvenDays === Infinity ? '∞' : serverCalc.gasBreakeven.breakEvenDays + 'd'}
+                      </div>
+                      <div className="text-[10px] text-dark-500">${serverCalc.gasBreakeven.totalGasCost} gas</div>
+                    </div>
+                  )}
+                  {serverCalc.healthFactor && (
+                    <div className="bg-dark-700/50 rounded-lg p-2 text-center">
+                      <div className="text-[10px] text-dark-400 mb-0.5">Saude do Range</div>
+                      <div className={clsx('font-mono font-bold',
+                        serverCalc.healthFactor.status === 'healthy' ? 'text-success-400' :
+                        serverCalc.healthFactor.status === 'warning' ? 'text-warning-400' : 'text-danger-400'
+                      )}>
+                        {serverCalc.healthFactor.factor}%
+                      </div>
+                      <div className="text-[10px] text-dark-500">
+                        ↓{serverCalc.healthFactor.distToLower}% ↑{serverCalc.healthFactor.distToUpper}%
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Warnings */}
+                {serverCalc.capitalEfficiency?.warning && (
+                  <div className="bg-warning-500/10 border border-warning-500/30 rounded-lg p-2 text-xs text-warning-400">
+                    ⚠ {serverCalc.capitalEfficiency.warning}
+                  </div>
+                )}
+                {serverCalc.gasBreakeven?.warning && (
+                  <div className="bg-danger-500/10 border border-danger-500/30 rounded-lg p-2 text-xs text-danger-400">
+                    ⚠ {serverCalc.gasBreakeven.warning}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
-              <a
-                href={uniswapUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-primary py-4 text-lg flex items-center justify-center gap-2"
-              >
-                🚀 Uniswap
-                <ExternalLink className="w-4 h-4" />
-              </a>
+              {uniswapUrl ? (
+                <a
+                  href={uniswapUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-primary py-4 text-lg flex items-center justify-center gap-2"
+                >
+                  🚀 Uniswap
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              ) : (
+                <button disabled className="btn btn-primary py-4 text-lg flex items-center justify-center gap-2 opacity-50 cursor-not-allowed">
+                  🚀 Uniswap
+                </button>
+              )}
 
               <button
                 onClick={handleMonitorRange}
-                disabled={createMonitorMutation.isPending || deleteMonitorMutation.isPending}
+                disabled={createMonitorMutation.isPending || deleteMonitorMutation.isPending || priceUnavailable}
                 className={clsx(
                   'py-4 text-lg flex items-center justify-center gap-2 rounded-xl font-semibold transition-all',
                   isMonitoring
@@ -513,6 +663,99 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
           </div>
         </div>
       </div>
+
+      {/* HODL vs LP Comparison */}
+      {!priceUnavailable && (
+        <HodlVsLpComparison
+          capital={capital}
+          feesPercent={metrics.feesPercent}
+          ilPercent={metrics.ilPercent}
+          gasPercent={capital > 0 ? (metrics.gasEstimate / capital) * 100 : 0}
+          period={period}
+          apr={metrics.apr}
+        />
+      )}
+    </div>
+  );
+}
+
+function HodlVsLpComparison({ capital, feesPercent, ilPercent, gasPercent, period, apr }: {
+  capital: number;
+  feesPercent: number;
+  ilPercent: number;
+  gasPercent: number;
+  period: Period;
+  apr: number;
+}) {
+  const days = periodConfig[period].days;
+  const periodMultiplier = days / 7; // metrics are for 7 days
+  const lpReturn = (feesPercent - ilPercent - gasPercent) * periodMultiplier;
+  const lpValue = capital * (1 + lpReturn / 100);
+  // HODL assumes 0% return (just holding tokens)
+  const hodlValue = capital;
+  const diff = lpValue - hodlValue;
+  const diffPercent = capital > 0 ? (diff / capital) * 100 : 0;
+  const lpWins = diff >= 0;
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <h2 className="font-semibold flex items-center gap-2">
+          <BarChart3 className="w-5 h-5" />
+          HODL vs LP — Comparacao ({period})
+        </h2>
+      </div>
+      <div className="card-body">
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className={clsx(
+            'rounded-xl p-4 border-2 text-center',
+            !lpWins ? 'border-success-500/50 bg-success-500/10' : 'border-dark-600 bg-dark-700/50'
+          )}>
+            <div className="text-sm text-dark-400 mb-1">HODL</div>
+            <div className="text-2xl font-bold">${hodlValue.toFixed(2)}</div>
+            <div className="text-sm text-dark-400 mt-1">+0.00%</div>
+          </div>
+          <div className={clsx(
+            'rounded-xl p-4 border-2 text-center',
+            lpWins ? 'border-success-500/50 bg-success-500/10' : 'border-dark-600 bg-dark-700/50'
+          )}>
+            <div className="text-sm text-dark-400 mb-1">Liquidity Provider</div>
+            <div className={clsx('text-2xl font-bold', lpWins ? 'text-success-400' : 'text-danger-400')}>
+              ${lpValue.toFixed(2)}
+            </div>
+            <div className={clsx('text-sm mt-1', lpWins ? 'text-success-400' : 'text-danger-400')}>
+              {(lpReturn >= 0 ? '+' : '') + lpReturn.toFixed(2)}%
+            </div>
+          </div>
+        </div>
+
+        <div className={clsx(
+          'rounded-lg p-3 text-center font-medium',
+          lpWins ? 'bg-success-500/10 text-success-400' : 'bg-danger-500/10 text-danger-400'
+        )}>
+          {lpWins
+            ? `LP ganha +$${diff.toFixed(2)} (+${diffPercent.toFixed(2)}%) vs HODL`
+            : `HODL ganha +$${Math.abs(diff).toFixed(2)} (+${Math.abs(diffPercent).toFixed(2)}%) vs LP`
+          }
+        </div>
+
+        <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+          <div className="bg-dark-700/50 rounded-lg p-2">
+            <div className="text-dark-400">Fees ({period})</div>
+            <div className="text-success-400 font-mono font-bold">+{(feesPercent * periodMultiplier).toFixed(2)}%</div>
+          </div>
+          <div className="bg-dark-700/50 rounded-lg p-2">
+            <div className="text-dark-400">IL ({period})</div>
+            <div className="text-danger-400 font-mono font-bold">-{(ilPercent * periodMultiplier).toFixed(2)}%</div>
+          </div>
+          <div className="bg-dark-700/50 rounded-lg p-2">
+            <div className="text-dark-400">APR Estimado</div>
+            <div className={clsx('font-mono font-bold', apr >= 0 ? 'text-primary-400' : 'text-danger-400')}>
+              {apr >= 0 ? '+' : ''}{apr.toFixed(1)}%
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -547,8 +790,8 @@ export default function SimulationPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {pools.slice(0, 6).map((item) => (
               <button
-                key={item.pool.externalId}
-                onClick={() => navigate('/simulation/' + item.pool.chain + '/' + (item.pool.poolAddress || item.pool.externalId || 'unknown'))}
+                key={item.pool.poolAddress || item.pool.externalId}
+                onClick={() => { if (item.pool.poolAddress) navigate('/simulation/' + item.pool.chain + '/' + item.pool.poolAddress); }}
                 className="card hover:border-primary-500/50 transition-all text-left"
               >
                 <div className="p-4">

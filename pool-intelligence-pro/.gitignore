@@ -34,5 +34,8 @@ prisma/migrations/
 .cache/
 .parcel-cache/
 
+# Frontend build output served by backend (built during deploy)
+backend/public/
+
 # Test
 coverage/
