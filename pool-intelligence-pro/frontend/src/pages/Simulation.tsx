@@ -264,21 +264,21 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
       <div className="card">
         <div className="card-body">
           {/* Token Prices - for data verification */}
-          <div className="flex flex-wrap gap-3 mb-4 p-3 bg-dark-800 rounded-lg border border-dark-700">
+          <div className="flex flex-wrap gap-3 mb-4 p-3 bg-card rounded-lg border border-border/60">
             <div className="flex items-center gap-2">
-              <span className="text-dark-400 text-sm">Preço {pool.token0?.symbol}:</span>
+              <span className="text-muted-foreground text-sm">Preço {pool.token0?.symbol}:</span>
               <span className="font-mono font-semibold">
                 {pool.token0?.priceUsd != null ? '$' + pool.token0.priceUsd.toFixed(4) : <span className="text-warning-400">API sem dados</span>}
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-dark-400 text-sm">Preço {pool.token1?.symbol}:</span>
+              <span className="text-muted-foreground text-sm">Preço {pool.token1?.symbol}:</span>
               <span className="font-mono font-semibold">
                 {pool.token1?.priceUsd != null ? '$' + pool.token1.priceUsd.toFixed(4) : <span className="text-warning-400">API sem dados</span>}
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-dark-400 text-sm">Fee Tier:</span>
+              <span className="text-muted-foreground text-sm">Fee Tier:</span>
               <span className="font-mono font-semibold">{pool.feeTier ? feeTierToPercent(pool.feeTier).toFixed(2) + '%' : 'N/A'}</span>
             </div>
           </div>
@@ -308,7 +308,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
                   : '$' + currentPrice.toFixed(2)}
               </div>
               {derivedPrice && !pool.price && (
-                <div className="text-[10px] text-dark-500">via tokens</div>
+                <div className="text-[10px] text-muted-foreground/60">via tokens</div>
               )}
             </div>
           </div>
@@ -321,7 +321,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
           <AlertTriangle className="w-5 h-5 text-danger-400 flex-shrink-0" />
           <div>
             <p className="font-medium text-danger-400">Preco indisponivel para esta pool</p>
-            <p className="text-sm text-dark-400">A simulacao nao pode ser realizada sem dados de preco reais. Tente novamente em alguns minutos.</p>
+            <p className="text-sm text-muted-foreground">A simulacao nao pode ser realizada sem dados de preco reais. Tente novamente em alguns minutos.</p>
           </div>
         </div>
       )}
@@ -335,7 +335,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
               onClick={() => setPeriod(p)}
               className={clsx(
                 'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-                period === p ? 'bg-primary-600 text-white' : 'bg-dark-700 text-dark-400 hover:bg-dark-600'
+                period === p ? 'bg-primary-600 text-white' : 'bg-muted text-muted-foreground hover:bg-muted/70'
               )}
             >
               {p}
@@ -366,9 +366,9 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
           </div>
           <div className="card-body space-y-6">
             <div>
-              <label className="block text-sm text-dark-400 mb-2">Capital a Investir</label>
+              <label className="block text-sm text-muted-foreground mb-2">Capital a Investir</label>
               <div className="flex items-center gap-2">
-                <span className="text-dark-400 text-xl">$</span>
+                <span className="text-muted-foreground text-xl">$</span>
                 <input
                   type="number"
                   value={capital}
@@ -384,7 +384,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
                     onClick={() => setCapital(val)}
                     className={clsx(
                       'px-3 py-1 rounded text-xs transition-colors',
-                      capital === val ? 'bg-primary-600 text-white' : 'bg-dark-700 hover:bg-dark-600'
+                      capital === val ? 'bg-primary-600 text-white' : 'bg-muted hover:bg-muted/70'
                     )}
                   >
                     ${formatNum(val)}
@@ -394,7 +394,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
             </div>
 
             <div>
-              <label className="block text-sm text-dark-400 mb-3">Modo de Operacao</label>
+              <label className="block text-sm text-muted-foreground mb-3">Modo de Operacao</label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {(Object.keys(modeConfig) as Mode[]).map((m) => {
                   const cfg = modeConfig[m];
@@ -407,7 +407,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
                         'p-4 rounded-xl border-2 transition-all text-center relative',
                         mode === m
                           ? 'border-primary-500 bg-primary-500/10'
-                          : 'border-dark-600 hover:border-dark-500'
+                          : 'border-border hover:border-border/80'
                       )}
                     >
                       {isRecommended && (
@@ -417,7 +417,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
                       )}
                       <div className="text-2xl mb-1">{cfg.emoji}</div>
                       <div className="font-semibold">{cfg.label}</div>
-                      <div className="text-xs text-dark-400">{'±' + cfg.rangePercent + '% range'}</div>
+                      <div className="text-xs text-muted-foreground">{'±' + cfg.rangePercent + '% range'}</div>
                     </button>
                   );
                 })}
@@ -430,7 +430,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
                   <span className="text-warning-400">Range personalizado ativo</span>
                   <button
                     onClick={() => setCustomRange(null)}
-                    className="text-xs bg-dark-600 px-2 py-1 rounded hover:bg-dark-500"
+                    className="text-xs bg-muted/70 px-2 py-1 rounded hover:bg-muted-foreground/40"
                   >
                     Resetar
                   </button>
@@ -452,41 +452,41 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
           <div className="card-body space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="stat-card">
-                <div className="flex items-center gap-2 text-dark-400 mb-1">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
                   <TrendingUp className="w-4 h-4 text-success-400" />
                   <span className="text-xs">Fees Estimadas</span>
                 </div>
                 <div className="text-success-400 font-bold">{'+' + metrics.feesPercent.toFixed(2) + '%'}</div>
-                <div className="text-xs text-dark-400">{'~$' + metrics.feesUsd.toFixed(2)}</div>
+                <div className="text-xs text-muted-foreground">{'~$' + metrics.feesUsd.toFixed(2)}</div>
               </div>
               <div className="stat-card">
-                <div className="flex items-center gap-2 text-dark-400 mb-1">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
                   <TrendingDown className="w-4 h-4 text-danger-400" />
                   <span className="text-xs">IL Estimada</span>
                 </div>
                 <div className="text-danger-400 font-bold">{'-' + metrics.ilPercent.toFixed(2) + '%'}</div>
-                <div className="text-xs text-dark-400">{'~$' + metrics.ilUsd.toFixed(2)}</div>
+                <div className="text-xs text-muted-foreground">{'~$' + metrics.ilUsd.toFixed(2)}</div>
               </div>
               <div className="stat-card">
-                <div className="flex items-center gap-2 text-dark-400 mb-1">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
                   <Clock className="w-4 h-4" />
                   <span className="text-xs">Tempo no Range</span>
                 </div>
                 <div className="font-bold">{metrics.timeInRange.toFixed(0) + '%'}</div>
-                <div className="text-xs text-dark-400">do periodo</div>
+                <div className="text-xs text-muted-foreground">do periodo</div>
               </div>
               <div className="stat-card">
-                <div className="flex items-center gap-2 text-dark-400 mb-1">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
                   <Fuel className="w-4 h-4" />
                   <span className="text-xs">Custo Gas ({pool.chain})</span>
                 </div>
                 <div className="font-bold">{'~$' + metrics.gasEstimate.toFixed(2)}</div>
-                <div className="text-xs text-dark-400">entrada + saida</div>
+                <div className="text-xs text-muted-foreground">entrada + saida</div>
               </div>
             </div>
 
             {/* Data source indicator */}
-            <div className="text-xs text-dark-500 flex items-center gap-2 px-1">
+            <div className="text-xs text-muted-foreground/60 flex items-center gap-2 px-1">
               <span>Vol. anual: {(metrics.volAnn * 100).toFixed(0)}%</span>
               <span>{pool.volatilityAnn ? '(dados reais)' : '(estimativa)'}</span>
               <span className={metrics.source === 'server' ? 'text-success-500' : 'text-warning-500'}>
@@ -508,19 +508,19 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
                 </div>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-dark-400">{'Valor: ' + (isPositive ? '+' : '') + '$' + metrics.netReturnUsd.toFixed(2)}</span>
+                <span className="text-muted-foreground">{'Valor: ' + (isPositive ? '+' : '') + '$' + metrics.netReturnUsd.toFixed(2)}</span>
                 <span className="text-primary-400 font-medium">{'APR: ~' + metrics.apr.toFixed(1) + '%'}</span>
               </div>
             </div>
 
-            <div className="text-center text-xs text-dark-400 bg-dark-700/50 rounded-lg p-2">
+            <div className="text-center text-xs text-muted-foreground bg-muted/50 rounded-lg p-2">
               Retorno = Fees ({metrics.feesPercent.toFixed(2)}%) - IL ({metrics.ilPercent.toFixed(2)}%) - Gas ({((metrics.gasEstimate / capital) * 100).toFixed(2)}%)
             </div>
 
             {metrics.gasEstimate / capital > 0.1 && (
               <div className="bg-warning-500/10 border border-warning-500/30 rounded-lg p-3 text-sm">
                 <span className="text-warning-400 font-medium">⚠ Atenção: </span>
-                <span className="text-dark-300">
+                <span className="text-foreground/80">
                   Gas (~${metrics.gasEstimate.toFixed(0)}) representa {((metrics.gasEstimate / capital) * 100).toFixed(0)}% do capital.
                   {pool.chain === 'ethereum'
                     ? ' Considere Arbitrum/Base para reduzir custos.'
@@ -534,18 +534,18 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
               <div className="space-y-3">
                 {/* Token Quantities */}
                 {serverCalc.tokenQuantities && (
-                  <div className="bg-dark-700/50 rounded-lg p-3">
-                    <div className="text-xs text-dark-400 mb-2 font-medium">Deposito Necessario</div>
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <div className="text-xs text-muted-foreground mb-2 font-medium">Deposito Necessario</div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <span className="text-xs text-dark-500">{pool.token0?.symbol}</span>
+                        <span className="text-xs text-muted-foreground/60">{pool.token0?.symbol}</span>
                         <div className="font-mono font-bold">{serverCalc.tokenQuantities.amount0.toFixed(6)}</div>
-                        <div className="text-xs text-dark-400">${serverCalc.tokenQuantities.amount0Usd.toFixed(2)} ({serverCalc.tokenQuantities.ratio0Pct}%)</div>
+                        <div className="text-xs text-muted-foreground">${serverCalc.tokenQuantities.amount0Usd.toFixed(2)} ({serverCalc.tokenQuantities.ratio0Pct}%)</div>
                       </div>
                       <div>
-                        <span className="text-xs text-dark-500">{pool.token1?.symbol}</span>
+                        <span className="text-xs text-muted-foreground/60">{pool.token1?.symbol}</span>
                         <div className="font-mono font-bold">{serverCalc.tokenQuantities.amount1.toFixed(2)}</div>
-                        <div className="text-xs text-dark-400">${serverCalc.tokenQuantities.amount1Usd.toFixed(2)} ({serverCalc.tokenQuantities.ratio1Pct}%)</div>
+                        <div className="text-xs text-muted-foreground">${serverCalc.tokenQuantities.amount1Usd.toFixed(2)} ({serverCalc.tokenQuantities.ratio1Pct}%)</div>
                       </div>
                     </div>
                   </div>
@@ -554,31 +554,31 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
                 {/* Capital Efficiency + Gas Break-even + Health Factor */}
                 <div className="grid grid-cols-3 gap-2">
                   {serverCalc.capitalEfficiency && (
-                    <div className="bg-dark-700/50 rounded-lg p-2 text-center">
-                      <div className="text-[10px] text-dark-400 mb-0.5">Eficiencia</div>
+                    <div className="bg-muted/50 rounded-lg p-2 text-center">
+                      <div className="text-[10px] text-muted-foreground mb-0.5">Eficiencia</div>
                       <div className="font-mono font-bold text-primary-400">{serverCalc.capitalEfficiency.multiplier}x</div>
-                      <div className="text-[10px] text-dark-500">vs V2</div>
+                      <div className="text-[10px] text-muted-foreground/60">vs V2</div>
                     </div>
                   )}
                   {serverCalc.gasBreakeven && (
-                    <div className="bg-dark-700/50 rounded-lg p-2 text-center">
-                      <div className="text-[10px] text-dark-400 mb-0.5">Break-even Gas</div>
+                    <div className="bg-muted/50 rounded-lg p-2 text-center">
+                      <div className="text-[10px] text-muted-foreground mb-0.5">Break-even Gas</div>
                       <div className={clsx('font-mono font-bold', serverCalc.gasBreakeven.viable ? 'text-success-400' : 'text-danger-400')}>
                         {serverCalc.gasBreakeven.breakEvenDays === Infinity ? '∞' : serverCalc.gasBreakeven.breakEvenDays + 'd'}
                       </div>
-                      <div className="text-[10px] text-dark-500">${serverCalc.gasBreakeven.totalGasCost} gas</div>
+                      <div className="text-[10px] text-muted-foreground/60">${serverCalc.gasBreakeven.totalGasCost} gas</div>
                     </div>
                   )}
                   {serverCalc.healthFactor && (
-                    <div className="bg-dark-700/50 rounded-lg p-2 text-center">
-                      <div className="text-[10px] text-dark-400 mb-0.5">Saude do Range</div>
+                    <div className="bg-muted/50 rounded-lg p-2 text-center">
+                      <div className="text-[10px] text-muted-foreground mb-0.5">Saude do Range</div>
                       <div className={clsx('font-mono font-bold',
                         serverCalc.healthFactor.status === 'healthy' ? 'text-success-400' :
                         serverCalc.healthFactor.status === 'warning' ? 'text-warning-400' : 'text-danger-400'
                       )}>
                         {serverCalc.healthFactor.factor}%
                       </div>
-                      <div className="text-[10px] text-dark-500">
+                      <div className="text-[10px] text-muted-foreground/60">
                         ↓{serverCalc.healthFactor.distToLower}% ↑{serverCalc.healthFactor.distToUpper}%
                       </div>
                     </div>
@@ -709,17 +709,17 @@ function HodlVsLpComparison({ capital, feesPercent, ilPercent, gasPercent, perio
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div className={clsx(
             'rounded-xl p-4 border-2 text-center',
-            !lpWins ? 'border-success-500/50 bg-success-500/10' : 'border-dark-600 bg-dark-700/50'
+            !lpWins ? 'border-success-500/50 bg-success-500/10' : 'border-border bg-muted/50'
           )}>
-            <div className="text-sm text-dark-400 mb-1">HODL</div>
+            <div className="text-sm text-muted-foreground mb-1">HODL</div>
             <div className="text-2xl font-bold">${hodlValue.toFixed(2)}</div>
-            <div className="text-sm text-dark-400 mt-1">+0.00%</div>
+            <div className="text-sm text-muted-foreground mt-1">+0.00%</div>
           </div>
           <div className={clsx(
             'rounded-xl p-4 border-2 text-center',
-            lpWins ? 'border-success-500/50 bg-success-500/10' : 'border-dark-600 bg-dark-700/50'
+            lpWins ? 'border-success-500/50 bg-success-500/10' : 'border-border bg-muted/50'
           )}>
-            <div className="text-sm text-dark-400 mb-1">Liquidity Provider</div>
+            <div className="text-sm text-muted-foreground mb-1">Liquidity Provider</div>
             <div className={clsx('text-2xl font-bold', lpWins ? 'text-success-400' : 'text-danger-400')}>
               ${lpValue.toFixed(2)}
             </div>
@@ -740,16 +740,16 @@ function HodlVsLpComparison({ capital, feesPercent, ilPercent, gasPercent, perio
         </div>
 
         <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
-          <div className="bg-dark-700/50 rounded-lg p-2">
-            <div className="text-dark-400">Fees ({period})</div>
+          <div className="bg-muted/50 rounded-lg p-2">
+            <div className="text-muted-foreground">Fees ({period})</div>
             <div className="text-success-400 font-mono font-bold">+{(feesPercent * periodMultiplier).toFixed(2)}%</div>
           </div>
-          <div className="bg-dark-700/50 rounded-lg p-2">
-            <div className="text-dark-400">IL ({period})</div>
+          <div className="bg-muted/50 rounded-lg p-2">
+            <div className="text-muted-foreground">IL ({period})</div>
             <div className="text-danger-400 font-mono font-bold">-{(ilPercent * periodMultiplier).toFixed(2)}%</div>
           </div>
-          <div className="bg-dark-700/50 rounded-lg p-2">
-            <div className="text-dark-400">APR Estimado</div>
+          <div className="bg-muted/50 rounded-lg p-2">
+            <div className="text-muted-foreground">APR Estimado</div>
             <div className={clsx('font-mono font-bold', apr >= 0 ? 'text-primary-400' : 'text-danger-400')}>
               {apr >= 0 ? '+' : ''}{apr.toFixed(1)}%
             </div>
@@ -783,7 +783,7 @@ export default function SimulationPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold">🧪 Simulacao de Range</h1>
-          <p className="text-dark-400 mt-1">Selecione uma pool para simular estrategias de liquidez</p>
+          <p className="text-muted-foreground mt-1">Selecione uma pool para simular estrategias de liquidez</p>
         </div>
 
         {pools && pools.length > 0 ? (
@@ -797,20 +797,20 @@ export default function SimulationPage() {
                 <div className="p-4">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="flex -space-x-2">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-xs font-bold border-2 border-dark-800">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-xs font-bold border-2 border-border/40">
                         {(item.pool.token0?.symbol ?? '??').slice(0, 2)}
                       </div>
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-success-500 to-success-700 flex items-center justify-center text-xs font-bold border-2 border-dark-800">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-success-500 to-success-700 flex items-center justify-center text-xs font-bold border-2 border-border/40">
                         {(item.pool.token1?.symbol ?? '??').slice(0, 2)}
                       </div>
                     </div>
                     <div>
                       <div className="font-semibold">{item.pool.token0?.symbol ?? '?'}/{item.pool.token1?.symbol ?? '?'}</div>
-                      <div className="text-xs text-dark-400">{item.pool.protocol} - {item.pool.chain}</div>
+                      <div className="text-xs text-muted-foreground">{item.pool.protocol} - {item.pool.chain}</div>
                     </div>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-dark-400">TVL: ${formatNum(item.pool.tvl)}</span>
+                    <span className="text-muted-foreground">TVL: ${formatNum(item.pool.tvl)}</span>
                     <span className="text-primary-400">Score: {item.score.total.toFixed(0)}</span>
                   </div>
                 </div>
@@ -821,7 +821,7 @@ export default function SimulationPage() {
           <div className="card p-8 text-center">
             <div className="text-4xl mb-4">🔍</div>
             <h3 className="text-lg font-semibold mb-2">Carregando pools...</h3>
-            <p className="text-dark-400">Ou va ao Radar para escolher uma pool</p>
+            <p className="text-muted-foreground">Ou va ao Radar para escolher uma pool</p>
           </div>
         )}
       </div>
@@ -831,11 +831,11 @@ export default function SimulationPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="h-8 w-48 bg-dark-700 rounded animate-pulse" />
-        <div className="card animate-pulse p-8"><div className="h-64 bg-dark-700 rounded" /></div>
+        <div className="h-8 w-48 bg-muted rounded animate-pulse" />
+        <div className="card animate-pulse p-8"><div className="h-64 bg-muted rounded" /></div>
         <div className="grid lg:grid-cols-2 gap-6">
-          <div className="card animate-pulse p-8"><div className="h-96 bg-dark-700 rounded" /></div>
-          <div className="card animate-pulse p-8"><div className="h-96 bg-dark-700 rounded" /></div>
+          <div className="card animate-pulse p-8"><div className="h-96 bg-muted rounded" /></div>
+          <div className="card animate-pulse p-8"><div className="h-96 bg-muted rounded" /></div>
         </div>
       </div>
     );
@@ -846,7 +846,7 @@ export default function SimulationPage() {
       <div className="card p-8 text-center">
         <AlertTriangle className="w-12 h-12 text-danger-400 mx-auto mb-4" />
         <h3 className="text-lg font-semibold mb-2">Pool nao encontrada</h3>
-        <p className="text-dark-400 mb-4">Nao foi possivel carregar os dados desta pool</p>
+        <p className="text-muted-foreground mb-4">Nao foi possivel carregar os dados desta pool</p>
         <button onClick={() => navigate('/radar')} className="btn btn-primary">
           Voltar ao Radar
         </button>
@@ -861,13 +861,13 @@ export default function SimulationPage() {
       <div className="flex items-center gap-4">
         <button
           onClick={() => navigate(-1)}
-          className="p-2 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors"
+          className="p-2 rounded-lg bg-muted hover:bg-muted/70 transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
           <h1 className="text-2xl font-bold">🧪 {poolName}</h1>
-          <p className="text-dark-400">{data.pool.protocol} - {data.pool.chain}</p>
+          <p className="text-muted-foreground">{data.pool.protocol} - {data.pool.chain}</p>
         </div>
       </div>
 

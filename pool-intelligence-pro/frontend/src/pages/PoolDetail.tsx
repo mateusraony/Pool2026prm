@@ -59,7 +59,7 @@ function ModeSelector({ value, onChange }: { value: RiskMode; onChange: (m: Risk
           onClick={() => onChange(m.id)}
           className={clsx(
             'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-all',
-            value === m.id ? m.color : 'border-dark-600 text-dark-400 hover:border-dark-500'
+            value === m.id ? m.color : 'border-border text-muted-foreground hover:border-border/80'
           )}
         >
           {m.icon}{m.label}
@@ -91,24 +91,24 @@ function RangeDisplay({ range, price, mode }: { range: RangeResult; price: numbe
     <div className="space-y-3">
       <div className="flex justify-between text-sm">
         <div>
-          <div className="text-dark-400 text-xs">Range Inferior</div>
+          <div className="text-muted-foreground text-xs">Range Inferior</div>
           <div className="font-mono font-bold">${range.lower.toFixed(4)}</div>
           <div className="text-xs text-red-400">-{distToLower.toFixed(1)}% do atual</div>
         </div>
         <div className="text-center">
-          <div className="text-dark-400 text-xs">Preço Atual</div>
+          <div className="text-muted-foreground text-xs">Preço Atual</div>
           <div className="font-mono font-bold text-lg">${price.toFixed(4)}</div>
-          <div className="text-xs text-dark-400">±{(range.widthPct * 100).toFixed(1)}% range</div>
+          <div className="text-xs text-muted-foreground">±{(range.widthPct * 100).toFixed(1)}% range</div>
         </div>
         <div className="text-right">
-          <div className="text-dark-400 text-xs">Range Superior</div>
+          <div className="text-muted-foreground text-xs">Range Superior</div>
           <div className="font-mono font-bold">${range.upper.toFixed(4)}</div>
           <div className="text-xs text-green-400">+{distToUpper.toFixed(1)}% do atual</div>
         </div>
       </div>
 
       {/* Price bar */}
-      <div className="relative h-3 bg-dark-700 rounded-full overflow-hidden">
+      <div className="relative h-3 bg-muted rounded-full overflow-hidden">
         <div className={clsx('absolute inset-y-0 left-0 rounded-full opacity-30', modeColors[mode])} style={{ width: '100%' }} />
         <div
           className={clsx('absolute top-0 w-2 h-full rounded-full', modeColors[mode])}
@@ -117,7 +117,7 @@ function RangeDisplay({ range, price, mode }: { range: RangeResult; price: numbe
       </div>
 
       {range.lowerTick != null && (
-        <div className="flex justify-between text-xs text-dark-500 font-mono">
+        <div className="flex justify-between text-xs text-muted-foreground/60 font-mono">
           <span>Tick inf: {range.lowerTick}</span>
           <span>tickSpacing: auto</span>
           <span>Tick sup: {range.upperTick}</span>
@@ -139,10 +139,10 @@ function FeeCard({ fees, capital }: { fees: FeeEstimate; capital: number }) {
         { label: '7 dias', value: fees.expectedFees7d },
         { label: '30 dias', value: fees.expectedFees30d },
       ].map(item => (
-        <div key={item.label} className="bg-dark-900 rounded-lg p-3 text-center">
-          <div className="text-xs text-dark-400 mb-1">{item.label}</div>
+        <div key={item.label} className="bg-background/80 rounded-lg p-3 text-center">
+          <div className="text-xs text-muted-foreground mb-1">{item.label}</div>
           <div className="font-mono font-bold text-green-400">{fmt(item.value)}</div>
-          <div className="text-[10px] text-dark-500 mt-0.5">
+          <div className="text-[10px] text-muted-foreground/60 mt-0.5">
             {capital > 0 ? `${((item.value / capital) * 100).toFixed(3)}%` : '—'}
           </div>
         </div>
@@ -157,10 +157,10 @@ function FeeCard({ fees, capital }: { fees: FeeEstimate; capital: number }) {
 
 function MetricCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
-    <div className="bg-dark-900 rounded-lg p-3">
-      <div className="text-xs text-dark-400 mb-1">{label}</div>
+    <div className="bg-background/80 rounded-lg p-3">
+      <div className="text-xs text-muted-foreground mb-1">{label}</div>
       <div className={clsx('font-mono font-bold text-base', color || 'text-white')}>{value}</div>
-      {sub && <div className="text-xs text-dark-500 mt-0.5">{sub}</div>}
+      {sub && <div className="text-xs text-muted-foreground/60 mt-0.5">{sub}</div>}
     </div>
   );
 }
@@ -192,7 +192,7 @@ function NotesSection({ poolId }: { poolId: string }) {
           onChange={e => setNewNote(e.target.value)}
           placeholder="Adicionar nota sobre esta pool..."
           rows={2}
-          className="flex-1 bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm focus:border-primary-500 focus:outline-none resize-none"
+          className="flex-1 bg-muted border border-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none resize-none"
         />
         <button
           onClick={() => createMut.mutate()}
@@ -203,17 +203,17 @@ function NotesSection({ poolId }: { poolId: string }) {
         </button>
       </div>
       {notes.map(note => (
-        <div key={note.id} className="flex gap-2 bg-dark-900 rounded-lg p-3">
-          <div className="flex-1 text-sm text-dark-200">{note.text}</div>
+        <div key={note.id} className="flex gap-2 bg-background/80 rounded-lg p-3">
+          <div className="flex-1 text-sm text-foreground/90">{note.text}</div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-xs text-dark-500">{new Date(note.createdAt).toLocaleDateString('pt-BR')}</span>
-            <button onClick={() => deleteMut.mutate(note.id)} className="text-dark-500 hover:text-red-400 transition-colors">
+            <span className="text-xs text-muted-foreground/60">{new Date(note.createdAt).toLocaleDateString('pt-BR')}</span>
+            <button onClick={() => deleteMut.mutate(note.id)} className="text-muted-foreground/60 hover:text-red-400 transition-colors">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
       ))}
-      {notes.length === 0 && <p className="text-sm text-dark-500 italic">Nenhuma nota ainda.</p>}
+      {notes.length === 0 && <p className="text-sm text-muted-foreground/60 italic">Nenhuma nota ainda.</p>}
     </div>
   );
 }
@@ -226,7 +226,7 @@ function MiniChart({ data, dataKey, color = '#6366f1', formatter }: {
   data: Record<string, unknown>[]; dataKey: string; color?: string;
   formatter?: (v: unknown) => string;
 }) {
-  if (!data.length) return <div className="h-32 flex items-center justify-center text-dark-500 text-sm">Sem dados históricos</div>;
+  if (!data.length) return <div className="h-32 flex items-center justify-center text-muted-foreground/60 text-sm">Sem dados históricos</div>;
   return (
     <ResponsiveContainer width="100%" height={120}>
       <LineChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
@@ -324,8 +324,8 @@ export default function PoolDetailPage() {
     return (
       <div className="p-6 text-center">
         <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-2" />
-        <p className="text-dark-400">Pool não encontrada ou erro ao carregar dados.</p>
-        <button onClick={() => navigate(-1)} className="mt-4 px-4 py-2 bg-dark-700 rounded-lg text-sm hover:bg-dark-600 transition-colors">
+        <p className="text-muted-foreground">Pool não encontrada ou erro ao carregar dados.</p>
+        <button onClick={() => navigate(-1)} className="mt-4 px-4 py-2 bg-muted rounded-lg text-sm hover:bg-muted/70 transition-colors">
           Voltar
         </button>
       </div>
@@ -337,8 +337,8 @@ export default function PoolDetailPage() {
     return (
       <div className="p-6 text-center">
         <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-2" />
-        <p className="text-dark-400">Dados da pool não disponíveis.</p>
-        <button onClick={() => navigate(-1)} className="mt-4 px-4 py-2 bg-dark-700 rounded-lg text-sm hover:bg-dark-600 transition-colors">
+        <p className="text-muted-foreground">Dados da pool não disponíveis.</p>
+        <button onClick={() => navigate(-1)} className="mt-4 px-4 py-2 bg-muted rounded-lg text-sm hover:bg-muted/70 transition-colors">
           Voltar
         </button>
       </div>
@@ -402,7 +402,7 @@ export default function PoolDetailPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="p-2 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors flex-shrink-0">
+          <button onClick={() => navigate(-1)} className="p-2 rounded-lg bg-muted hover:bg-muted/70 transition-colors flex-shrink-0">
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div>
@@ -411,10 +411,10 @@ export default function PoolDetailPage() {
               {pool.bluechip && <span className="text-yellow-400 text-base">★</span>}
             </h1>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <span className="text-xs bg-dark-700 px-2 py-0.5 rounded">{pool.poolType || 'V2'}</span>
-              <span className="text-xs text-dark-400">{poolProtocol}</span>
-              <span className="text-xs text-dark-400 capitalize">{poolChain}</span>
-              <span className="text-xs text-dark-500 font-mono">{poolAddress ? `${poolAddress.slice(0, 8)}...${poolAddress.slice(-6)}` : '—'}</span>
+              <span className="text-xs bg-muted px-2 py-0.5 rounded">{pool.poolType || 'V2'}</span>
+              <span className="text-xs text-muted-foreground">{poolProtocol}</span>
+              <span className="text-xs text-muted-foreground capitalize">{poolChain}</span>
+              <span className="text-xs text-muted-foreground/60 font-mono">{poolAddress ? `${poolAddress.slice(0, 8)}...${poolAddress.slice(-6)}` : '—'}</span>
               <span className={clsx('text-xs px-2 py-0.5 rounded font-bold', healthBg(healthScore))}>
                 Health {healthScore}/100
               </span>
@@ -423,7 +423,7 @@ export default function PoolDetailPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
-          <button onClick={toggleFav} className={clsx('p-2 rounded-lg transition-colors', isFav ? 'bg-yellow-500/20 text-yellow-400' : 'bg-dark-700 hover:bg-dark-600')}>
+          <button onClick={toggleFav} className={clsx('p-2 rounded-lg transition-colors', isFav ? 'bg-yellow-500/20 text-yellow-400' : 'bg-muted hover:bg-muted/70')}>
             {isFav ? <Star className="w-4 h-4 fill-yellow-400" /> : <StarOff className="w-4 h-4" />}
           </button>
           <button
@@ -435,7 +435,7 @@ export default function PoolDetailPage() {
           </button>
           {token0Addr && token1Addr && (
             <a href={addLiquidityUrl} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg text-sm transition-colors">
+              className="flex items-center gap-1.5 px-3 py-2 bg-muted hover:bg-muted/70 rounded-lg text-sm transition-colors">
               <ExternalLink className="w-4 h-4" />
               Add Liquidity
             </a>
@@ -464,15 +464,15 @@ export default function PoolDetailPage() {
       </div>
 
       {/* Charts */}
-      <div className="bg-dark-800 rounded-xl border border-dark-600 overflow-hidden">
-        <div className="flex border-b border-dark-700">
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
+        <div className="flex border-b border-border/60">
           {chartTabs.map(tab => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key as typeof activeTab)}
               className={clsx(
                 'px-4 py-2.5 text-sm font-medium transition-colors border-b-2',
-                activeTab === tab.key ? 'border-primary-500 text-white' : 'border-transparent text-dark-400 hover:text-white'
+                activeTab === tab.key ? 'border-primary-500 text-white' : 'border-transparent text-muted-foreground hover:text-white'
               )}
             >
               {tab.label}
@@ -481,7 +481,7 @@ export default function PoolDetailPage() {
         </div>
         <div className="p-4">
           {chartData.length === 0 ? (
-            <div className="h-28 flex items-center justify-center text-dark-500 text-sm">
+            <div className="h-28 flex items-center justify-center text-muted-foreground/60 text-sm">
               Dados históricos não disponíveis para esta pool.
             </div>
           ) : (
@@ -495,26 +495,26 @@ export default function PoolDetailPage() {
       </div>
 
       {/* Range Calculator */}
-      <div className="bg-dark-800 rounded-xl border border-dark-600 overflow-hidden">
-        <div className="p-4 border-b border-dark-700">
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
+        <div className="p-4 border-b border-border/60">
           <h2 className="font-semibold">Calculadora de Range (CL)</h2>
-          <p className="text-xs text-dark-400 mt-0.5">Baseado na volatilidade histórica com distribuição lognormal</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Baseado na volatilidade histórica com distribuição lognormal</p>
         </div>
         <div className="p-4 space-y-5">
           {/* Controls */}
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
-              <label className="block text-xs text-dark-400 mb-1.5">Modo de Risco</label>
+              <label className="block text-xs text-muted-foreground mb-1.5">Modo de Risco</label>
               <ModeSelector value={riskMode} onChange={setRiskMode} />
             </div>
             <div>
-              <label className="block text-xs text-dark-400 mb-1.5">Horizonte (dias)</label>
+              <label className="block text-xs text-muted-foreground mb-1.5">Horizonte (dias)</label>
               <div className="flex gap-1">
                 {[3, 7, 14, 30].map(d => (
                   <button
                     key={d}
                     onClick={() => setHorizonDays(d)}
-                    className={clsx('px-3 py-1.5 rounded text-sm transition-colors', horizonDays === d ? 'bg-primary-600 text-white' : 'bg-dark-700 hover:bg-dark-600')}
+                    className={clsx('px-3 py-1.5 rounded text-sm transition-colors', horizonDays === d ? 'bg-primary-600 text-white' : 'bg-muted hover:bg-muted/70')}
                   >
                     {d}d
                   </button>
@@ -522,13 +522,13 @@ export default function PoolDetailPage() {
               </div>
             </div>
             <div>
-              <label className="block text-xs text-dark-400 mb-1.5">Capital (USD)</label>
+              <label className="block text-xs text-muted-foreground mb-1.5">Capital (USD)</label>
               <input
                 type="number"
                 min={0}
                 value={capital}
                 onChange={e => setCapital(Math.max(0, parseFloat(e.target.value) || 0))}
-                className="w-28 bg-dark-700 border border-dark-600 rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none focus:border-primary-500"
+                className="w-28 bg-muted border border-border rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none focus:border-primary"
               />
             </div>
           </div>
@@ -548,52 +548,52 @@ export default function PoolDetailPage() {
               priceHistory={ohlcvData?.candles?.map(c => ({ timestamp: c.timestamp < 1e12 ? c.timestamp * 1000 : c.timestamp, price: c.close })) ?? []}
               liquidityData={liquidityData?.bars?.map(b => ({ price: b.price, liquidity: b.liquidity })) ?? undefined}
               height={260}
-              className="rounded-lg border border-dark-700"
+              className="rounded-lg border border-border/60"
             />
           )}
 
           {/* IL Risk + Fee Estimate */}
           {selectedRange && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-dark-900 rounded-lg p-4">
+              <div className="bg-background/80 rounded-lg p-4">
                 <h3 className="text-sm font-medium mb-3 flex items-center gap-1.5">
                   {ilRisk?.probOutOfRange > 0.3 ? <TrendingDown className="w-4 h-4 text-red-400" /> : <TrendingUp className="w-4 h-4 text-green-400" />}
                   Risco IL em {horizonDays}d
                 </h3>
                 <div className="space-y-2">
                   <div>
-                    <div className="flex justify-between text-xs text-dark-400 mb-1">
+                    <div className="flex justify-between text-xs text-muted-foreground mb-1">
                       <span>Chance de sair do range</span>
                       <span className={clsx('font-bold', ilRisk?.probOutOfRange > 0.4 ? 'text-red-400' : ilRisk?.probOutOfRange > 0.2 ? 'text-yellow-400' : 'text-green-400')}>
                         {fmtPct((ilRisk?.probOutOfRange ?? 0) * 100, 0)}
                       </span>
                     </div>
-                    <div className="h-2 bg-dark-700 rounded-full overflow-hidden">
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
                       <div
                         className={clsx('h-full rounded-full', ilRisk?.probOutOfRange > 0.4 ? 'bg-red-500' : ilRisk?.probOutOfRange > 0.2 ? 'bg-yellow-500' : 'bg-green-500')}
                         style={{ width: `${((ilRisk?.probOutOfRange ?? 0) * 100).toFixed(0)}%` }}
                       />
                     </div>
                   </div>
-                  <p className="text-xs text-dark-500 mt-2">
+                  <p className="text-xs text-muted-foreground/60 mt-2">
                     Baseado na volatilidade anualizada de {fmtPct(volatilityAnn * 100, 0)} com distribuição lognormal.
                     Estimativa; resultado real depende do mercado.
                   </p>
                 </div>
               </div>
 
-              <div className="bg-dark-900 rounded-lg p-4">
+              <div className="bg-background/80 rounded-lg p-4">
                 <h3 className="text-sm font-medium mb-3">Estimativa de Fees</h3>
                 {feeEstimate ? (
                   <>
                     <FeeCard fees={feeEstimate} capital={capital} />
-                    <p className="text-xs text-dark-500 mt-2">
+                    <p className="text-xs text-muted-foreground/60 mt-2">
                       Baseado em {fmtPct((feeEstimate.userLiquidityShare * 100), 2)} de participação na liquidez.
                       Fator de atividade k={feeEstimate.k_active} ({riskMode}).
                       Estimativa; depende da posição permanecer in-range.
                     </p>
                   </>
-                ) : <p className="text-sm text-dark-500">Dados de fees não disponíveis.</p>}
+                ) : <p className="text-sm text-muted-foreground/60">Dados de fees não disponíveis.</p>}
               </div>
             </div>
           )}
@@ -601,19 +601,19 @@ export default function PoolDetailPage() {
           {/* All 3 ranges quick view */}
           {calcData && (
             <div>
-              <h3 className="text-sm text-dark-400 mb-2">Comparação de Ranges</h3>
+              <h3 className="text-sm text-muted-foreground mb-2">Comparação de Ranges</h3>
               <div className="grid grid-cols-3 gap-2">
                 {(['DEFENSIVE', 'NORMAL', 'AGGRESSIVE'] as const).map(mode => {
                   const r = calcData.ranges[mode];
                   return (
-                    <div key={mode} className={clsx('rounded-lg p-3 border', mode === riskMode ? 'border-primary-500 bg-primary-500/5' : 'border-dark-700 bg-dark-900')}>
+                    <div key={mode} className={clsx('rounded-lg p-3 border', mode === riskMode ? 'border-primary-500 bg-primary-500/5' : 'border-border/60 bg-background/80')}>
                       <div className="text-xs font-medium mb-1.5">
                         {mode === 'DEFENSIVE' ? '🛡 Defensivo' : mode === 'NORMAL' ? '⚖ Normal' : '🔥 Agressivo'}
                       </div>
-                      <div className="text-xs font-mono text-dark-300">${r.lower.toFixed(4)}</div>
-                      <div className="text-xs text-dark-500">até</div>
-                      <div className="text-xs font-mono text-dark-300">${r.upper.toFixed(4)}</div>
-                      <div className="text-xs text-dark-500 mt-1">±{(r.widthPct * 100).toFixed(1)}%</div>
+                      <div className="text-xs font-mono text-foreground/80">${r.lower.toFixed(4)}</div>
+                      <div className="text-xs text-muted-foreground/60">até</div>
+                      <div className="text-xs font-mono text-foreground/80">${r.upper.toFixed(4)}</div>
+                      <div className="text-xs text-muted-foreground/60 mt-1">±{(r.widthPct * 100).toFixed(1)}%</div>
                     </div>
                   );
                 })}
@@ -624,8 +624,8 @@ export default function PoolDetailPage() {
       </div>
 
       {/* Notes */}
-      <div className="bg-dark-800 rounded-xl border border-dark-600 overflow-hidden">
-        <div className="p-4 border-b border-dark-700">
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
+        <div className="p-4 border-b border-border/60">
           <h2 className="font-semibold flex items-center gap-2">
             <StickyNote className="w-4 h-4 text-yellow-400" />
             Minhas Notas

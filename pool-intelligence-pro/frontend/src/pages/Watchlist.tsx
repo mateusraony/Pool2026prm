@@ -47,7 +47,7 @@ export default function WatchlistPage() {
             <Star className="w-7 h-7 text-warning-400 fill-warning-400" />
             Watchlist
           </h1>
-          <p className="text-dark-400 mt-1">Pools que voce esta monitorando</p>
+          <p className="text-muted-foreground mt-1">Pools que voce esta monitorando</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="badge badge-primary">{watchlist?.length || 0} pools</span>
@@ -57,7 +57,7 @@ export default function WatchlistPage() {
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="card animate-pulse"><div className="p-4 h-24 bg-dark-700 rounded" /></div>
+            <div key={i} className="card animate-pulse"><div className="p-4 h-24 bg-muted rounded" /></div>
           ))}
         </div>
       ) : watchlistWithDetails.length > 0 ? (
@@ -83,10 +83,10 @@ export default function WatchlistPage() {
                     <div className="flex items-center gap-4">
                       {pool ? (
                         <div className="flex -space-x-2">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-xs font-bold border-2 border-dark-800">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-xs font-bold border-2 border-border/40">
                             {(pool.token0?.symbol ?? '???').slice(0, 3)}
                           </div>
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-success-500 to-success-700 flex items-center justify-center text-xs font-bold border-2 border-dark-800">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-success-500 to-success-700 flex items-center justify-center text-xs font-bold border-2 border-border/40">
                             {(pool.token1?.symbol ?? '???').slice(0, 3)}
                           </div>
                         </div>
@@ -97,7 +97,7 @@ export default function WatchlistPage() {
                       )}
                       <div>
                         <h3 className="font-semibold text-lg">{poolName}</h3>
-                        <p className="text-sm text-dark-400">
+                        <p className="text-sm text-muted-foreground">
                           {pool ? pool.protocol + ' - ' + pool.chain : item.chain}
                         </p>
                       </div>
@@ -106,33 +106,33 @@ export default function WatchlistPage() {
                     {pool && score && (
                       <div className="hidden md:flex items-center gap-6">
                         <div className="text-center">
-                          <div className="text-xs text-dark-400">{pool.token0?.symbol}</div>
+                          <div className="text-xs text-muted-foreground">{pool.token0?.symbol}</div>
                           <div className="font-semibold font-mono text-sm">
                             {pool.token0?.priceUsd != null ? '$' + pool.token0.priceUsd.toFixed(2) : <span className="text-warning-400">—</span>}
                           </div>
                         </div>
                         <div className="text-center">
-                          <div className="text-xs text-dark-400">{pool.token1?.symbol}</div>
+                          <div className="text-xs text-muted-foreground">{pool.token1?.symbol}</div>
                           <div className="font-semibold font-mono text-sm">
                             {pool.token1?.priceUsd != null ? '$' + pool.token1.priceUsd.toFixed(2) : <span className="text-warning-400">—</span>}
                           </div>
                         </div>
                         <div className="text-center">
-                          <div className="text-xs text-dark-400">TVL</div>
+                          <div className="text-xs text-muted-foreground">TVL</div>
                           <div className="font-semibold">${formatNum(pool.tvl)}</div>
                         </div>
                         <div className="text-center">
-                          <div className="text-xs text-dark-400">Volume 24h</div>
+                          <div className="text-xs text-muted-foreground">Volume 24h</div>
                           <div className="font-semibold">${formatNum(pool.volume24h)}</div>
                         </div>
                         <div className="text-center">
-                          <div className="text-xs text-dark-400">APR Est.</div>
+                          <div className="text-xs text-muted-foreground">APR Est.</div>
                           <div className="font-semibold text-success-400">
                             {(score?.breakdown?.return?.aprEstimate ?? pool.apr ?? 0).toFixed(1)}%
                           </div>
                         </div>
                         <div className="text-center">
-                          <div className="text-xs text-dark-400">Score</div>
+                          <div className="text-xs text-muted-foreground">Score</div>
                           <div className={clsx(
                             'font-bold',
                             (score?.total ?? 0) >= 70 ? 'text-success-400' :
@@ -176,20 +176,20 @@ export default function WatchlistPage() {
                   {/* Mobile stats */}
                   {pool && score && (
                     <div className="md:hidden mt-4 grid grid-cols-2 gap-2 text-center text-sm">
-                      <div className="bg-dark-700/50 rounded p-2">
-                        <div className="text-xs text-dark-400">TVL</div>
+                      <div className="bg-muted/50 rounded p-2">
+                        <div className="text-xs text-muted-foreground">TVL</div>
                         <div className="font-semibold">${formatNum(pool.tvl)}</div>
                       </div>
-                      <div className="bg-dark-700/50 rounded p-2">
-                        <div className="text-xs text-dark-400">Vol</div>
+                      <div className="bg-muted/50 rounded p-2">
+                        <div className="text-xs text-muted-foreground">Vol</div>
                         <div className="font-semibold">${formatNum(pool.volume24h)}</div>
                       </div>
-                      <div className="bg-dark-700/50 rounded p-2">
-                        <div className="text-xs text-dark-400">APR</div>
+                      <div className="bg-muted/50 rounded p-2">
+                        <div className="text-xs text-muted-foreground">APR</div>
                         <div className="font-semibold text-success-400">{(score?.breakdown?.return?.aprEstimate ?? pool.apr ?? 0).toFixed(1)}%</div>
                       </div>
-                      <div className="bg-dark-700/50 rounded p-2">
-                        <div className="text-xs text-dark-400">Score</div>
+                      <div className="bg-muted/50 rounded p-2">
+                        <div className="text-xs text-muted-foreground">Score</div>
                         <div className="font-semibold">{(score?.total ?? 0).toFixed(0)}</div>
                       </div>
                     </div>
@@ -201,9 +201,9 @@ export default function WatchlistPage() {
         </div>
       ) : (
         <div className="card p-8 text-center">
-          <Star className="w-16 h-16 mx-auto mb-4 text-dark-600" />
+          <Star className="w-16 h-16 mx-auto mb-4 text-muted-foreground/40" />
           <h3 className="text-lg font-semibold mb-2">Watchlist vazia</h3>
-          <p className="text-dark-400 mb-4">Adicione pools do Radar para monitorar</p>
+          <p className="text-muted-foreground mb-4">Adicione pools do Radar para monitorar</p>
           <button
             className="btn btn-primary"
             onClick={() => navigate('/radar')}

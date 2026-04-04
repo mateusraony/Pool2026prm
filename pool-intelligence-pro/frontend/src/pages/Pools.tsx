@@ -54,7 +54,7 @@ function SortHeader({ label, sortKey, current, dir, onSort }: {
   const active = current === sortKey;
   return (
     <th
-      className="px-3 py-2 text-xs font-medium text-dark-400 cursor-pointer hover:text-white whitespace-nowrap select-none"
+      className="px-3 py-2 text-xs font-medium text-muted-foreground cursor-pointer hover:text-white whitespace-nowrap select-none"
       onClick={() => onSort(sortKey)}
     >
       <span className="flex items-center gap-1">
@@ -93,7 +93,7 @@ function PoolRow({ pool, isFav, isLoadingFav, onToggleFav, onClick }: {
 
   return (
     <tr
-      className="border-b border-dark-700 hover:bg-dark-700/40 transition-colors cursor-pointer"
+      className="border-b border-border/60 hover:bg-muted/40 transition-colors cursor-pointer"
       onClick={() => onClick(pool)}
     >
       {/* Pool name */}
@@ -102,7 +102,7 @@ function PoolRow({ pool, isFav, isLoadingFav, onToggleFav, onClick }: {
           <button
             onClick={e => { e.stopPropagation(); onToggleFav(pool); }}
             disabled={isLoadingFav}
-            className="flex-shrink-0 text-dark-500 hover:text-yellow-400 transition-colors disabled:opacity-50"
+            className="flex-shrink-0 text-muted-foreground/60 hover:text-yellow-400 transition-colors disabled:opacity-50"
           >
             {isLoadingFav
               ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -117,14 +117,14 @@ function PoolRow({ pool, isFav, isLoadingFav, onToggleFav, onClick }: {
             </div>
             <div className="flex items-center gap-1 mt-0.5">
               <span className={clsx('text-[10px] px-1.5 py-0 rounded', modeColor)}>{poolType}</span>
-              <span className="text-[10px] text-dark-500">{pool.protocol || ''}</span>
+              <span className="text-[10px] text-muted-foreground/60">{pool.protocol || ''}</span>
             </div>
           </div>
         </div>
       </td>
 
       {/* Chain */}
-      <td className="px-3 py-2.5 text-xs text-dark-400 capitalize">{pool.chain || '—'}</td>
+      <td className="px-3 py-2.5 text-xs text-muted-foreground capitalize">{pool.chain || '—'}</td>
 
       {/* TVL */}
       <td className="px-3 py-2.5 text-sm font-mono text-right">{fmt(pool.tvlUSD)}</td>
@@ -143,13 +143,13 @@ function PoolRow({ pool, isFav, isLoadingFav, onToggleFav, onClick }: {
       </td>
 
       {/* Volume 1h */}
-      <td className="px-3 py-2.5 text-sm font-mono text-right text-dark-300">{fmt(pool.volume1hUSD)}</td>
+      <td className="px-3 py-2.5 text-sm font-mono text-right text-foreground/80">{fmt(pool.volume1hUSD)}</td>
 
       {/* Fees 1h */}
-      <td className="px-3 py-2.5 text-sm font-mono text-right text-dark-300">{fmt(pool.fees1hUSD)}</td>
+      <td className="px-3 py-2.5 text-sm font-mono text-right text-foreground/80">{fmt(pool.fees1hUSD)}</td>
 
       {/* Volatility */}
-      <td className="px-3 py-2.5 text-sm font-mono text-right text-dark-400">
+      <td className="px-3 py-2.5 text-sm font-mono text-right text-muted-foreground">
         {fmtPct(volatility * 100, 0)}
       </td>
 
@@ -163,7 +163,7 @@ function PoolRow({ pool, isFav, isLoadingFav, onToggleFav, onClick }: {
       </td>
 
       {/* Updated */}
-      <td className="px-3 py-2.5 text-[10px] text-dark-500 text-right whitespace-nowrap">
+      <td className="px-3 py-2.5 text-[10px] text-muted-foreground/60 text-right whitespace-nowrap">
         {formatTime(pool.updatedAt)}
       </td>
     </tr>
@@ -186,7 +186,7 @@ function PoolMobileCard({ pool, isFav, isLoadingFav, onToggleFav, onClick }: {
 
   return (
     <div
-      className="bg-dark-800 border border-dark-600 rounded-xl p-3 cursor-pointer hover:border-dark-500 transition-colors active:bg-dark-700"
+      className="bg-card border border-border rounded-xl p-3 cursor-pointer hover:border-border/80 transition-colors active:bg-muted"
       onClick={() => onClick(pool)}
     >
       {/* Header row: pair + fav + health */}
@@ -195,7 +195,7 @@ function PoolMobileCard({ pool, isFav, isLoadingFav, onToggleFav, onClick }: {
           <button
             onClick={e => { e.stopPropagation(); onToggleFav(pool); }}
             disabled={isLoadingFav}
-            className="flex-shrink-0 text-dark-500 hover:text-yellow-400 disabled:opacity-50"
+            className="flex-shrink-0 text-muted-foreground/60 hover:text-yellow-400 disabled:opacity-50"
           >
             {isLoadingFav
               ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -210,8 +210,8 @@ function PoolMobileCard({ pool, isFav, isLoadingFav, onToggleFav, onClick }: {
             </p>
             <div className="flex items-center gap-1 mt-0.5">
               <span className={clsx('text-[10px] px-1.5 rounded', modeColor)}>{poolType}</span>
-              <span className="text-[10px] text-dark-500">{pool.protocol}</span>
-              <span className="text-[10px] text-dark-500 capitalize">· {pool.chain}</span>
+              <span className="text-[10px] text-muted-foreground/60">{pool.protocol}</span>
+              <span className="text-[10px] text-muted-foreground/60 capitalize">· {pool.chain}</span>
             </div>
           </div>
         </div>
@@ -223,30 +223,30 @@ function PoolMobileCard({ pool, isFav, isLoadingFav, onToggleFav, onClick }: {
       {/* Metrics grid */}
       <div className="grid grid-cols-3 gap-2 text-center">
         <div>
-          <p className="text-[10px] text-dark-500 mb-0.5">TVL</p>
+          <p className="text-[10px] text-muted-foreground/60 mb-0.5">TVL</p>
           <p className="text-xs font-mono font-medium">{fmt(pool.tvlUSD)}</p>
         </div>
         <div>
-          <p className="text-[10px] text-dark-500 mb-0.5">APR</p>
+          <p className="text-[10px] text-muted-foreground/60 mb-0.5">APR</p>
           <p className={clsx('text-xs font-mono font-medium', (pool.aprTotal ?? 0) > 50 ? 'text-green-400' : '')}>
             {fmtPct(pool.aprTotal)}<ConfBadge conf={pool.dataConfidence?.apr?.confidence} />
           </p>
         </div>
         <div>
-          <p className="text-[10px] text-dark-500 mb-0.5">APR Aj.</p>
+          <p className="text-[10px] text-muted-foreground/60 mb-0.5">APR Aj.</p>
           <p className="text-xs font-mono font-medium text-yellow-400">{fmtPct(pool.aprAdjusted)}</p>
         </div>
         <div>
-          <p className="text-[10px] text-dark-500 mb-0.5">Vol. 1h</p>
-          <p className="text-xs font-mono text-dark-300">{fmt(pool.volume1hUSD)}</p>
+          <p className="text-[10px] text-muted-foreground/60 mb-0.5">Vol. 1h</p>
+          <p className="text-xs font-mono text-foreground/80">{fmt(pool.volume1hUSD)}</p>
         </div>
         <div>
-          <p className="text-[10px] text-dark-500 mb-0.5">Fees 1h</p>
-          <p className="text-xs font-mono text-dark-300">{fmt(pool.fees1hUSD)}</p>
+          <p className="text-[10px] text-muted-foreground/60 mb-0.5">Fees 1h</p>
+          <p className="text-xs font-mono text-foreground/80">{fmt(pool.fees1hUSD)}</p>
         </div>
         <div>
-          <p className="text-[10px] text-dark-500 mb-0.5">Volat.</p>
-          <p className="text-xs font-mono text-dark-400">{fmtPct((pool.volatilityAnn ?? 0) * 100, 0)}</p>
+          <p className="text-[10px] text-muted-foreground/60 mb-0.5">Volat.</p>
+          <p className="text-xs font-mono text-muted-foreground">{fmtPct((pool.volatilityAnn ?? 0) * 100, 0)}</p>
         </div>
       </div>
     </div>
@@ -282,26 +282,26 @@ function Top3Cards({ pools, onClick }: { pools: UnifiedPool[]; onClick: (p: Unif
             onClick={() => onClick(pool)}
           >
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-dark-400">#{i + 1} {info.label}</span>
+              <span className="text-xs font-semibold text-muted-foreground">#{i + 1} {info.label}</span>
               {info.icon}
             </div>
             <div className="font-bold text-base">{pool.baseToken || '?'}/{pool.quoteToken || '?'}</div>
-            <div className="text-xs text-dark-400 mt-0.5">{pool.protocol || ''} · {pool.chain || ''}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">{pool.protocol || ''} · {pool.chain || ''}</div>
             <div className="flex gap-4 mt-3">
               <div>
-                <div className="text-[10px] text-dark-500">TVL</div>
+                <div className="text-[10px] text-muted-foreground/60">TVL</div>
                 <div className="text-sm font-mono">{fmt(pool.tvlUSD)}</div>
               </div>
               <div>
-                <div className="text-[10px] text-dark-500">APR Ajust.</div>
+                <div className="text-[10px] text-muted-foreground/60">APR Ajust.</div>
                 <div className="text-sm font-mono text-yellow-400">{fmtPct(pool.aprAdjusted)}</div>
               </div>
               <div>
-                <div className="text-[10px] text-dark-500">Health</div>
+                <div className="text-[10px] text-muted-foreground/60">Health</div>
                 <div className={clsx('text-sm font-bold', healthColor(healthScore))}>{healthScore}</div>
               </div>
             </div>
-            <div className="mt-2 text-xs text-dark-400 line-clamp-2">
+            <div className="mt-2 text-xs text-muted-foreground line-clamp-2">
               {healthScore >= 75
                 ? `Alta liquidez e eficiência de capital. APR de fee ${fmtPct(pool.aprFee)}.`
                 : healthScore >= 55
@@ -467,18 +467,18 @@ export default function PoolsPage() {
           <h1 className="text-2xl font-bold flex items-center gap-2">
             🏊 Pool Intelligence
           </h1>
-          <p className="text-dark-400 text-sm mt-1">
+          <p className="text-muted-foreground text-sm mt-1">
             {data?.total ?? 0} pools analisadas · score institucional · dados observados e estimados
             {data?.syncing && <span className="ml-2 text-blue-400 text-xs">Sincronizando TheGraph...</span>}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => refetch({ cancelRefetch: false })} disabled={isFetching} className="p-2 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors disabled:opacity-50">
+          <button onClick={() => refetch({ cancelRefetch: false })} disabled={isFetching} className="p-2 rounded-lg bg-muted hover:bg-muted/70 transition-colors disabled:opacity-50">
             <RefreshCw className={clsx('w-4 h-4', isFetching && 'animate-spin')} />
           </button>
           <button
             onClick={() => setShowFilters(v => !v)}
-            className={clsx('flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors', showFilters ? 'bg-primary-600 text-white' : 'bg-dark-700 hover:bg-dark-600')}
+            className={clsx('flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors', showFilters ? 'bg-primary-600 text-white' : 'bg-muted hover:bg-muted/70')}
           >
             <Filter className="w-4 h-4" />
             Filtros
@@ -518,13 +518,13 @@ export default function PoolsPage() {
 
       {/* Search bar */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-500" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Buscar por token (ETH, USDC...) ou endereço..."
           list="token-suggestions"
-          className="w-full bg-dark-800 border border-dark-600 rounded-lg pl-9 pr-4 py-2 text-sm focus:border-primary-500 focus:outline-none"
+          className="w-full bg-card border border-border rounded-lg pl-9 pr-4 py-2 text-sm focus:border-primary focus:outline-none"
         />
         <datalist id="token-suggestions">
           {tokens.map(t => <option key={t} value={t} />)}
@@ -533,49 +533,49 @@ export default function PoolsPage() {
 
       {/* Filter panel */}
       {showFilters && (
-        <div className="bg-dark-800 rounded-xl border border-dark-600 p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="bg-card rounded-xl border border-border p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <div>
-            <label className="block text-xs text-dark-400 mb-1">Chain</label>
+            <label className="block text-xs text-muted-foreground mb-1">Chain</label>
             <select
               value={chainFilter}
               onChange={e => setChainFilter(e.target.value)}
-              className="w-full bg-dark-700 border border-dark-600 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-primary-500"
+              className="w-full bg-muted border border-border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
             >
               {CHAINS.map(c => <option key={c} value={c}>{c || 'Todas'}</option>)}
             </select>
           </div>
 
           <div>
-            <label className="block text-xs text-dark-400 mb-1">Tipo</label>
+            <label className="block text-xs text-muted-foreground mb-1">Tipo</label>
             <select
               value={poolTypeFilter}
               onChange={e => setPoolTypeFilter(e.target.value)}
-              className="w-full bg-dark-700 border border-dark-600 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-primary-500"
+              className="w-full bg-muted border border-border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
             >
               {POOL_TYPES.map(t => <option key={t} value={t}>{t || 'Todos'}</option>)}
             </select>
           </div>
 
           <div>
-            <label className="block text-xs text-dark-400 mb-1">TVL mín. (USD)</label>
+            <label className="block text-xs text-muted-foreground mb-1">TVL mín. (USD)</label>
             <input
               type="number"
               value={minTVL}
               onChange={e => setMinTVL(e.target.value)}
               placeholder="100000"
-              className="w-full bg-dark-700 border border-dark-600 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-primary-500"
+              className="w-full bg-muted border border-border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
             />
           </div>
 
           <div>
-            <label className="block text-xs text-dark-400 mb-1">Health mín.</label>
+            <label className="block text-xs text-muted-foreground mb-1">Health mín.</label>
             <input
               type="number"
               min={0} max={100}
               value={minHealth}
               onChange={e => setMinHealth(e.target.value)}
               placeholder="0"
-              className="w-full bg-dark-700 border border-dark-600 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-primary-500"
+              className="w-full bg-muted border border-border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
             />
           </div>
 
@@ -594,7 +594,7 @@ export default function PoolsPage() {
           <div className="flex items-end">
             <button
               onClick={() => { setChainFilter(''); setPoolTypeFilter(''); setMinTVL(''); setMinHealth(''); setBluechipOnly(false); setSearch(''); }}
-              className="px-3 py-1.5 bg-dark-700 hover:bg-dark-600 rounded-lg text-sm transition-colors"
+              className="px-3 py-1.5 bg-muted hover:bg-muted/70 rounded-lg text-sm transition-colors"
             >
               Limpar
             </button>
@@ -614,7 +614,7 @@ export default function PoolsPage() {
             {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
           </div>
         ) : sorted.length === 0 ? (
-          <div className="py-12 text-center text-dark-400">
+          <div className="py-12 text-center text-muted-foreground">
             Nenhuma pool encontrada. Ajuste os filtros.
           </div>
         ) : (
@@ -632,13 +632,13 @@ export default function PoolsPage() {
       </div>
 
       {/* Table — visível em sm+ */}
-      <div className="hidden sm:block bg-dark-800 rounded-xl border border-dark-600 overflow-hidden">
+      <div className="hidden sm:block bg-card rounded-xl border border-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left min-w-[800px]">
-            <thead className="bg-dark-900 border-b border-dark-700">
+            <thead className="bg-muted/50 border-b border-border/60">
               <tr>
-                <th className="px-3 py-2 text-xs font-medium text-dark-400">Pool</th>
-                <th className="px-3 py-2 text-xs font-medium text-dark-400">Chain</th>
+                <th className="px-3 py-2 text-xs font-medium text-muted-foreground">Pool</th>
+                <th className="px-3 py-2 text-xs font-medium text-muted-foreground">Chain</th>
                 <SortHeader label="TVL" sortKey="tvl" current={sortKey} dir={sortDir} onSort={handleSort} />
                 <SortHeader label="APR" sortKey="apr" current={sortKey} dir={sortDir} onSort={handleSort} />
                 <SortHeader label="APR Ajust." sortKey="aprAdjusted" current={sortKey} dir={sortDir} onSort={handleSort} />
@@ -646,14 +646,14 @@ export default function PoolsPage() {
                 <SortHeader label="Fees 1h" sortKey="fees1h" current={sortKey} dir={sortDir} onSort={handleSort} />
                 <SortHeader label="Volat." sortKey="volatilityAnn" current={sortKey} dir={sortDir} onSort={handleSort} />
                 <SortHeader label="Health" sortKey="healthScore" current={sortKey} dir={sortDir} onSort={handleSort} />
-                <th className="px-3 py-2 text-xs font-medium text-dark-400 text-right">Upd.</th>
+                <th className="px-3 py-2 text-xs font-medium text-muted-foreground text-right">Upd.</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <>
                   {[...Array(8)].map((_, i) => (
-                    <tr key={i} className="border-b border-dark-700">
+                    <tr key={i} className="border-b border-border/60">
                       {[...Array(10)].map((__, j) => (
                         <td key={j} className="px-3 py-3">
                           <Skeleton className="h-4 w-full" />
@@ -664,7 +664,7 @@ export default function PoolsPage() {
                 </>
               ) : sorted.length === 0 && (data?.syncing || isFetching) ? (
                 <tr>
-                  <td colSpan={10} className="px-3 py-12 text-center text-dark-400">
+                  <td colSpan={10} className="px-3 py-12 text-center text-muted-foreground">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
                     <p className="font-medium">Sincronizando dados do TheGraph...</p>
                     <p className="text-xs mt-1">Isso pode levar alguns segundos na primeira vez.</p>
@@ -672,7 +672,7 @@ export default function PoolsPage() {
                 </tr>
               ) : sorted.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-3 py-12 text-center text-dark-400">
+                  <td colSpan={10} className="px-3 py-12 text-center text-muted-foreground">
                     Nenhuma pool encontrada. Ajuste os filtros ou aguarde a sincronização.
                   </td>
                 </tr>
@@ -694,7 +694,7 @@ export default function PoolsPage() {
 
         {/* Footer */}
         {!isLoading && sorted.length > 0 && (
-          <div className="px-4 py-2.5 border-t border-dark-700 text-xs text-dark-500 flex items-center justify-between">
+          <div className="px-4 py-2.5 border-t border-border/60 text-xs text-muted-foreground/60 flex items-center justify-between">
             <span>{sorted.length} pools exibidas de {data?.total ?? 0} totais</span>
             <span className="flex items-center gap-1">
               <ExternalLink className="w-3 h-3" />
@@ -705,7 +705,7 @@ export default function PoolsPage() {
       </div>
 
       {/* Legend */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-dark-400">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-muted-foreground">
         <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-green-500/30 flex-shrink-0" />Health ≥70 = excelente</div>
         <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-yellow-500/30 flex-shrink-0" />Health 45-69 = razoável</div>
         <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-500/30 flex-shrink-0" />Health &lt;45 = cuidado</div>

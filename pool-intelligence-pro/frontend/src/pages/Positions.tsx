@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Trash2, ExternalLink, TrendingUp, TrendingDown, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Trash2, ExternalLink, TrendingUp, TrendingDown, AlertTriangle, RefreshCw, Briefcase } from 'lucide-react';
 import { fetchRangePositions, deleteRangePosition, RangePosition } from '../api/client';
 import clsx from 'clsx';
 
@@ -30,10 +30,10 @@ function PositionCard({ position, onDelete }: { position: RangePosition; onDelet
 
   return (
     <div className={clsx(
-      'bg-dark-800 rounded-xl p-4 lg:p-6 border transition-all',
+      'bg-card rounded-xl p-4 lg:p-6 border transition-all',
       isOutOfRange ? 'border-red-500/50 bg-red-500/5' :
       (isNearLower || isNearUpper) ? 'border-yellow-500/50 bg-yellow-500/5' :
-      'border-dark-600 hover:border-dark-500'
+      'border-border hover:border-border/80'
     )}>
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-4">
@@ -56,7 +56,7 @@ function PositionCard({ position, onDelete }: { position: RangePosition; onDelet
               </span>
             )}
           </div>
-          <p className="text-sm text-dark-400 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             {position.chain} • {position.poolAddress.slice(0, 8)}...{position.poolAddress.slice(-6)}
           </p>
         </div>
@@ -64,7 +64,7 @@ function PositionCard({ position, onDelete }: { position: RangePosition; onDelet
         <div className="flex items-center gap-2">
           <Link
             to={`/simulation/${position.chain}/${position.poolAddress}`}
-            className="p-2 rounded-lg bg-dark-700 hover:bg-dark-600 transition-colors"
+            className="p-2 rounded-lg bg-muted hover:bg-muted/70 transition-colors"
             title="Ver Simulação"
           >
             <ExternalLink className="w-4 h-4" />
@@ -81,12 +81,12 @@ function PositionCard({ position, onDelete }: { position: RangePosition; onDelet
 
       {/* Range Visualization */}
       <div className="mb-4">
-        <div className="flex justify-between text-xs text-dark-400 mb-1">
+        <div className="flex justify-between text-xs text-muted-foreground mb-1">
           <span>Limite Inferior</span>
           <span>Preço Atual</span>
           <span>Limite Superior</span>
         </div>
-        <div className="relative h-8 bg-dark-700 rounded-lg overflow-hidden">
+        <div className="relative h-8 bg-muted rounded-lg overflow-hidden">
           {/* Range bar */}
           <div className="absolute inset-y-0 left-0 right-0 flex items-center">
             {/* Lower danger zone */}
@@ -125,16 +125,16 @@ function PositionCard({ position, onDelete }: { position: RangePosition; onDelet
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-dark-700 rounded-lg p-3">
-          <p className="text-xs text-dark-400">Capital</p>
+        <div className="bg-muted rounded-lg p-3">
+          <p className="text-xs text-muted-foreground">Capital</p>
           <p className="text-lg font-bold">${position.capital.toLocaleString()}</p>
         </div>
-        <div className="bg-dark-700 rounded-lg p-3">
-          <p className="text-xs text-dark-400">Preço Entrada</p>
+        <div className="bg-muted rounded-lg p-3">
+          <p className="text-xs text-muted-foreground">Preço Entrada</p>
           <p className="text-lg font-bold">${position.entryPrice.toFixed(2)}</p>
         </div>
-        <div className="bg-dark-700 rounded-lg p-3">
-          <p className="text-xs text-dark-400 flex items-center gap-1">
+        <div className="bg-muted rounded-lg p-3">
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
             <TrendingDown className="w-3 h-3" /> Dist. Inferior
           </p>
           <p className={clsx(
@@ -145,8 +145,8 @@ function PositionCard({ position, onDelete }: { position: RangePosition; onDelet
             {distanceToLower.toFixed(1)}%
           </p>
         </div>
-        <div className="bg-dark-700 rounded-lg p-3">
-          <p className="text-xs text-dark-400 flex items-center gap-1">
+        <div className="bg-muted rounded-lg p-3">
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
             <TrendingUp className="w-3 h-3" /> Dist. Superior
           </p>
           <p className={clsx(
@@ -160,7 +160,7 @@ function PositionCard({ position, onDelete }: { position: RangePosition; onDelet
       </div>
 
       {/* Footer */}
-      <div className="mt-4 pt-4 border-t border-dark-700 flex flex-wrap items-center justify-between gap-2 text-xs text-dark-400">
+      <div className="mt-4 pt-4 border-t border-border/60 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>Criado: {new Date(position.createdAt).toLocaleDateString('pt-BR')}</span>
         <span>Alerta: {position.alertThreshold}% do limite</span>
         {position.lastCheckedAt && (
@@ -204,7 +204,7 @@ export default function PositionsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold">Minhas Posições</h1>
-          <p className="text-dark-400 mt-1">Acompanhe suas posições de liquidez monitoradas</p>
+          <p className="text-muted-foreground mt-1">Acompanhe suas posições de liquidez monitoradas</p>
         </div>
         <button
           onClick={() => refetch()}
@@ -218,16 +218,16 @@ export default function PositionsPage() {
 
       {/* Portfolio Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-dark-800 rounded-xl p-4 border border-dark-600">
-          <p className="text-sm text-dark-400">Posições Ativas</p>
+        <div className="bg-card rounded-xl p-4 border border-border">
+          <p className="text-sm text-muted-foreground">Posições Ativas</p>
           <p className="text-2xl font-bold">{activePositions.length}</p>
         </div>
-        <div className="bg-dark-800 rounded-xl p-4 border border-dark-600">
-          <p className="text-sm text-dark-400">Capital Total</p>
+        <div className="bg-card rounded-xl p-4 border border-border">
+          <p className="text-sm text-muted-foreground">Capital Total</p>
           <p className="text-2xl font-bold">${totalCapital.toLocaleString()}</p>
         </div>
-        <div className="bg-dark-800 rounded-xl p-4 border border-dark-600">
-          <p className="text-sm text-dark-400">Em Risco</p>
+        <div className="bg-card rounded-xl p-4 border border-border">
+          <p className="text-sm text-muted-foreground">Em Risco</p>
           <p className={clsx(
             'text-2xl font-bold',
             positionsAtRisk > 0 ? 'text-yellow-400' : 'text-green-400'
@@ -235,8 +235,8 @@ export default function PositionsPage() {
             {positionsAtRisk}
           </p>
         </div>
-        <div className="bg-dark-800 rounded-xl p-4 border border-dark-600">
-          <p className="text-sm text-dark-400">Monitoramento</p>
+        <div className="bg-card rounded-xl p-4 border border-border">
+          <p className="text-sm text-muted-foreground">Monitoramento</p>
           <p className="text-2xl font-bold text-green-400">Ativo</p>
         </div>
       </div>
@@ -250,10 +250,10 @@ export default function PositionsPage() {
 
       {/* Empty State */}
       {!isLoading && positions.length === 0 && (
-        <div className="text-center py-12 bg-dark-800 rounded-xl border border-dark-600">
-          <div className="text-6xl mb-4">💼</div>
+        <div className="text-center py-12 bg-card rounded-xl border border-border">
+          <div className="flex justify-center mb-4"><Briefcase className="w-12 h-12 text-muted-foreground/40" /></div>
           <h3 className="text-xl font-semibold mb-2">Nenhuma posição monitorada</h3>
-          <p className="text-dark-400 mb-6">
+          <p className="text-muted-foreground mb-6">
             Vá até a página de Simulação, configure um range e clique em "Monitorar Range"
           </p>
           <Link
@@ -268,7 +268,7 @@ export default function PositionsPage() {
       {/* Active Positions */}
       {activePositions.length > 0 && (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-dark-300">
+          <h2 className="text-lg font-semibold text-foreground/80">
             Posições Ativas ({activePositions.length})
           </h2>
           <div className="grid gap-4">
@@ -290,7 +290,7 @@ export default function PositionsPage() {
       {/* Inactive Positions */}
       {inactivePositions.length > 0 && (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold text-dark-300">
+          <h2 className="text-lg font-semibold text-foreground/80">
             Posições Inativas ({inactivePositions.length})
           </h2>
           <div className="grid gap-4 opacity-60">
@@ -306,12 +306,12 @@ export default function PositionsPage() {
       )}
 
       {/* Info */}
-      <div className="bg-dark-800/50 rounded-xl p-4 border border-dark-700">
+      <div className="bg-card/50 rounded-xl p-4 border border-border/60">
         <h3 className="font-semibold mb-2 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-yellow-400" />
           Como funciona o monitoramento
         </h3>
-        <ul className="text-sm text-dark-400 space-y-1">
+        <ul className="text-sm text-muted-foreground space-y-1">
           <li>• O sistema verifica suas posições a cada 2 minutos</li>
           <li>• Você recebe alerta no Telegram quando o preço está a 5% do limite do range</li>
           <li>• Alertas são enviados no máximo 1x a cada 30 minutos por posição</li>

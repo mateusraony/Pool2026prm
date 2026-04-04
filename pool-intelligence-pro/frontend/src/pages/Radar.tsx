@@ -53,16 +53,16 @@ function PoolCard({ pool, score, index, isWatched, isAdding, onAddToWatchlist }:
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="flex -space-x-2">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-xs font-bold border-2 border-dark-800">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-xs font-bold border-2 border-border/40">
                 {(pool.token0?.symbol ?? '???').slice(0, 3)}
               </div>
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-success-500 to-success-700 flex items-center justify-center text-xs font-bold border-2 border-dark-800">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-success-500 to-success-700 flex items-center justify-center text-xs font-bold border-2 border-border/40">
                 {(pool.token1?.symbol ?? '???').slice(0, 3)}
               </div>
             </div>
             <div>
               <h3 className="font-semibold">{pool.token0?.symbol ?? '?'}/{pool.token1?.symbol ?? '?'}</h3>
-              <p className="text-xs text-dark-400">{pool.protocol} - {pool.chain}</p>
+              <p className="text-xs text-muted-foreground">{pool.protocol} - {pool.chain}</p>
             </div>
           </div>
           <ScoreBadge score={score} />
@@ -70,10 +70,10 @@ function PoolCard({ pool, score, index, isWatched, isAdding, onAddToWatchlist }:
 
         {/* Token Prices - for verification */}
         <div className="flex gap-2 mb-3 text-xs">
-          <span className="px-2 py-1 rounded bg-dark-700 font-mono">
+          <span className="px-2 py-1 rounded bg-muted font-mono">
             {pool.token0?.symbol}: {pool.token0?.priceUsd != null ? '$' + pool.token0.priceUsd.toFixed(2) : <span className="text-warning-400">sem preço</span>}
           </span>
-          <span className="px-2 py-1 rounded bg-dark-700 font-mono">
+          <span className="px-2 py-1 rounded bg-muted font-mono">
             {pool.token1?.symbol}: {pool.token1?.priceUsd != null ? '$' + pool.token1.priceUsd.toFixed(2) : <span className="text-warning-400">sem preço</span>}
           </span>
         </div>
@@ -108,8 +108,8 @@ function PoolCard({ pool, score, index, isWatched, isAdding, onAddToWatchlist }:
                 isWatched
                   ? 'bg-warning-500 text-white'
                   : isAdding
-                    ? 'bg-dark-600 animate-pulse'
-                    : 'bg-dark-600 hover:bg-warning-500 hover:text-white'
+                    ? 'bg-muted/70 animate-pulse'
+                    : 'bg-muted/70 hover:bg-warning-500 hover:text-white'
               )}
               onClick={(e) => { e.stopPropagation(); if (!isWatched && !isAdding) onAddToWatchlist(); }}
               title={isWatched ? 'Na watchlist' : 'Adicionar à watchlist'}
@@ -167,7 +167,7 @@ export default function RadarPage() {
   return (
     <MainLayout title="Radar de Pools" subtitle="Descoberta automatica de oportunidades em DeFi">
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2 text-sm text-dark-400">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <TrendingUp className="w-4 h-4 text-success-500" />
           {(pools?.length || 0) + ' pools encontradas'}
         </div>
@@ -176,14 +176,14 @@ export default function RadarPage() {
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1,2,3,4,5,6].map((i) => (
-            <div key={i} className="card animate-pulse"><div className="p-5 space-y-4"><div className="h-10 bg-dark-700 rounded" /><div className="h-20 bg-dark-700 rounded" /><div className="h-8 bg-dark-700 rounded" /></div></div>
+            <div key={i} className="card animate-pulse"><div className="p-5 space-y-4"><div className="h-10 bg-muted rounded" /><div className="h-20 bg-muted rounded" /><div className="h-8 bg-muted rounded" /></div></div>
           ))}
         </div>
       ) : error ? (
         <div className="card p-8 text-center">
           <AlertTriangle className="w-12 h-12 text-danger-400 mx-auto mb-4" />
           <h3 className="text-lg font-semibold mb-2">Erro ao carregar pools</h3>
-          <p className="text-dark-400">Verifique a conexao com o servidor</p>
+          <p className="text-muted-foreground">Verifique a conexao com o servidor</p>
         </div>
       ) : pools && pools.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -207,7 +207,7 @@ export default function RadarPage() {
         <div className="card p-8 text-center">
           <div className="text-4xl mb-4">🔍</div>
           <h3 className="text-lg font-semibold mb-2">Aguardando scan</h3>
-          <p className="text-dark-400">O radar esta buscando pools...</p>
+          <p className="text-muted-foreground">O radar esta buscando pools...</p>
         </div>
       )}
     </MainLayout>

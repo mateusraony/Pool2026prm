@@ -559,32 +559,32 @@ export function UniswapRangeChart({
 
       {/* ── Info cards ── */}
       <div className="mt-3 grid grid-cols-5 gap-2 text-center">
-        <div className="bg-dark-700/50 rounded-lg p-2">
-          <div className="text-[10px] text-dark-400 mb-0.5">Preco Atual</div>
+        <div className="bg-muted/50 rounded-lg p-2">
+          <div className="text-[10px] text-muted-foreground mb-0.5">Preco Atual</div>
           <div className="font-mono font-bold text-xs">{formatPrice(currentPrice)}</div>
         </div>
-        <div className="bg-dark-700/50 rounded-lg p-2">
-          <div className="text-[10px] text-dark-400 mb-0.5">Preco Min</div>
+        <div className="bg-muted/50 rounded-lg p-2">
+          <div className="text-[10px] text-muted-foreground mb-0.5">Preco Min</div>
           <div className="font-mono font-bold text-xs" style={{ color: accentColor }}>{formatPrice(rangeLower)}</div>
         </div>
-        <div className="bg-dark-700/50 rounded-lg p-2">
-          <div className="text-[10px] text-dark-400 mb-0.5">Preco Max</div>
+        <div className="bg-muted/50 rounded-lg p-2">
+          <div className="text-[10px] text-muted-foreground mb-0.5">Preco Max</div>
           <div className="font-mono font-bold text-xs" style={{ color: accentColor }}>{formatPrice(rangeUpper)}</div>
         </div>
-        <div className="bg-dark-700/50 rounded-lg p-2">
-          <div className="text-[10px] text-dark-400 mb-0.5">Range Width</div>
+        <div className="bg-muted/50 rounded-lg p-2">
+          <div className="text-[10px] text-muted-foreground mb-0.5">Range Width</div>
           <div className="font-mono font-bold text-xs text-warning-400">
             ±{(currentPrice > 0 ? (rangeUpper - rangeLower) / currentPrice * 50 : 0).toFixed(1)}%
           </div>
         </div>
-        <div className="bg-dark-700/50 rounded-lg p-2">
-          <div className="text-[10px] text-dark-400 mb-0.5">No Range</div>
+        <div className="bg-muted/50 rounded-lg p-2">
+          <div className="text-[10px] text-muted-foreground mb-0.5">No Range</div>
           <div className="font-mono font-bold text-xs text-success-400">
             {timeInRange != null ? `${timeInRange}%` : '—'}
           </div>
         </div>
       </div>
-      <div className="mt-1.5 text-center text-[10px] text-dark-500">
+      <div className="mt-1.5 text-center text-[10px] text-muted-foreground/60">
         🖱️ Arraste os handles para ajustar o range
       </div>
     </div>

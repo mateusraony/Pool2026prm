@@ -42,13 +42,13 @@ function RecommendationCard({ rec, index }: { rec: Recommendation; index: number
     >
       <div className={clsx(
         'px-6 py-3 flex items-center justify-between',
-        index < 3 ? 'bg-gradient-to-r ' + rankColors[index] : 'bg-dark-700/50'
+        index < 3 ? 'bg-gradient-to-r ' + rankColors[index] : 'bg-muted/50'
       )}>
         <div className="flex items-center gap-3">
           <span className="text-2xl">{index < 3 ? rankEmojis[index] : '🏅'}</span>
           <div>
             <h3 className="font-bold text-lg">{poolName}</h3>
-            <p className="text-sm text-dark-400">{rec.pool.protocol} - {rec.pool.chain}</p>
+            <p className="text-sm text-muted-foreground">{rec.pool.protocol} - {rec.pool.chain}</p>
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -57,7 +57,7 @@ function RecommendationCard({ rec, index }: { rec: Recommendation; index: number
           </span>
           <div className="text-right">
             <div className="text-2xl font-bold">{(rec.score?.total ?? 0).toFixed(0)}</div>
-            <div className="text-xs text-dark-400">Score</div>
+            <div className="text-xs text-muted-foreground">Score</div>
           </div>
         </div>
       </div>
@@ -88,12 +88,12 @@ function RecommendationCard({ rec, index }: { rec: Recommendation; index: number
           </div>
         </div>
 
-        <div className="bg-dark-700/50 rounded-xl p-4">
+        <div className="bg-muted/50 rounded-xl p-4">
           <h4 className="font-semibold mb-2 flex items-center gap-2">
             <Brain className="w-4 h-4 text-primary-400" />
             Analise IA
           </h4>
-          <p className="text-dark-300 text-sm leading-relaxed">{rec.commentary}</p>
+          <p className="text-foreground/80 text-sm leading-relaxed">{rec.commentary}</p>
         </div>
 
         <div className="grid md:grid-cols-3 gap-4">
@@ -102,7 +102,7 @@ function RecommendationCard({ rec, index }: { rec: Recommendation; index: number
               <TrendingUp className="w-4 h-4" />
               Condicoes de Entrada
             </h4>
-            <ul className="text-sm space-y-1 text-dark-300">
+            <ul className="text-sm space-y-1 text-foreground/80">
               {rec.entryConditions.map((c, i) => <li key={`entry-${i}`}>• {c}</li>)}
             </ul>
           </div>
@@ -112,7 +112,7 @@ function RecommendationCard({ rec, index }: { rec: Recommendation; index: number
               <TrendingDown className="w-4 h-4" />
               Condicoes de Saida
             </h4>
-            <ul className="text-sm space-y-1 text-dark-300">
+            <ul className="text-sm space-y-1 text-foreground/80">
               {rec.exitConditions.map((c, i) => <li key={`exit-${i}`}>• {c}</li>)}
             </ul>
           </div>
@@ -122,14 +122,14 @@ function RecommendationCard({ rec, index }: { rec: Recommendation; index: number
               <AlertTriangle className="w-4 h-4" />
               Riscos Principais
             </h4>
-            <ul className="text-sm space-y-1 text-dark-300">
+            <ul className="text-sm space-y-1 text-foreground/80">
               {rec.mainRisks.map((r, i) => <li key={`risk-${i}`}>• {r}</li>)}
             </ul>
           </div>
         </div>
 
-        <div className="flex items-center justify-between pt-4 border-t border-dark-600">
-          <div className="flex items-center gap-4 text-sm text-dark-400">
+        <div className="flex items-center justify-between pt-4 border-t border-border">
+          <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4" />
               Valido ate: {format(new Date(rec.validUntil), 'dd/MM/yyyy HH:mm')}
@@ -179,13 +179,13 @@ export default function RecommendationsPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">🧠 Recomendacoes IA</h1>
-          <p className="text-dark-400 mt-1">
+          <p className="text-muted-foreground mt-1">
             Top {limit} oportunidades analisadas por inteligencia artificial
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <Filter className="w-4 h-4 text-dark-400" />
+          <Filter className="w-4 h-4 text-muted-foreground" />
           <select
             className="input py-2"
             value={limit}
@@ -211,14 +211,14 @@ export default function RecommendationsPage() {
                 'p-4 rounded-xl border-2 transition-all text-left',
                 selectedMode === mode
                   ? 'border-primary-500 bg-primary-500/10'
-                  : 'border-dark-600 hover:border-dark-500'
+                  : 'border-border hover:border-border/80'
               )}
             >
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-xl">{config.emoji}</span>
                 <span className="font-semibold">{config.label}</span>
               </div>
-              <p className="text-xs text-dark-400">{config.description}</p>
+              <p className="text-xs text-muted-foreground">{config.description}</p>
             </button>
           );
         })}
@@ -229,8 +229,8 @@ export default function RecommendationsPage() {
           {[1, 2, 3].map((i) => (
             <div key={i} className="card animate-pulse">
               <div className="p-6 space-y-4">
-                <div className="h-20 bg-dark-700 rounded" />
-                <div className="h-40 bg-dark-700 rounded" />
+                <div className="h-20 bg-muted rounded" />
+                <div className="h-40 bg-muted rounded" />
               </div>
             </div>
           ))}
@@ -249,7 +249,7 @@ export default function RecommendationsPage() {
               ? 'Aguardando analise'
               : 'Nenhuma recomendacao ' + modeConfig[selectedMode].label.toLowerCase()}
           </h3>
-          <p className="text-dark-400">
+          <p className="text-muted-foreground">
             {selectedMode === 'ALL'
               ? 'A IA esta processando as melhores oportunidades...'
               : 'Tente selecionar outro modo de estrategia'}

@@ -63,7 +63,7 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean
       onClick={() => onChange(!enabled)}
       className={clsx(
         'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none',
-        enabled ? 'bg-primary-600' : 'bg-dark-600'
+        enabled ? 'bg-primary-600' : 'bg-muted/70'
       )}
     >
       <span
@@ -218,7 +218,7 @@ export default function SettingsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold">Configurações</h1>
-          <p className="text-dark-400 mt-1">Gerencie notificações e integrações</p>
+          <p className="text-muted-foreground mt-1">Gerencie notificações e integrações</p>
         </div>
 
         {hasUnsavedChanges && (
@@ -238,8 +238,8 @@ export default function SettingsPage() {
       </div>
 
       {/* Telegram Status */}
-      <div className="bg-dark-800 rounded-xl border border-dark-600 overflow-hidden">
-        <div className="p-4 border-b border-dark-700">
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
+        <div className="p-4 border-b border-border/60">
           <h2 className="font-semibold flex items-center gap-2">
             <Send className="w-5 h-5 text-blue-400" />
             Telegram
@@ -249,7 +249,7 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium">Status da Integração</p>
-              <p className="text-sm text-dark-400">
+              <p className="text-sm text-muted-foreground">
                 {data?.telegram?.chatId
                   ? `Chat ID: ${data.telegram.chatId}`
                   : 'Configure TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID no .env'}
@@ -273,7 +273,7 @@ export default function SettingsPage() {
                 'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors disabled:opacity-50',
                 testStatus === 'success' ? 'bg-green-600 text-white' :
                 testStatus === 'error' ? 'bg-red-600 text-white' :
-                'bg-dark-700 hover:bg-dark-600'
+                'bg-muted hover:bg-muted/70'
               )}
             >
               {testStatus === 'loading' ? <RefreshCw className="w-4 h-4 animate-spin" /> :
@@ -336,23 +336,23 @@ export default function SettingsPage() {
 
           {!telegramEnabled && (
             <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-sm text-yellow-400">
-              Para ativar o Telegram, adicione <code className="bg-dark-700 px-1 rounded">TELEGRAM_BOT_TOKEN</code> e{' '}
-              <code className="bg-dark-700 px-1 rounded">TELEGRAM_CHAT_ID</code> no arquivo <code className="bg-dark-700 px-1 rounded">.env</code> do backend.
+              Para ativar o Telegram, adicione <code className="bg-muted px-1 rounded">TELEGRAM_BOT_TOKEN</code> e{' '}
+              <code className="bg-muted px-1 rounded">TELEGRAM_CHAT_ID</code> no arquivo <code className="bg-muted px-1 rounded">.env</code> do backend.
             </div>
           )}
         </div>
       </div>
 
       {/* App URL */}
-      <div className="bg-dark-800 rounded-xl border border-dark-600 overflow-hidden">
-        <div className="p-4 border-b border-dark-700">
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
+        <div className="p-4 border-b border-border/60">
           <h2 className="font-semibold flex items-center gap-2">
             <Link className="w-5 h-5 text-purple-400" />
             URL do Aplicativo
           </h2>
         </div>
         <div className="p-4 space-y-3">
-          <p className="text-sm text-dark-400">
+          <p className="text-sm text-muted-foreground">
             URL base usada para gerar links nas mensagens do Telegram. Ex: se você expôs a aplicação com ngrok ou tem um domínio próprio.
           </p>
           <input
@@ -360,22 +360,22 @@ export default function SettingsPage() {
             value={settings.appUrl}
             onChange={e => updateLocal({ appUrl: e.target.value })}
             placeholder="http://localhost:5173"
-            className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm font-mono focus:border-primary-500 focus:outline-none"
+            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm font-mono focus:border-primary focus:outline-none"
           />
-          <p className="text-xs text-dark-500">
-            Links gerados: <code className="text-dark-300">{settings.appUrl || 'http://localhost:5173'}/positions</code>
+          <p className="text-xs text-muted-foreground/60">
+            Links gerados: <code className="text-foreground/80">{settings.appUrl || 'http://localhost:5173'}/positions</code>
           </p>
         </div>
       </div>
 
       {/* Token Filters */}
-      <div className="bg-dark-800 rounded-xl border border-dark-600 overflow-hidden">
-        <div className="p-4 border-b border-dark-700">
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
+        <div className="p-4 border-b border-border/60">
           <h2 className="font-semibold flex items-center gap-2">
             <Filter className="w-5 h-5 text-orange-400" />
             Filtro de Tokens
           </h2>
-          <p className="text-sm text-dark-400 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             Filtre as recomendações para mostrar apenas pools que contenham os tokens selecionados
           </p>
         </div>
@@ -383,7 +383,7 @@ export default function SettingsPage() {
           {/* Current tokens */}
           <div className="flex flex-wrap gap-2">
             {(settings.tokenFilters || []).length === 0 ? (
-              <span className="text-dark-400 text-sm italic">Nenhum filtro ativo — mostrando todas as pools</span>
+              <span className="text-muted-foreground text-sm italic">Nenhum filtro ativo — mostrando todas as pools</span>
             ) : (
               (settings.tokenFilters || []).map(token => (
                 <span
@@ -410,7 +410,7 @@ export default function SettingsPage() {
               onChange={e => setNewToken(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAddToken()}
               placeholder="Digite um símbolo (ex: ETH, USDC, WBTC)"
-              className="flex-1 bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm font-mono uppercase focus:border-primary-500 focus:outline-none"
+              className="flex-1 bg-muted border border-border rounded-lg px-3 py-2 text-sm font-mono uppercase focus:border-primary focus:outline-none"
             />
             <button
               onClick={handleAddToken}
@@ -424,7 +424,7 @@ export default function SettingsPage() {
 
           {/* Quick add common tokens */}
           <div className="flex flex-wrap gap-2">
-            <span className="text-xs text-dark-500 mr-2">Adicionar rápido:</span>
+            <span className="text-xs text-muted-foreground/60 mr-2">Adicionar rápido:</span>
             {['ETH', 'WETH', 'USDC', 'USDT', 'WBTC', 'DAI', 'ARB', 'OP'].map(token => (
               <button
                 key={token}
@@ -438,8 +438,8 @@ export default function SettingsPage() {
                 className={clsx(
                   'px-2 py-0.5 rounded text-xs transition-colors',
                   (settings.tokenFilters || []).includes(token)
-                    ? 'bg-dark-600 text-dark-400 cursor-not-allowed'
-                    : 'bg-dark-700 hover:bg-dark-600 text-dark-300'
+                    ? 'bg-muted/70 text-muted-foreground cursor-not-allowed'
+                    : 'bg-muted hover:bg-muted/70 text-foreground/80'
                 )}
               >
                 {token}
@@ -455,13 +455,13 @@ export default function SettingsPage() {
       </div>
 
       {/* Notification Types */}
-      <div className="bg-dark-800 rounded-xl border border-dark-600 overflow-hidden">
-        <div className="p-4 border-b border-dark-700">
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
+        <div className="p-4 border-b border-border/60">
           <h2 className="font-semibold flex items-center gap-2">
             <Bell className="w-5 h-5 text-yellow-400" />
             Tipos de Notificação
           </h2>
-          <p className="text-sm text-dark-400 mt-1">Escolha quais alertas você quer receber no Telegram</p>
+          <p className="text-sm text-muted-foreground mt-1">Escolha quais alertas você quer receber no Telegram</p>
         </div>
         <div className="divide-y divide-dark-700">
           {NOTIFICATION_OPTIONS.map((option) => (
@@ -471,7 +471,7 @@ export default function SettingsPage() {
                   <span>{option.emoji}</span>
                   <span className="font-medium">{option.label}</span>
                 </div>
-                <p className="text-sm text-dark-400 mt-0.5">{option.description}</p>
+                <p className="text-sm text-muted-foreground mt-0.5">{option.description}</p>
               </div>
               <Toggle
                 enabled={settings.notifications[option.key]}
@@ -483,43 +483,43 @@ export default function SettingsPage() {
       </div>
 
       {/* Daily Report Schedule */}
-      <div className="bg-dark-800 rounded-xl border border-dark-600 overflow-hidden">
-        <div className="p-4 border-b border-dark-700">
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
+        <div className="p-4 border-b border-border/60">
           <h2 className="font-semibold flex items-center gap-2">
             <Clock className="w-5 h-5 text-green-400" />
             Horário do Relatório Diário
           </h2>
-          <p className="text-sm text-dark-400 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             Hora em que o relatório de posições será enviado (hora do servidor)
           </p>
         </div>
         <div className="p-4">
           <div className="flex items-center gap-4">
             <div>
-              <label className="block text-xs text-dark-400 mb-1">Hora</label>
+              <label className="block text-xs text-muted-foreground mb-1">Hora</label>
               <input
                 type="number"
                 min={0}
                 max={23}
                 value={settings.dailyReportHour}
                 onChange={e => updateLocal({ dailyReportHour: parseInt(e.target.value) || 0 })}
-                className="w-20 bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-center font-mono focus:border-primary-500 focus:outline-none"
+                className="w-20 bg-muted border border-border rounded-lg px-3 py-2 text-center font-mono focus:border-primary focus:outline-none"
               />
             </div>
-            <span className="text-2xl text-dark-400 mt-4">:</span>
+            <span className="text-2xl text-muted-foreground mt-4">:</span>
             <div>
-              <label className="block text-xs text-dark-400 mb-1">Minuto</label>
+              <label className="block text-xs text-muted-foreground mb-1">Minuto</label>
               <input
                 type="number"
                 min={0}
                 max={59}
                 value={settings.dailyReportMinute}
                 onChange={e => updateLocal({ dailyReportMinute: parseInt(e.target.value) || 0 })}
-                className="w-20 bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-center font-mono focus:border-primary-500 focus:outline-none"
+                className="w-20 bg-muted border border-border rounded-lg px-3 py-2 text-center font-mono focus:border-primary focus:outline-none"
               />
             </div>
             <div className="mt-4">
-              <p className="text-sm text-dark-400">
+              <p className="text-sm text-muted-foreground">
                 Enviará diariamente às{' '}
                 <span className="text-white font-mono font-bold">
                   {String(settings.dailyReportHour).padStart(2, '0')}:{String(settings.dailyReportMinute).padStart(2, '0')}
@@ -537,7 +537,7 @@ export default function SettingsPage() {
                   'px-3 py-1 rounded text-xs transition-colors',
                   settings.dailyReportHour === opt.h && settings.dailyReportMinute === opt.m
                     ? 'bg-primary-600 text-white'
-                    : 'bg-dark-700 hover:bg-dark-600'
+                    : 'bg-muted hover:bg-muted/70'
                 )}
               >
                 {opt.label}
