@@ -952,10 +952,30 @@ router.get('/pools/:chain/:address/ohlcv', async (req, res) => {
     const limit = Math.min(!Number.isNaN(limitOhlcvParsed) && limitOhlcvParsed > 0 ? limitOhlcvParsed : 168, 1000);
     const token = (req.query.token as string) === 'quote' ? 'quote' : 'base';
 
-    // Tentar dados reais primeiro
+    // Resolve UUID/externalId to actual contract address for GeckoTerminal
+    // The frontend may send a UUID (e.g. b99bcdf5-...) instead of a 0x... address
+    let contractAddress = normalizedAddress;
+    const isLikelyUuid = !normalizedAddress.startsWith('0x');
+    let poolData: Awaited<ReturnType<typeof getPoolWithFallback>> | null = null;
+    if (isLikelyUuid) {
+      const found = memoryStore.getAllPools().find(p =>
+        p.chain === chain && (p.id === normalizedAddress || p.poolAddress === normalizedAddress)
+      );
+      if (found?.poolAddress) {
+        contractAddress = found.poolAddress.toLowerCase();
+      } else {
+        // Try fetching pool to get its contract address
+        poolData = await getPoolWithFallback(chain, normalizedAddress);
+        if (poolData?.pool?.poolAddress) {
+          contractAddress = poolData.pool.poolAddress.toLowerCase();
+        }
+      }
+    }
+
+    // Tentar dados reais primeiro (com endereço de contrato real)
     let result = await priceHistoryService.getOhlcv(
       chain,
-      normalizedAddress,
+      contractAddress,
       timeframe as 'day' | 'hour' | 'minute',
       limit,
       token
@@ -963,14 +983,14 @@ router.get('/pools/:chain/:address/ohlcv', async (req, res) => {
 
     // Fallback: gerar candles sintéticos com dados da pool
     if (!result) {
-      const poolData = await getPoolWithFallback(chain, normalizedAddress);
+      if (!poolData) poolData = await getPoolWithFallback(chain, normalizedAddress);
       const pool = poolData?.pool;
       const price = pool?.price || 1;
       const vol = pool?.volatilityAnn || 0.5;
       const vol24h = pool?.volume24h || 50000;
 
       result = await priceHistoryService.getOhlcvWithFallback(
-        chain, normalizedAddress,
+        chain, contractAddress,
         timeframe as 'day' | 'hour' | 'minute',
         limit, token,
         price, vol, vol24h
@@ -1032,16 +1052,28 @@ router.get('/pools/:chain/:address/deep-analysis', async (req, res) => {
 
     // Fetch OHLCV (com fallback sintético)
     const limit = timeframe === 'hour' ? 168 : 90;
+
+    // Resolve UUID to contract address (same logic as OHLCV endpoint)
+    let contractAddr = normalizedAddress;
+    const isUuid = !normalizedAddress.startsWith('0x');
+    if (isUuid) {
+      const found = memoryStore.getAllPools().find(p =>
+        p.chain === chain && (p.id === normalizedAddress || p.poolAddress === normalizedAddress)
+      );
+      if (found?.poolAddress) contractAddr = found.poolAddress.toLowerCase();
+    }
+
     const poolId = `${chain}_${normalizedAddress}`;
     const pool = memoryStore.getPool(poolId);
 
-    let ohlcv = await priceHistoryService.getOhlcv(chain, normalizedAddress, timeframe, limit);
+    let ohlcv = await priceHistoryService.getOhlcv(chain, contractAddr, timeframe, limit);
     if (!ohlcv || ohlcv.candles.length < 15) {
       // Fallback: buscar dados da pool e gerar candles sintéticos
       const poolData = await getPoolWithFallback(chain, normalizedAddress);
       const p = poolData?.pool;
+      if (p?.poolAddress) contractAddr = p.poolAddress.toLowerCase();
       ohlcv = await priceHistoryService.getOhlcvWithFallback(
-        chain, normalizedAddress, timeframe, limit, 'base',
+        chain, contractAddr, timeframe, limit, 'base',
         p?.price || 1, p?.volatilityAnn || 0.5, p?.volume24h || 50000
       );
     }
