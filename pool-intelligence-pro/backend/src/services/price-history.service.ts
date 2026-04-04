@@ -205,7 +205,14 @@ class PriceHistoryService {
       return result;
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
-      logService.error('POOLS', `OHLCV fetch failed: ${msg}`, { chain, address, timeframe });
+      // 404 = pool not indexed on GeckoTerminal — expected, not an error
+      if (msg.includes('HTTP 404')) {
+        logService.info('POOLS', `OHLCV not available on GeckoTerminal (pool not indexed)`, { chain, address });
+      } else if (msg.includes('Circuit breaker is open')) {
+        logService.info('POOLS', `OHLCV skipped (circuit breaker open), using fallback`, { chain, address });
+      } else {
+        logService.warn('POOLS', `OHLCV fetch failed: ${msg}`, { chain, address, timeframe });
+      }
       return null;
     }
   }
