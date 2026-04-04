@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { TrendingUp, TrendingDown, Clock, Fuel, DollarSign, AlertTriangle, ArrowLeft, ExternalLink, Bell, BellRing, Check, BarChart3 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Clock, Fuel, DollarSign, AlertTriangle, ArrowLeft, ExternalLink, Bell, BellRing, Check, BarChart3, Settings, FlaskConical } from 'lucide-react';
 import { fetchPool, fetchPools, createRangePosition, fetchRangePositions, deleteRangePosition, calcRange, fetchOhlcv, fetchLiquidityDistribution, Pool, Score } from '../api/client';
 import { feeTierToBps, feeTierToPercent } from '../data/constants';
 import { UniswapRangeChart } from '@/components/charts/UniswapRangeChart';
@@ -315,6 +315,20 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
         </div>
       </div>
 
+      {/* Aviso: preço fora do range (IL = 100% para pools V3) */}
+      {!priceUnavailable && currentPrice > 0 && rangeLower > 0 && rangeUpper > 0 &&
+        (currentPrice < rangeLower || currentPrice > rangeUpper) && (
+        <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-xs">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          <span>
+            <strong>Preço atual fora do range configurado.</strong>{' '}
+            Em pools de liquidez concentrada (Uniswap V3 / Algebra), quando o preço sai do range
+            a posição <strong>para de gerar fees</strong> e o capital fica 100% em um dos tokens
+            (sem proteção de IL). Ajuste o range ou aguarde o preço retornar.
+          </span>
+        </div>
+      )}
+
       {/* Price warning */}
       {priceUnavailable && (
         <div className="bg-danger-500/10 border border-danger-500/30 rounded-xl p-4 flex items-center gap-3">
@@ -343,6 +357,17 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
           ))}
         </div>
       )}
+      {/* Aviso de dados sintéticos — aparece quando GeckoTerminal não tem histórico real */}
+      {ohlcvData?.synthetic && (
+        <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-warning/10 border border-warning/30 text-warning text-xs">
+          <FlaskConical className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          <span>
+            <strong>Dados simulados</strong> — GeckoTerminal não tem histórico de preço real para esta pool.
+            O gráfico foi gerado via simulação estocástica (GBM). Probabilidades e ranges continuam válidos,
+            mas os candles históricos <strong>não refletem movimentos reais</strong>.
+          </span>
+        </div>
+      )}
       {!priceUnavailable && (
         <UniswapRangeChart
           priceHistory={priceHistoryData}
@@ -362,7 +387,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
         {/* Controls */}
         <div className="card">
           <div className="card-header">
-            <h2 className="font-semibold">⚙️ Configuracao</h2>
+            <h2 className="font-semibold flex items-center gap-2"><Settings className="w-4 h-4" /> Configuracao</h2>
           </div>
           <div className="card-body space-y-6">
             <div>
