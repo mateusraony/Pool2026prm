@@ -199,8 +199,8 @@ export class DefiLlamaAdapter extends BaseAdapter {
       const feeTier = pool.feeTier || 0.003;
       const volumeEstimate = fees24hEstimate / feeTier;
 
-      // Sanity check: volume should be reasonable (not 100x TVL)
-      if (volumeEstimate > 0 && volumeEstimate < pool.tvl * 50) {
+      // Sanity check: volume should be reasonable (not 5x TVL — tighter bound to avoid low-fee outliers)
+      if (volumeEstimate > 0 && volumeEstimate < pool.tvl * 5) {
         pool.volume24h = Math.round(volumeEstimate);
         if (!pool.fees24h) {
           pool.fees24h = Math.round(fees24hEstimate * 100) / 100;
