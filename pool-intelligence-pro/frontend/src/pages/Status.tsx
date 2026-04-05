@@ -119,12 +119,12 @@ export default function StatusPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">🩺 Status do Sistema</h1>
-        <p className="text-dark-400 mt-1">Monitoramento em tempo real</p>
+        <h1 className="text-2xl font-bold flex items-center gap-2"><Activity className="w-6 h-6 text-primary" /> Status do Sistema</h1>
+        <p className="text-muted-foreground mt-1">Monitoramento em tempo real</p>
       </div>
 
       {/* === TOP CARDS === */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         <div className="card">
           <div className="card-body text-center">
             <StatusIcon className={clsx('w-10 h-10 mx-auto mb-2', 'text-' + statusColor + '-400')} />
@@ -136,14 +136,14 @@ export default function StatusPage() {
           <div className="card-body text-center">
             <Clock className="w-10 h-10 mx-auto mb-2 text-blue-400" />
             <h3 className="font-semibold text-sm">Uptime</h3>
-            <p className="text-sm text-dark-400">{health?.uptime?.formatted || '...'}</p>
+            <p className="text-sm text-muted-foreground">{health?.uptime?.formatted || '...'}</p>
           </div>
         </div>
         <div className="card">
           <div className="card-body text-center">
             <Server className="w-10 h-10 mx-auto mb-2 text-primary-400" />
             <h3 className="font-semibold text-sm">Provedores</h3>
-            <p className="text-sm text-dark-400">
+            <p className="text-sm text-muted-foreground">
               {health?.providers?.filter(p => p.isHealthy && !p.isOptional).length || 0}/
               {health?.providers?.filter(p => !p.isOptional).length || 0} online
             </p>
@@ -153,14 +153,14 @@ export default function StatusPage() {
           <div className="card-body text-center">
             <Cpu className="w-10 h-10 mx-auto mb-2 text-purple-400" />
             <h3 className="font-semibold text-sm">Memória</h3>
-            <p className="text-sm text-dark-400">{formatMB(health?.memory?.rssMB)}</p>
+            <p className="text-sm text-muted-foreground">{formatMB(health?.memory?.rssMB)}</p>
           </div>
         </div>
         <div className="card">
           <div className="card-body text-center">
             <Zap className="w-10 h-10 mx-auto mb-2 text-yellow-400" />
             <h3 className="font-semibold text-sm">Requests</h3>
-            <p className="text-sm text-dark-400">{health?.requests?.totalRequests ?? '...'}</p>
+            <p className="text-sm text-muted-foreground">{health?.requests?.totalRequests ?? '...'}</p>
           </div>
         </div>
         <div className="card">
@@ -186,37 +186,37 @@ export default function StatusPage() {
           </div>
           <div className="card-body">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="p-3 bg-dark-700/50 rounded-lg text-center">
+              <div className="p-3 bg-muted/50 rounded-lg text-center">
                 <p className="text-2xl font-bold text-purple-400">{health.memory.rssMB.toFixed(1)}</p>
-                <p className="text-sm text-dark-400">RSS (MB)</p>
+                <p className="text-sm text-muted-foreground">RSS (MB)</p>
               </div>
-              <div className="p-3 bg-dark-700/50 rounded-lg text-center">
+              <div className="p-3 bg-muted/50 rounded-lg text-center">
                 <p className="text-2xl font-bold text-blue-400">{health.memory.heapUsedMB.toFixed(1)}</p>
-                <p className="text-sm text-dark-400">Heap Used (MB)</p>
+                <p className="text-sm text-muted-foreground">Heap Used (MB)</p>
               </div>
-              <div className="p-3 bg-dark-700/50 rounded-lg text-center">
+              <div className="p-3 bg-muted/50 rounded-lg text-center">
                 <p className="text-2xl font-bold text-cyan-400">
                   {((health.memory.heapUsedBytes / health.memory.heapTotalBytes) * 100).toFixed(0)}%
                 </p>
-                <p className="text-sm text-dark-400">Heap Usage</p>
+                <p className="text-sm text-muted-foreground">Heap Usage</p>
               </div>
-              <div className="p-3 bg-dark-700/50 rounded-lg text-center">
+              <div className="p-3 bg-muted/50 rounded-lg text-center">
                 <p className={clsx(
                   'text-2xl font-bold',
                   health.memory.rssMB > 400 ? 'text-danger-400' : health.memory.rssMB > 300 ? 'text-warning-400' : 'text-success-400'
                 )}>
                   {health.memory.rssMB > 400 ? 'ALTO' : health.memory.rssMB > 300 ? 'MÉDIO' : 'OK'}
                 </p>
-                <p className="text-sm text-dark-400">RAM Status</p>
+                <p className="text-sm text-muted-foreground">RAM Status</p>
               </div>
             </div>
             {/* Barra visual RSS vs limite Render (512MB) */}
             <div className="mt-4">
-              <div className="flex justify-between text-xs text-dark-400 mb-1">
+              <div className="flex justify-between text-xs text-muted-foreground mb-1">
                 <span>RSS: {health.memory.rssMB.toFixed(1)} MB</span>
                 <span>Limite Render: 512 MB</span>
               </div>
-              <div className="w-full bg-dark-700 rounded-full h-3">
+              <div className="w-full bg-muted rounded-full h-3">
                 <div
                   className={clsx(
                     'h-3 rounded-full transition-all duration-500',
@@ -238,28 +238,28 @@ export default function StatusPage() {
           </div>
           <div className="card-body">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-              <div className="p-3 bg-dark-700/50 rounded-lg text-center">
+              <div className="p-3 bg-muted/50 rounded-lg text-center">
                 <p className="text-2xl font-bold text-blue-400">{health.requests.totalRequests}</p>
-                <p className="text-sm text-dark-400">Total</p>
+                <p className="text-sm text-muted-foreground">Total</p>
               </div>
-              <div className="p-3 bg-dark-700/50 rounded-lg text-center">
+              <div className="p-3 bg-muted/50 rounded-lg text-center">
                 <p className={clsx('text-2xl font-bold', health.requests.totalErrors > 0 ? 'text-danger-400' : 'text-success-400')}>
                   {health.requests.totalErrors}
                 </p>
-                <p className="text-sm text-dark-400">Erros</p>
+                <p className="text-sm text-muted-foreground">Erros</p>
               </div>
-              <div className="p-3 bg-dark-700/50 rounded-lg text-center">
+              <div className="p-3 bg-muted/50 rounded-lg text-center">
                 <p className={clsx(
                   'text-2xl font-bold',
                   health.requests.errorRate > 5 ? 'text-danger-400' : health.requests.errorRate > 1 ? 'text-warning-400' : 'text-success-400'
                 )}>
                   {health.requests.errorRate.toFixed(1)}%
                 </p>
-                <p className="text-sm text-dark-400">Error Rate</p>
+                <p className="text-sm text-muted-foreground">Error Rate</p>
               </div>
-              <div className="p-3 bg-dark-700/50 rounded-lg text-center">
+              <div className="p-3 bg-muted/50 rounded-lg text-center">
                 <p className="text-2xl font-bold text-primary-400">{formatMs(health.requests.avgDurationMs)}</p>
-                <p className="text-sm text-dark-400">Latência Média</p>
+                <p className="text-sm text-muted-foreground">Latência Média</p>
               </div>
             </div>
 
@@ -268,7 +268,7 @@ export default function StatusPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-dark-400 border-b border-dark-700">
+                    <tr className="text-muted-foreground border-b border-border/60">
                       <th className="text-left py-2 px-2">Endpoint</th>
                       <th className="text-right py-2 px-2">Requests</th>
                       <th className="text-right py-2 px-2">Avg</th>
@@ -279,13 +279,13 @@ export default function StatusPage() {
                   </thead>
                   <tbody>
                     {topEndpoints.map(([endpoint, stats]) => (
-                      <tr key={endpoint} className="border-b border-dark-800 hover:bg-dark-700/30">
+                      <tr key={endpoint} className="border-b border-border/40 hover:bg-muted/30">
                         <td className="py-2 px-2 font-mono text-xs">{endpoint}</td>
                         <td className="text-right py-2 px-2">{stats.count}</td>
-                        <td className="text-right py-2 px-2 text-dark-400">{stats.avgMs.toFixed(0)}ms</td>
-                        <td className="text-right py-2 px-2 text-dark-400">{stats.p95Ms.toFixed(0)}ms</td>
-                        <td className="text-right py-2 px-2 text-dark-400">{stats.maxMs.toFixed(0)}ms</td>
-                        <td className={clsx('text-right py-2 px-2', stats.errors > 0 ? 'text-danger-400' : 'text-dark-400')}>
+                        <td className="text-right py-2 px-2 text-muted-foreground">{stats.avgMs.toFixed(0)}ms</td>
+                        <td className="text-right py-2 px-2 text-muted-foreground">{stats.p95Ms.toFixed(0)}ms</td>
+                        <td className="text-right py-2 px-2 text-muted-foreground">{stats.maxMs.toFixed(0)}ms</td>
+                        <td className={clsx('text-right py-2 px-2', stats.errors > 0 ? 'text-danger-400' : 'text-muted-foreground')}>
                           {stats.errors}
                         </td>
                       </tr>
@@ -309,7 +309,7 @@ export default function StatusPage() {
               {Object.entries(health.jobs).map(([name, job]) => {
                 const successRate = job.totalRuns > 0 ? (job.successes / job.totalRuns) * 100 : 0;
                 return (
-                  <div key={name} className="p-3 bg-dark-700/50 rounded-lg">
+                  <div key={name} className="p-3 bg-muted/50 rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-medium text-sm">{name}</span>
                       <span className={clsx(
@@ -319,22 +319,22 @@ export default function StatusPage() {
                         {successRate.toFixed(0)}%
                       </span>
                     </div>
-                    <div className="grid grid-cols-3 gap-2 text-xs text-dark-400">
+                    <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
                       <div>
-                        <span className="block text-dark-300">{job.totalRuns}</span>
+                        <span className="block text-foreground">{job.totalRuns}</span>
                         <span>runs</span>
                       </div>
                       <div>
-                        <span className={clsx('block', job.failures > 0 ? 'text-danger-400' : 'text-dark-300')}>{job.failures}</span>
+                        <span className={clsx('block', job.failures > 0 ? 'text-danger-400' : 'text-foreground')}>{job.failures}</span>
                         <span>falhas</span>
                       </div>
                       <div>
-                        <span className="block text-dark-300">{job.avgDurationMs.toFixed(0)}ms</span>
+                        <span className="block text-foreground">{job.avgDurationMs.toFixed(0)}ms</span>
                         <span>avg</span>
                       </div>
                     </div>
                     {job.lastRunAt && (
-                      <p className="text-xs text-dark-500 mt-2">
+                      <p className="text-xs text-muted-foreground/60 mt-2">
                         Último: {format(new Date(job.lastRunAt), 'HH:mm:ss')}
                         {job.lastDurationMs != null && ` (${job.lastDurationMs.toFixed(0)}ms)`}
                       </p>
@@ -355,21 +355,21 @@ export default function StatusPage() {
           </div>
           <div className="card-body">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-              <div className="p-3 bg-dark-700/50 rounded-lg">
+              <div className="p-3 bg-muted/50 rounded-lg">
                 <p className="text-2xl font-bold text-blue-400">{health.logs.INFO}</p>
-                <p className="text-sm text-dark-400">INFO</p>
+                <p className="text-sm text-muted-foreground">INFO</p>
               </div>
-              <div className="p-3 bg-dark-700/50 rounded-lg">
-                <p className={clsx('text-2xl font-bold', health.logs.WARN > 0 ? 'text-warning-400' : 'text-dark-400')}>{health.logs.WARN}</p>
-                <p className="text-sm text-dark-400">WARN</p>
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <p className={clsx('text-2xl font-bold', health.logs.WARN > 0 ? 'text-warning-400' : 'text-muted-foreground')}>{health.logs.WARN}</p>
+                <p className="text-sm text-muted-foreground">WARN</p>
               </div>
-              <div className="p-3 bg-dark-700/50 rounded-lg">
-                <p className={clsx('text-2xl font-bold', health.logs.ERROR > 0 ? 'text-danger-400' : 'text-dark-400')}>{health.logs.ERROR}</p>
-                <p className="text-sm text-dark-400">ERROR</p>
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <p className={clsx('text-2xl font-bold', health.logs.ERROR > 0 ? 'text-danger-400' : 'text-muted-foreground')}>{health.logs.ERROR}</p>
+                <p className="text-sm text-muted-foreground">ERROR</p>
               </div>
-              <div className="p-3 bg-dark-700/50 rounded-lg">
-                <p className={clsx('text-2xl font-bold', health.logs.CRITICAL > 0 ? 'text-danger-400 animate-pulse' : 'text-dark-400')}>{health.logs.CRITICAL}</p>
-                <p className="text-sm text-dark-400">CRITICAL</p>
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <p className={clsx('text-2xl font-bold', health.logs.CRITICAL > 0 ? 'text-danger-400 animate-pulse' : 'text-muted-foreground')}>{health.logs.CRITICAL}</p>
+                <p className="text-sm text-muted-foreground">CRITICAL</p>
               </div>
             </div>
           </div>
@@ -384,24 +384,24 @@ export default function StatusPage() {
           </div>
           <div className="card-body">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-              <div className="p-3 bg-dark-700/50 rounded-lg">
+              <div className="p-3 bg-muted/50 rounded-lg">
                 <p className="text-2xl font-bold text-cyan-400">{health.memoryStore.pools}</p>
-                <p className="text-sm text-dark-400">Pools</p>
+                <p className="text-sm text-muted-foreground">Pools</p>
               </div>
-              <div className="p-3 bg-dark-700/50 rounded-lg">
+              <div className="p-3 bg-muted/50 rounded-lg">
                 <p className="text-2xl font-bold text-green-400">{health.memoryStore.hitRatePct}%</p>
-                <p className="text-sm text-dark-400">Hit Rate</p>
+                <p className="text-sm text-muted-foreground">Hit Rate</p>
               </div>
-              <div className="p-3 bg-dark-700/50 rounded-lg">
+              <div className="p-3 bg-muted/50 rounded-lg">
                 <p className="text-2xl font-bold text-primary-400">{health.memoryStore.reads}</p>
-                <p className="text-sm text-dark-400">Reads</p>
+                <p className="text-sm text-muted-foreground">Reads</p>
               </div>
-              <div className="p-3 bg-dark-700/50 rounded-lg">
+              <div className="p-3 bg-muted/50 rounded-lg">
                 <p className="text-2xl font-bold text-yellow-400">{health.memoryStore.estimatedKB} KB</p>
-                <p className="text-sm text-dark-400">RAM Estimada</p>
+                <p className="text-sm text-muted-foreground">RAM Estimada</p>
               </div>
             </div>
-            <div className="mt-4 flex items-center gap-4 text-sm text-dark-400">
+            <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
               <span>Hits: {health.memoryStore.hits}</span>
               <span>Misses: {health.memoryStore.misses}</span>
               <span>Writes: {health.memoryStore.writes}</span>
@@ -425,21 +425,21 @@ export default function StatusPage() {
           </div>
           <div className="card-body space-y-3">
             {health?.providers?.map((p) => (
-              <div key={p.name} className={clsx('flex items-center justify-between p-3 rounded-lg', p.isOptional ? 'bg-dark-800/40 opacity-70' : 'bg-dark-700/50')}>
+              <div key={p.name} className={clsx('flex items-center justify-between p-3 rounded-lg', p.isOptional ? 'bg-muted/40 opacity-70' : 'bg-muted/50')}>
                 <div className="flex items-center gap-3">
-                  <div className={clsx('w-3 h-3 rounded-full', p.isHealthy ? 'bg-success-500' : p.isOptional ? 'bg-dark-500' : 'bg-danger-500')} />
+                  <div className={clsx('w-3 h-3 rounded-full', p.isHealthy ? 'bg-success-500' : p.isOptional ? 'bg-muted-foreground/40' : 'bg-danger-500')} />
                   <span className="font-medium">{p.name}</span>
-                  {p.isOptional && <span className="text-xs text-dark-500 italic">(opcional)</span>}
+                  {p.isOptional && <span className="text-xs text-muted-foreground/60 italic">(opcional)</span>}
                 </div>
                 <div className="flex items-center gap-2">
                   {p.isHealthy && <span className="badge badge-success text-xs">OK</span>}
                   {!p.isHealthy && !p.isOptional && <span className="badge badge-danger text-xs">FALHA</span>}
                   {!p.isHealthy && p.isOptional && p.note && (
-                    <span className="text-xs text-dark-500 max-w-xs truncate" title={p.note}>{p.note}</span>
+                    <span className="text-xs text-muted-foreground/60 max-w-xs truncate" title={p.note}>{p.note}</span>
                   )}
                   {p.isCircuitOpen && <span className="badge badge-danger text-xs">Circuit Open</span>}
                   {p.consecutiveFailures > 0 && !p.isOptional && (
-                    <span className="text-sm text-dark-400">{p.consecutiveFailures} falhas</span>
+                    <span className="text-sm text-muted-foreground">{p.consecutiveFailures} falhas</span>
                   )}
                 </div>
               </div>
@@ -474,7 +474,7 @@ export default function StatusPage() {
           <div className="card-body">
             <div className="space-y-2 max-h-80 overflow-y-auto">
               {logs?.map((log, i) => (
-                <div key={i} className="flex items-start gap-2 text-sm p-2 bg-dark-700/50 rounded">
+                <div key={i} className="flex items-start gap-2 text-sm p-2 bg-muted/50 rounded">
                   <span className={clsx(
                     'badge text-xs',
                     log.level === 'ERROR' ? 'badge-danger' :
@@ -482,13 +482,13 @@ export default function StatusPage() {
                   )}>
                     {log.level}
                   </span>
-                  <span className="text-dark-400">[{log.component}]</span>
+                  <span className="text-muted-foreground">[{log.component}]</span>
                   <span className="flex-1 truncate">{log.message}</span>
-                  <span className="text-xs text-dark-400">{(() => { const d = new Date(log.timestamp); return isNaN(d.getTime()) ? log.timestamp : format(d, 'HH:mm:ss'); })()}</span>
+                  <span className="text-xs text-muted-foreground">{(() => { const d = new Date(log.timestamp); return isNaN(d.getTime()) ? log.timestamp : format(d, 'HH:mm:ss'); })()}</span>
                 </div>
               ))}
               {(!logs || logs.length === 0) && (
-                <p className="text-dark-400 text-center py-4">Nenhum log disponível</p>
+                <p className="text-muted-foreground text-center py-4">Nenhum log disponível</p>
               )}
             </div>
           </div>
@@ -502,25 +502,25 @@ export default function StatusPage() {
         </div>
         <div className="card-body">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
-            <div className="p-3 bg-dark-700/50 rounded-lg">
+            <div className="p-3 bg-muted/50 rounded-lg">
               <p className="text-2xl font-bold text-success-400">{((health?.cache?.hitRate || 0) * 100).toFixed(0)}%</p>
-              <p className="text-sm text-dark-400">Hit Rate</p>
+              <p className="text-sm text-muted-foreground">Hit Rate</p>
             </div>
-            <div className="p-3 bg-dark-700/50 rounded-lg">
+            <div className="p-3 bg-muted/50 rounded-lg">
               <p className="text-2xl font-bold text-blue-400">{health?.cache?.hits || 0}</p>
-              <p className="text-sm text-dark-400">Hits</p>
+              <p className="text-sm text-muted-foreground">Hits</p>
             </div>
-            <div className="p-3 bg-dark-700/50 rounded-lg">
-              <p className="text-2xl font-bold text-dark-300">{health?.cache?.misses || 0}</p>
-              <p className="text-sm text-dark-400">Misses</p>
+            <div className="p-3 bg-muted/50 rounded-lg">
+              <p className="text-2xl font-bold text-foreground">{health?.cache?.misses || 0}</p>
+              <p className="text-sm text-muted-foreground">Misses</p>
             </div>
-            <div className="p-3 bg-dark-700/50 rounded-lg">
+            <div className="p-3 bg-muted/50 rounded-lg">
               <p className="text-2xl font-bold text-primary-400">{health?.cache?.sets || 0}</p>
-              <p className="text-sm text-dark-400">Sets</p>
+              <p className="text-sm text-muted-foreground">Sets</p>
             </div>
-            <div className="p-3 bg-dark-700/50 rounded-lg">
+            <div className="p-3 bg-muted/50 rounded-lg">
               <p className="text-2xl font-bold text-cyan-400">{health?.cache?.keys || 0}</p>
-              <p className="text-sm text-dark-400">Keys</p>
+              <p className="text-sm text-muted-foreground">Keys</p>
             </div>
           </div>
         </div>

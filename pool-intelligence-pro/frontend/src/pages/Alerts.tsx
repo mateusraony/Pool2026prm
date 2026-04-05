@@ -93,8 +93,8 @@ export default function AlertsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">🚨 Alertas</h1>
-          <p className="text-dark-400 mt-1">Configure notificacoes automaticas</p>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><Bell className="w-6 h-6 text-primary" /> Alertas</h1>
+          <p className="text-muted-foreground mt-1">Configure notificacoes automaticas</p>
         </div>
         <button
           className="btn btn-primary flex items-center gap-2"
@@ -117,7 +117,7 @@ export default function AlertsPage() {
             {loadingAlerts ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-16 bg-dark-700 rounded animate-pulse" />
+                  <div key={i} className="h-16 bg-muted rounded animate-pulse" />
                 ))}
               </div>
             ) : alerts?.rules && alerts.rules.length > 0 ? (
@@ -127,14 +127,14 @@ export default function AlertsPage() {
                   return (
                     <div
                       key={id}
-                      className="p-3 rounded-lg border bg-dark-700/50 border-dark-600"
+                      className="p-3 rounded-lg border bg-muted/50 border-border"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <span className="text-xl">{config?.icon || '🔔'}</span>
                           <div>
                             <div className="font-medium">{config?.label || rule.type}</div>
-                            <div className="text-sm text-dark-400">
+                            <div className="text-sm text-muted-foreground">
                               Pool: {getPoolName(rule.poolId)} | Limite: {rule.value}{config?.unit || ''}
                             </div>
                           </div>
@@ -152,7 +152,7 @@ export default function AlertsPage() {
                 })}
               </div>
             ) : (
-              <div className="text-center py-8 text-dark-400">
+              <div className="text-center py-8 text-muted-foreground">
                 <BellOff className="w-12 h-12 mx-auto mb-4 opacity-50" />
                 <p>Nenhum alerta configurado</p>
                 <p className="text-sm mt-1">Clique em "Novo Alerta" para criar</p>
@@ -170,19 +170,19 @@ export default function AlertsPage() {
               </h3>
             </div>
             <div className="card-body space-y-4">
-              <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                 <span>Cooldown entre alertas</span>
                 <span className="text-primary-400 font-medium">{settings?.alertConfig?.cooldownMinutes ?? 60} min</span>
               </div>
-              <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                 <span>Max alertas por hora</span>
                 <span className="text-primary-400 font-medium">{settings?.alertConfig?.maxAlertsPerHour ?? 30}</span>
               </div>
-              <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                 <span>Modo atual</span>
                 <span className="badge badge-warning">{(settings as any)?.system?.mode || (settings as any)?.mode || 'NORMAL'}</span>
               </div>
-              <div className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                 <div className="flex items-center gap-2">
                   <Send className="w-4 h-4" />
                   <span>Telegram Bot</span>
@@ -220,9 +220,9 @@ export default function AlertsPage() {
               <div className="card-body">
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {alerts.recentAlerts.slice(0, 5).map((alert, i) => (
-                    <div key={i} className="p-2 bg-dark-700/50 rounded text-sm">
+                    <div key={i} className="p-2 bg-muted/50 rounded text-sm">
                       <div className="font-medium">{alert.message}</div>
-                      <div className="text-xs text-dark-400">
+                      <div className="text-xs text-muted-foreground">
                         {new Date(alert.timestamp).toLocaleString('pt-BR')}
                       </div>
                     </div>
@@ -239,13 +239,13 @@ export default function AlertsPage() {
           <div className="card w-full max-w-lg">
             <div className="card-header flex items-center justify-between">
               <h3 className="font-semibold">Novo Alerta</h3>
-              <button onClick={() => setShowModal(false)} className="p-1 hover:bg-dark-600 rounded">
+              <button onClick={() => setShowModal(false)} className="p-1 hover:bg-muted/70 rounded">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="card-body space-y-4">
               <div>
-                <label className="block text-sm text-dark-400 mb-2">Pool (opcional - deixe vazio para global)</label>
+                <label className="block text-sm text-muted-foreground mb-2">Pool (opcional - deixe vazio para global)</label>
                 <select
                   className="input w-full"
                   value={newAlert.poolId || ''}
@@ -261,7 +261,7 @@ export default function AlertsPage() {
               </div>
 
               <div>
-                <label className="block text-sm text-dark-400 mb-2">Tipo de Alerta</label>
+                <label className="block text-sm text-muted-foreground mb-2">Tipo de Alerta</label>
                 <div className="grid grid-cols-2 gap-2">
                   {(Object.keys(alertTypeConfig) as AlertType[]).map(type => {
                     const config = alertTypeConfig[type];
@@ -270,13 +270,13 @@ export default function AlertsPage() {
                         key={type}
                         className={clsx(
                           'p-3 rounded-lg border-2 transition-all text-left',
-                          newAlert.type === type ? 'border-primary-500 bg-primary-500/10' : 'border-dark-600 hover:border-dark-500'
+                          newAlert.type === type ? 'border-primary-500 bg-primary-500/10' : 'border-border hover:border-border/80'
                         )}
                         onClick={() => setNewAlert({ ...newAlert, type, condition: undefined })}
                       >
                         <div className="text-lg mb-1">{config.icon}</div>
                         <div className="text-sm font-medium">{config.label}</div>
-                        <div className="text-xs text-dark-400">{config.description}</div>
+                        <div className="text-xs text-muted-foreground">{config.description}</div>
                       </button>
                     );
                   })}
@@ -285,10 +285,10 @@ export default function AlertsPage() {
 
               {isRangeType ? (
                 <div className="space-y-3">
-                  <label className="block text-sm text-dark-400">Range de Preço</label>
+                  <label className="block text-sm text-muted-foreground">Range de Preço</label>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs text-dark-400 mb-1">Limite Inferior ($)</label>
+                      <label className="block text-xs text-muted-foreground mb-1">Limite Inferior ($)</label>
                       <input
                         type="number"
                         className="input w-full"
@@ -302,7 +302,7 @@ export default function AlertsPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-dark-400 mb-1">Limite Superior ($)</label>
+                      <label className="block text-xs text-muted-foreground mb-1">Limite Superior ($)</label>
                       <input
                         type="number"
                         className="input w-full"
@@ -318,7 +318,7 @@ export default function AlertsPage() {
                   </div>
                   {newAlert.type === 'NEAR_RANGE_EXIT' && (
                     <div>
-                      <label className="block text-xs text-dark-400 mb-1">
+                      <label className="block text-xs text-muted-foreground mb-1">
                         Proximidade para alertar (% do limite) — padrão: 5%
                       </label>
                       <input
@@ -335,7 +335,7 @@ export default function AlertsPage() {
                 </div>
               ) : !isGlobalType && (
                 <div>
-                  <label className="block text-sm text-dark-400 mb-2">
+                  <label className="block text-sm text-muted-foreground mb-2">
                     Valor ({alertTypeConfig[newAlert.type]?.unit || '$'})
                   </label>
                   <input

@@ -48,11 +48,11 @@ function StatCard({ label, value, subValue, icon, color }: {
   return (
     <div className={clsx('rounded-xl border p-4', color)}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-dark-400 uppercase tracking-wider">{label}</span>
+        <span className="text-xs text-muted-foreground uppercase tracking-wider">{label}</span>
         {icon}
       </div>
       <div className="text-2xl font-bold">{value}</div>
-      {subValue && <div className="text-xs text-dark-400 mt-1">{subValue}</div>}
+      {subValue && <div className="text-xs text-muted-foreground mt-1">{subValue}</div>}
     </div>
   );
 }
@@ -72,19 +72,19 @@ function PoolCard({ pool, rank, onClick }: { pool: UnifiedPool; rank: number; on
 
   return (
     <div
-      className="bg-dark-800 border border-dark-600 rounded-xl p-4 hover:border-primary-500/50 cursor-pointer transition-all"
+      className="bg-card border border-border rounded-xl p-4 hover:border-primary-500/50 cursor-pointer transition-all"
       onClick={onClick}
     >
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="w-6 h-6 rounded-full bg-dark-700 flex items-center justify-center text-xs font-bold">
+          <span className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-bold">
             {rank}
           </span>
           <div>
             <div className="font-bold">{pool.baseToken || '?'}/{pool.quoteToken || '?'}</div>
             <div className="flex items-center gap-1 mt-0.5">
               <span className={clsx('text-[10px] px-1.5 rounded', modeColor)}>{poolType}</span>
-              <span className="text-[10px] text-dark-500">{pool.protocol || 'Unknown'} · {pool.chain || '?'}</span>
+              <span className="text-[10px] text-muted-foreground/60">{pool.protocol || 'Unknown'} · {pool.chain || '?'}</span>
             </div>
           </div>
         </div>
@@ -95,19 +95,19 @@ function PoolCard({ pool, rank, onClick }: { pool: UnifiedPool; rank: number; on
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
         <div>
-          <div className="text-[10px] text-dark-500 mb-0.5">TVL</div>
+          <div className="text-[10px] text-muted-foreground/60 mb-0.5">TVL</div>
           <div className="text-sm font-mono">{fmt(pool.tvlUSD)}</div>
         </div>
         <div>
-          <div className="text-[10px] text-dark-500 mb-0.5">APR Fee</div>
+          <div className="text-[10px] text-muted-foreground/60 mb-0.5">APR Fee</div>
           <div className="text-sm font-mono text-green-400">{fmtPct(pool.aprFee)}</div>
         </div>
         <div>
-          <div className="text-[10px] text-dark-500 mb-0.5">APR Ajust.</div>
+          <div className="text-[10px] text-muted-foreground/60 mb-0.5">APR Ajust.</div>
           <div className="text-sm font-mono text-yellow-400">{fmtPct(pool.aprAdjusted)}</div>
         </div>
         <div>
-          <div className="text-[10px] text-dark-500 mb-0.5">Vol 1h</div>
+          <div className="text-[10px] text-muted-foreground/60 mb-0.5">Vol 1h</div>
           <div className="text-sm font-mono">{fmt(pool.volume1hUSD)}</div>
         </div>
       </div>
@@ -174,34 +174,34 @@ function VerdictPanel({ pools, token }: { pools: UnifiedPool[]; token: string })
         {verdictIcon}
         <div className="flex-1">
           <h3 className="font-bold text-lg mb-1">Veredicto para {token.toUpperCase()}</h3>
-          <p className="text-sm text-dark-300">{verdictText}</p>
+          <p className="text-sm text-foreground/80">{verdictText}</p>
 
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
             <div>
-              <span className="text-dark-500 text-xs">Pools</span>
+              <span className="text-muted-foreground/60 text-xs">Pools</span>
               <div className="font-bold">{pools.length}</div>
             </div>
             <div>
-              <span className="text-dark-500 text-xs">TVL Total</span>
+              <span className="text-muted-foreground/60 text-xs">TVL Total</span>
               <div className="font-bold">{fmt(totalTVL)}</div>
             </div>
             <div>
-              <span className="text-dark-500 text-xs">Pools Blue-chip</span>
+              <span className="text-muted-foreground/60 text-xs">Pools Blue-chip</span>
               <div className="font-bold">{bluechipPools.length}</div>
             </div>
             <div>
-              <span className="text-dark-500 text-xs">Pools CL</span>
+              <span className="text-muted-foreground/60 text-xs">Pools CL</span>
               <div className="font-bold">{clPools.length}</div>
             </div>
           </div>
 
           {best && (
-            <div className="mt-4 pt-4 border-t border-dark-600">
-              <div className="text-xs text-dark-400 mb-2">🏆 Melhor pool recomendada:</div>
+            <div className="mt-4 pt-4 border-t border-border">
+              <div className="text-xs text-muted-foreground mb-2">🏆 Melhor pool recomendada:</div>
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <span className="font-bold">{best.baseToken || '?'}/{best.quoteToken || '?'}</span>
-                  <span className="text-dark-400 text-sm ml-2">{best.protocol || ''} · {best.chain || ''}</span>
+                  <span className="text-muted-foreground text-sm ml-2">{best.protocol || ''} · {best.chain || ''}</span>
                 </div>
                 <div className="flex gap-3">
                   <span className="text-green-400">{fmtPct(best.aprAdjusted ?? best.aprFee)} APR</span>
@@ -305,13 +305,13 @@ export default function TokenAnalyzerPage() {
           <Search className="w-8 h-8 text-primary-400" />
           Token Analyzer
         </h1>
-        <p className="text-dark-400 mt-2">
+        <p className="text-muted-foreground mt-2">
           Pesquise qualquer token e veja se vale a pena investir em pools de liquidez
         </p>
       </div>
 
       {/* Search Box */}
-      <div className="bg-dark-800 border border-dark-600 rounded-xl p-6">
+      <div className="bg-card border border-border rounded-xl p-6">
         <label className="block text-sm font-medium mb-2">
           Digite o símbolo ou endereço do token
         </label>
@@ -323,7 +323,7 @@ export default function TokenAnalyzerPage() {
               onKeyPress={handleKeyPress}
               placeholder="Ex: ETH, USDC, ARB, 0x..."
               list="token-list"
-              className="w-full bg-dark-700 border border-dark-600 rounded-lg px-4 py-3 text-lg focus:border-primary-500 focus:outline-none"
+              className="w-full bg-muted border border-border rounded-lg px-4 py-3 text-lg focus:border-primary focus:outline-none"
             />
             <datalist id="token-list">
               {tokens.map(t => <option key={t} value={t} />)}
@@ -341,7 +341,7 @@ export default function TokenAnalyzerPage() {
 
         {/* Quick tokens */}
         <div className="mt-4 flex flex-wrap gap-2">
-          <span className="text-xs text-dark-500">Populares:</span>
+          <span className="text-xs text-muted-foreground/60">Populares:</span>
           {quickTokens.map(t => (
             <button
               key={t}
@@ -350,7 +350,7 @@ export default function TokenAnalyzerPage() {
                 'px-2 py-1 text-xs rounded transition-colors',
                 searchedToken === t
                   ? 'bg-primary-600 text-white'
-                  : 'bg-dark-700 hover:bg-dark-600'
+                  : 'bg-muted hover:bg-muted/70'
               )}
             >
               {t}
@@ -363,7 +363,7 @@ export default function TokenAnalyzerPage() {
       {isLoading && searchedToken && (
         <div className="text-center py-12">
           <RefreshCw className="w-8 h-8 animate-spin mx-auto text-primary-400 mb-3" />
-          <p className="text-dark-400">Buscando pools para {searchedToken}...</p>
+          <p className="text-muted-foreground">Buscando pools para {searchedToken}...</p>
         </div>
       )}
 
@@ -371,10 +371,10 @@ export default function TokenAnalyzerPage() {
       {searchedToken && !isLoading && (
         <>
           {filteredPools.length === 0 ? (
-            <div className="text-center py-12 bg-dark-800 border border-dark-600 rounded-xl">
+            <div className="text-center py-12 bg-card border border-border rounded-xl">
               <AlertTriangle className="w-12 h-12 mx-auto text-yellow-400 mb-3" />
               <h3 className="text-xl font-bold mb-2">Nenhuma pool encontrada</h3>
-              <p className="text-dark-400">
+              <p className="text-muted-foreground">
                 Não encontramos pools de liquidez com o token "{searchedToken}".
                 <br />
                 Verifique o símbolo ou tente um endereço de contrato.
@@ -436,7 +436,7 @@ export default function TokenAnalyzerPage() {
                   ))}
                 </div>
                 {filteredPools.length > 10 && (
-                  <p className="text-center text-dark-400 text-sm mt-4">
+                  <p className="text-center text-muted-foreground text-sm mt-4">
                     Mostrando 10 de {filteredPools.length} pools. Vá para Pool Intelligence para ver todas.
                   </p>
                 )}
@@ -448,10 +448,10 @@ export default function TokenAnalyzerPage() {
 
       {/* Initial state */}
       {!searchedToken && (
-        <div className="text-center py-16 bg-dark-800/50 border border-dark-700 rounded-xl">
+        <div className="text-center py-16 bg-card/50 border border-border/60 rounded-xl">
           <Zap className="w-16 h-16 mx-auto text-primary-400/50 mb-4" />
           <h3 className="text-xl font-medium mb-2">Pronto para analisar</h3>
-          <p className="text-dark-400 max-w-md mx-auto">
+          <p className="text-muted-foreground max-w-md mx-auto">
             Digite o símbolo do token que você quer analisar (ex: ETH, ARB, PEPE)
             e veja se existem pools com boa liquidez e saúde.
           </p>

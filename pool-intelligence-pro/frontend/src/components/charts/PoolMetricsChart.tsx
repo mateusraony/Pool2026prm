@@ -14,11 +14,11 @@ export function PoolMetricsChart({ chain, address }: Props) {
     refetchInterval: 300_000, // 5min
   });
 
-  if (isLoading) return <div className="h-40 bg-dark-700 rounded animate-pulse" />;
+  if (isLoading) return <div className="h-40 bg-muted rounded animate-pulse" />;
 
   if (history.length < 2) {
     return (
-      <div className="h-40 flex items-center justify-center text-muted-foreground text-sm rounded-lg border border-dark-700">
+      <div className="h-40 flex items-center justify-center text-muted-foreground text-sm rounded-lg border border-border/60">
         <span>Histórico disponível após 2+ atualizações do radar</span>
       </div>
     );

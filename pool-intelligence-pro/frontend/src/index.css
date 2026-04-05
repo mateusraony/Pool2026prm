@@ -121,7 +121,7 @@
     --warning: 38 92% 45%;
     --warning-foreground: 0 0% 100%;
 
-    --border: 220 13% 87%;
+    --border: 220 13% 80%;
     --input: 220 14% 92%;
     --ring: 174 72% 40%;
 
@@ -238,19 +238,28 @@
     @apply inline-flex items-center px-2.5 py-1 rounded-lg font-mono text-xs font-semibold;
   }
 
-  /* Score glow effect for high scores */
+  /* Score glow effect for high scores — dark mode only */
   .score-high {
     @apply text-success;
-    text-shadow: 0 0 12px hsl(142 72% 45% / 0.5);
   }
 
   .score-medium {
     @apply text-warning;
-    text-shadow: 0 0 12px hsl(38 92% 50% / 0.4);
   }
 
   .score-low {
     @apply text-destructive;
+  }
+
+  :root:not(.light) .score-high {
+    text-shadow: 0 0 12px hsl(142 72% 45% / 0.5);
+  }
+
+  :root:not(.light) .score-medium {
+    text-shadow: 0 0 12px hsl(38 92% 50% / 0.4);
+  }
+
+  :root:not(.light) .score-low {
     text-shadow: 0 0 12px hsl(0 72% 51% / 0.4);
   }
 

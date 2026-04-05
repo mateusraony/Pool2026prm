@@ -182,20 +182,20 @@ export default function InteractiveChart({
   };
 
   return (
-    <div className="bg-dark-800 rounded-xl p-4 border border-dark-600" ref={containerRef}>
+    <div className="bg-card rounded-xl p-4 border border-border" ref={containerRef}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-sm flex items-center gap-2">
           📊 Distribuicao de Liquidez
-          <span className="text-xs text-dark-400">({token0Symbol}/{token1Symbol})</span>
+          <span className="text-xs text-muted-foreground">({token0Symbol}/{token1Symbol})</span>
         </h3>
         <div className="flex items-center gap-4 text-xs">
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 rounded bg-primary-500/30" />
-            <span className="text-dark-400">Total</span>
+            <span className="text-muted-foreground">Total</span>
           </div>
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 rounded bg-primary-500" />
-            <span className="text-dark-400">Seu Range</span>
+            <span className="text-muted-foreground">Seu Range</span>
           </div>
         </div>
       </div>
@@ -413,21 +413,21 @@ export default function InteractiveChart({
 
       {/* Range info */}
       <div className="mt-4 grid grid-cols-3 gap-4 text-center">
-        <div className="bg-dark-700/50 rounded-lg p-3">
-          <div className="text-xs text-dark-400 mb-1">Preco Min</div>
+        <div className="bg-muted/50 rounded-lg p-3">
+          <div className="text-xs text-muted-foreground mb-1">Preco Min</div>
           <div className="font-mono font-bold text-primary-400">${formatPrice(rangeLower)}</div>
         </div>
-        <div className="bg-dark-700/50 rounded-lg p-3">
-          <div className="text-xs text-dark-400 mb-1">Range Width</div>
+        <div className="bg-muted/50 rounded-lg p-3">
+          <div className="text-xs text-muted-foreground mb-1">Range Width</div>
           <div className="font-mono font-bold text-warning-400">±{rangePercent}%</div>
         </div>
-        <div className="bg-dark-700/50 rounded-lg p-3">
-          <div className="text-xs text-dark-400 mb-1">Preco Max</div>
+        <div className="bg-muted/50 rounded-lg p-3">
+          <div className="text-xs text-muted-foreground mb-1">Preco Max</div>
           <div className="font-mono font-bold text-primary-400">${formatPrice(rangeUpper)}</div>
         </div>
       </div>
 
-      <div className="mt-3 text-center text-sm text-dark-400">
+      <div className="mt-3 text-center text-sm text-muted-foreground">
         <span className="text-success-400 font-medium">{inRangePercent}%</span> tempo estimado no range
         <span className="mx-2">•</span>
         🖱️ Arraste os handles <span className="text-primary-400">MIN</span> e <span className="text-primary-400">MAX</span> para ajustar

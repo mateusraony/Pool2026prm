@@ -124,7 +124,7 @@ export default function PoolCompare() {
               key={pool.id}
               className="flex items-center gap-2 bg-secondary/60 rounded-lg px-3 py-1.5 ring-1 ring-border/30"
             >
-              <span className="text-sm">{dexLogos[pool.dex] || '🔵'}</span>
+              <span className="text-sm">{dexLogos[pool.dex] || '◆'}</span>
               <span className="text-sm font-medium">{pool.pair}</span>
               <span className="text-xs text-muted-foreground">{pool.network}</span>
               <button
@@ -195,7 +195,7 @@ export default function PoolCompare() {
                       )}
                     >
                       <div className="flex items-center gap-3">
-                        <span>{dexLogos[pool.dex] || '🔵'}</span>
+                        <span>{dexLogos[pool.dex] || '◆'}</span>
                         <div>
                           <span className="text-sm font-medium">{pool.pair}</span>
                           <span className="text-xs text-muted-foreground ml-2">{pool.dex} · {pool.network}</span>
@@ -241,7 +241,7 @@ export default function PoolCompare() {
               return (
               <div key={pool.id} className="p-3 text-center">
                 <div className="flex items-center justify-center gap-2 mb-1">
-                  <span>{dexLogos[pool.dex] || '🔵'}</span>
+                  <span>{dexLogos[pool.dex] || '◆'}</span>
                   <span className="font-display font-semibold text-sm">{pool.pair}</span>
                   <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
                     {isConcentrated ? 'CL' : 'AMM'}
