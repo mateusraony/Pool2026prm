@@ -29,6 +29,7 @@ function getEndpoint(chain: string): string | null {
   if (!apiKey) return null; // Hosted service removed — API key required
 
   // Uniswap V3 subgraph IDs on decentralized network
+  // Note: optimism is NOT available on the decentralized network — falls back to GeckoTerminal/DexScreener
   const subgraphIds: Record<string, string> = {
     ethereum: 'ELUcwgpm14LKPLrBRuVvPvNKHQ9HvwmtKgKSH855M4Np',
     arbitrum: 'FbCGRftH4a3yZugY7TnbYgPJVEv2LvMT6oF1fxPe9aH',
