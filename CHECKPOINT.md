@@ -1,6 +1,6 @@
 # CHECKPOINT - Pool Intelligence Pro
 
-## Última Atualização: 2026-04-04 (Sessão 6)
+## Última Atualização: 2026-04-07 (Sessão 7)
 
 ---
 
@@ -8,12 +8,60 @@
 
 | Verificação | Resultado | Detalhes |
 |------------|-----------|----------|
-| tsc frontend | ✅ | 0 erros (sessão 5) |
-| tsc backend | ✅ | 0 erros (sessão 5) |
-| build frontend | ✅ | Vite ~18s |
+| tsc frontend | ✅ | 0 erros |
+| tsc backend | ✅ | 0 erros |
+| build frontend | ✅ | Vite ~10s — Simulation 48KB (calculadora incluída) |
 | build backend | ✅ | OK |
 | backend tests | ✅ | 14 files, 360/360 passando |
 | **total testes** | ✅ | **360 (100%)** |
+
+---
+
+## Sessão 7 — Features Revert Finance + Calculadora de Rendimento + Python Script
+
+### Branch atual
+
+`claude/fix-calc-formulas-t9NvR` — **2 commits novos acima da main**  
+Commits `bd469ea` e `b8d7a57` aguardando PR/merge.
+
+### O que foi feito nesta sessão
+
+#### Parte 1 — Features inspiradas no Revert Finance (`bd469ea`)
+
+| Área | Feature | Arquivo(s) |
+|------|---------|-----------|
+| Backend | `calcOptimalCompound()` — intervalo ótimo com `sqrt(2*gas/dailyFees)`, guard div/zero | `calc.service.ts` |
+| Backend | `calcLendingPosition()` — liquidation price = `entryPrice*(ltvUsed/ltvMax)`, netApr com leverage | `calc.service.ts` |
+| Backend | `backtest-real.service.ts` — dados reais do TheGraph (168/720/2160 pts), IL real + fees | `backtest-real.service.ts` |
+| Backend | `getRangeZone()` / `shouldSendRangeExitAlert()` — buffer 15% + confirmação TWAP configurável | `alert.service.ts` |
+| Backend | `priceOutTimestamps` — mapa de timestamps por pool para anti-wick | `memory-store.service.ts` |
+| Backend | `POST /api/calc/optimal-compound`, `POST /api/calc/lending`, `GET /api/backtest-real/:chain/:address` | `calc.routes.ts`, `routes/index.ts` |
+| Frontend | `AutoCompoundWidget` — APY vs APR, barra de progresso, badge "Pronto para compound" | `AutoCompoundWidget.tsx` |
+| Frontend | `LendingSimulator` — página `/lending` com HF colorido, slider LTV/juros, 3 cenários | `LendingSimulator.tsx` |
+| Frontend | `LendingRiskPanel` — painel colapsável no ScoutPoolDetail com link `/lending?pool=...` | `LendingRiskPanel.tsx` |
+| Frontend | Sidebar — entrada "Lending Sim" na seção Operações | `Sidebar.tsx` |
+| Frontend | ScoutSettings — seletor `wickConfirmMinutes` (2/5/10/15 min) | `ScoutSettings.tsx` |
+| Frontend | Rota `/lending` no App.tsx com lazy loading | `App.tsx` |
+
+#### Parte 2 — Calculadora de Rendimento Real (`b8d7a57`)
+
+| Área | Feature | Arquivo(s) |
+|------|---------|-----------|
+| Frontend | `PoolYieldCalculator` — inputs: inicial, rendimento, período, gas, IL% | `PoolYieldCalculator.tsx` |
+| Frontend | Cálculos instantâneos: lucro%, APR mensal, APY composto (12x), APY simples | `PoolYieldCalculator.tsx` |
+| Frontend | Tabela rendimento real na saída: bruto → -gas → -IL → líquido | `PoolYieldCalculator.tsx` |
+| Frontend | Benchmark bar chart (Recharts): pool vs CDI ~0.9%/mês vs S&P500 ~0.8%/mês | `PoolYieldCalculator.tsx` |
+| Frontend | Badge performance: Excelente (>2%/mês) / Estável (0.5–2%) / Alerta (<0.5%) | `PoolYieldCalculator.tsx` |
+| Frontend | Veredito IA dinâmico: analisa IL, gas, spread vs CDI, risco de saída | `PoolYieldCalculator.tsx` |
+| Frontend | Comparativo vs sistema: mostra diferença p.p./mês vs APR estimado | `PoolYieldCalculator.tsx` |
+| Frontend | Histórico localStorage (até 10 entradas): APR real vs estimado do sistema | `PoolYieldCalculator.tsx` |
+| Frontend | Integrado na página `/simulation` após AutoCompoundWidget | `Simulation.tsx` |
+| Python | `pool_yield_calc.py` — CLI com args, modo interativo, batch JSON, saída colorida ANSI | `scripts/pool_yield_calc.py` |
+| Python | `exemplos_yield.json` — 3 cenários de exemplo (ETH/USDC, WBTC/ETH, USDC/USDT) | `scripts/exemplos_yield.json` |
+
+### Frase de checkpoint
+
+> Sessão 7 em 07/04/2026 — features Revert Finance (AutoCompound, AutoRange TWAP, Backtesting real, LendingSimulator) + PoolYieldCalculator com histórico e Python CLI. Branch `claude/fix-calc-formulas-t9NvR`, 2 commits acima da main, build ✅, 360 testes ✅.
 
 ---
 
@@ -120,10 +168,13 @@ DIRECT_URL=postgresql://postgres:***@db.xxx.supabase.co:5432/postgres?sslmode=re
 
 ## Ações Pendentes
 
-1. 🟡 **Verificar deploy no Render** — PR #81 foi mergeado; auto-deploy deve ter rodado. Checar se erros P1001 e OHLCV sumiram do log.
-2. 🟡 **Testar OHLCV no app** — Abrir uma pool e verificar se o gráfico de velas mostra dados reais (`"synthetic": false` na API).
-3. 🟡 **PR #3** — Branch antiga de fevereiro. Main já contém tudo mais atualizado. Decidir: fechar sem merge.
-4. 🟡 **Rotacionar senha Supabase** — Credenciais foram compartilhadas em sessão anterior.
+1. 🟡 **Criar PR** — Branch `claude/fix-calc-formulas-t9NvR` tem 2 commits novos prontos para PR: Revert Finance features + Calculadora de Rendimento.
+2. 🟡 **Testar Calculadora no app** — Abrir `/simulation/:chain/:address`, preencher rendimento acumulado e verificar badge + gráfico benchmark.
+3. 🟡 **Testar Python script** — `python3 scripts/pool_yield_calc.py --batch scripts/exemplos_yield.json`
+4. 🟡 **Verificar deploy Render** — Confirmar que `prisma db push` via pooler (porta 6543) resolveu erros P1001 nos logs.
+5. 🟡 **Testar LendingSimulator** — Navegar para `/lending` e verificar HF colorido, sliders e 3 cenários.
+6. 🟡 **PR #3** — Branch antiga de fevereiro. Decidir: fechar sem merge.
+7. 🟡 **Rotacionar senha Supabase** — Credenciais foram compartilhadas em sessão anterior.
 
 ---
 
@@ -131,6 +182,23 @@ DIRECT_URL=postgresql://postgres:***@db.xxx.supabase.co:5432/postgres?sslmode=re
 
 1. Leia este `CHECKPOINT.md`
 2. `git log --oneline -10` para ver últimos commits
-3. Branch: `claude/fix-calc-formulas-t9NvR` (sincronizada com main)
-4. Para novos trabalhos: criar branch nova ou continuar nesta
-5. Verificar health: `curl https://seu-app.onrender.com/health`
+3. Branch: `claude/fix-calc-formulas-t9NvR` (2 commits acima da main)
+4. Próximo passo recomendado: criar PR com os 2 novos commits
+5. Calculadora Python: `python3 scripts/pool_yield_calc.py --initial 1000 --yield 45 --period 30`
+6. Verificar health: `curl https://seu-app.onrender.com/health`
+
+### Uso rápido do Python script
+
+```bash
+# Args direto
+python3 scripts/pool_yield_calc.py --initial 5000 --yield 180 --period 30 --gas 12.5 --il 1.2 --system-apr 43.5
+
+# Modo interativo
+python3 scripts/pool_yield_calc.py
+
+# Batch com exemplos
+python3 scripts/pool_yield_calc.py --batch scripts/exemplos_yield.json
+
+# Saída JSON para integração
+python3 scripts/pool_yield_calc.py --initial 1000 --yield 30 --period 7 --json
+```
