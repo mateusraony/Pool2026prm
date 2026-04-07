@@ -6,6 +6,7 @@ import { fetchPool, fetchPools, createRangePosition, fetchRangePositions, delete
 import { feeTierToBps, feeTierToPercent } from '../data/constants';
 import { UniswapRangeChart } from '@/components/charts/UniswapRangeChart';
 import { AutoCompoundWidget } from '@/components/common/AutoCompoundWidget';
+import { PoolYieldCalculator } from '@/components/common/PoolYieldCalculator';
 import clsx from 'clsx';
 
 type Period = '7D' | '30D' | 'YTD';
@@ -709,6 +710,16 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
         capital={capital}
         gasEstimate={metrics.gasEstimate}
         chain={pool.chain}
+      />
+
+      {/* ─── Pool Yield Calculator ─────────────────────────────── */}
+      <PoolYieldCalculator
+        poolApr={score?.breakdown?.return?.aprEstimate ?? pool.apr}
+        ilEstimate={metrics.ilPercent}
+        gasEstimate={metrics.gasEstimate}
+        poolName={(pool.token0?.symbol ?? '?') + '/' + (pool.token1?.symbol ?? '?')}
+        poolId={pool.poolAddress ?? pool.externalId}
+        capital={capital}
       />
     </div>
   );
