@@ -1,163 +1,213 @@
-# Design Spec: Revert Finance–Inspired Features
+# Design Spec: Revert Finance–Inspired Features (v2 — pós-revisão)
 **Date:** 2026-04-07  
-**Status:** Approved by user  
-**Branch:** `claude/fix-render-deploy-P1001-v2`
+**Status:** Aprovado — pronto para implementação  
+**Branch:** `claude/fix-render-deploy-P1001-v2`  
+**Revisão:** v2 corrige 5 issues críticas identificadas pelo revisor técnico
+
+---
+
+## Correções v2 (vs v1)
+
+| Issue | Status | Correção |
+|---|---|---|
+| Fórmula Liquidation Price errada | ✅ Corrigida | `entryPrice * (ltvUsed / ltvMax)` |
+| Fórmula Net APR inflada | ✅ Corrigida | `poolApr + (poolApr - interestRate) * (borrowAmount/capital)` |
+| Conflito AutoCompound com função existente | ✅ Resolvido | Nova função `calcOptimalCompound`, existente intacta |
+| TheGraph data points ambíguos | ✅ Esclarecido | 168 entries (7d), 720 entries (30d), 2160 (90d) com paginação |
+| Divisão por zero em optimalFrequency | ✅ Corrigida | Guard `dailyFees <= 0 → Infinity` |
 
 ---
 
 ## Overview
 
-Six features inspired by analysis of [Revert Finance](https://github.com/revert-finance), adapted for our off-chain intelligence context. No smart contracts. No on-chain execution. Everything is analysis, simulation, and UI.
+Seis features off-chain de análise e simulação, inspiradas pelo Revert Finance mas adaptadas para web intelligence. Sem smart contracts, sem execução on-chain.
 
 ---
 
 ## Feature 1 — Auto-Compound ROI Calculator
 
-### Purpose
-Show users the optimal compounding schedule for their LP fees — inspired by Revert's `compoundor-js` bot logic but expressed as analysis rather than automation.
+### Contexto
+`calcAutoCompound()` **já existe** em `calc.service.ts` (linhas 1145–1220) e simula compound vs simples ao longo de um período com frequência fixa. **Não modificamos essa função.**
 
-### Location
-- Widget in `Simulation.tsx` (below the 7-day projection card)
-- Widget in `ScoutPoolDetail.tsx` (new "Compound Strategy" section)
+Adicionamos uma função **complementar**: `calcOptimalCompound()` — responde "quando devo fazer compound?" calculando o intervalo ótimo via fórmula de sqrt.
 
 ### Backend
-**New function in `calc.service.ts`:** `calcAutoCompound(params)`
+
+**Nova função em `calc.service.ts`:** `calcOptimalCompound(params)`
 
 ```typescript
-interface AutoCompoundParams {
-  capital: number;        // USD
-  apr: number;            // annual % (e.g. 42 for 42%)
-  timeInRangePct: number; // 0-100
-  gasEstimate: number;    // USD per compound transaction
-  chain: string;          // for gas lookup
-  daysElapsed?: number;   // days since position opened (for accrued fees)
+interface OptimalCompoundParams {
+  capital: number;        // USD investido
+  apr: number;            // APR anual % (e.g. 42)
+  timeInRangePct: number; // 0–100 (reduz fees efetivas)
+  gasEstimate: number;    // USD por transação de compound
+  daysElapsed?: number;   // dias desde abertura (para estimar fees acumuladas)
 }
 
-interface AutoCompoundResult {
-  dailyFees: number;          // USD/day
-  feesAccruedEstimate: number; // USD if daysElapsed provided
-  breakEvenDays: number;       // days until fees > gas cost
-  optimalFrequencyDays: number;// sqrt(2 * gas / dailyFees) — optimal interval
-  aprSimple: number;           // APR without compounding
-  aprCompounded: number;       // APR with optimal compounding (APY)
-  aprBoostPct: number;         // difference
-  shouldCompoundNow: boolean;  // feesAccrued >= gas * 3
-  nextCompoundIn: number;      // days until next optimal compound
+interface OptimalCompoundResult {
+  dailyFees: number;           // USD/dia efetivo (apr ajustado por timeInRange)
+  feesAccruedEstimate: number; // USD acumulado (se daysElapsed fornecido)
+  breakEvenDays: number;       // dias para fees > custo de gas (gasEstimate / dailyFees)
+  optimalIntervalDays: number; // sqrt(2 * gasEstimate / dailyFees); Infinity se dailyFees ≤ 0
+  aprSimple: number;           // APR original sem compound
+  aprCompounded: number;       // APY com compound no intervalo ótimo: (1 + dailyFees/capital)^365 - 1
+  aprBoostPct: number;         // aprCompounded - aprSimple
+  shouldCompoundNow: boolean;  // feesAccrued >= gasEstimate * 3 (regra 3× gas)
+  nextCompoundInDays: number;  // optimalIntervalDays - (daysElapsed % optimalIntervalDays)
 }
 ```
 
-**Formula:**
+**Fórmulas:**
 ```
-dailyFees = (apr/100/365) * capital * (timeInRange/100)
-optimalFrequencyDays = sqrt(2 * gasEstimate / dailyFees)
-aprCompounded = (1 + dailyFees/capital)^365 - 1
-aprBoost = aprCompounded - aprSimple
-shouldCompound = feesAccrued >= gasEstimate * 3
+dailyFees = (apr / 100 / 365) * capital * (timeInRangePct / 100)
+
+// Guard: dailyFees ≤ 0 → optimalIntervalDays = Infinity, shouldCompoundNow = false
+optimalIntervalDays = sqrt(2 * gasEstimate / dailyFees)
+
+breakEvenDays = gasEstimate / dailyFees
+
+aprCompounded = (1 + dailyFees / capital) ^ 365 - 1   // em decimal, ×100 para %
+aprBoostPct = aprCompounded * 100 - aprSimple
+
+feesAccruedEstimate = dailyFees * (daysElapsed ?? 0)
+shouldCompoundNow = feesAccruedEstimate >= gasEstimate * 3
 ```
 
-**New endpoint:** `POST /api/calc/auto-compound`
+**Novo endpoint:** `POST /api/calc/optimal-compound`  
+(rota diferente de `/api/auto-compound` existente — sem conflito)
 
-### Frontend UI
-Card with:
-- Daily fee accrual rate: `~$X/day`
-- Compound frequency: `Optimal: every N days`
-- APR boost: `+Z% with compounding (APY: W%)`
-- Progress bar: fees accrued / threshold to compound
-- CTA badge: `✅ Ready to compound` or `⏳ Compound in N days`
+### Frontend
+
+Widget `AutoCompoundWidget.tsx` em `Simulation.tsx` (abaixo da projeção 7d) e `ScoutPoolDetail.tsx`:
+- "~$X/dia em fees" com indicador de timeInRange
+- "Compound ótimo: a cada N dias"
+- "APY com compound: Z% (+W% vs APR simples)"
+- Barra de progresso: fees acumuladas / limiar 3× gas
+- Badge: `✅ Pronto para compound` / `⏳ Compound em N dias`
+- Quando `optimalIntervalDays = Infinity`: "Capital muito pequeno para compensar o gas"
 
 ---
 
-## Feature 2 — AutoRange Buffer Zone (Tick-Based Alert Buffer)
+## Feature 2 — AutoRange Buffer Zone
 
-### Purpose
-Reduce false-positive range alerts. Inspired by Revert's `AutoRange.sol` `lowerTickLimit`/`upperTickLimit` — a buffer zone before alerting.
+### Backend — nova função em `alert.service.ts`
 
-### Location
-- `alert.service.ts` — alert trigger logic
-- `ScoutPoolDetail.tsx` — visual buffer zone in range chart
-- `ScoutActivePools.tsx` — status badge update
-
-### Backend Logic Change in `alert.service.ts`
-
-Replace binary "in/out" with three-zone system:
+**Não altera** `calcHealthFactor` existente. Cria função separada:
 
 ```typescript
 type RangeZoneStatus = 'SAFE' | 'DANGER_ZONE' | 'OUT_OF_RANGE';
 
-function getRangeZone(currentPrice: number, lower: number, upper: number): RangeZoneStatus {
+function getRangeZone(
+  currentPrice: number,
+  lower: number,
+  upper: number
+): { status: RangeZoneStatus; distToEdgePct: number; bufferPct: number } {
   const rangeWidth = upper - lower;
-  const buffer = rangeWidth * 0.15; // 15% of range width each side
+  const buffer = rangeWidth * 0.15; // 15% de cada borda
 
-  if (currentPrice < lower || currentPrice > upper) return 'OUT_OF_RANGE';
-  if (currentPrice < lower + buffer || currentPrice > upper - buffer) return 'DANGER_ZONE';
-  return 'SAFE';
+  if (currentPrice < lower || currentPrice > upper) {
+    return { status: 'OUT_OF_RANGE', distToEdgePct: 0, bufferPct: 15 };
+  }
+  const distLower = currentPrice - lower;
+  const distUpper = upper - currentPrice;
+  const minDist = Math.min(distLower, distUpper);
+  const distToEdgePct = (minDist / rangeWidth) * 100;
+
+  if (minDist < buffer) {
+    return { status: 'DANGER_ZONE', distToEdgePct, bufferPct: 15 };
+  }
+  return { status: 'SAFE', distToEdgePct, bufferPct: 15 };
 }
 ```
 
-- `SAFE` → no alert
-- `DANGER_ZONE` → optional warning notification (configurable in settings)
-- `OUT_OF_RANGE` → full alert (existing behavior, now with TWAP guard from Feature 3)
+**Lógica de alertas atualizada:**
+- `SAFE` → sem alerta
+- `DANGER_ZONE` → aviso opcional (configurável — não notifica por padrão)
+- `OUT_OF_RANGE` → alerta completo (passa para Feature 3 — TWAP guard)
 
 ### Frontend
-Range chart shows buffer zone as a semi-transparent yellow band inside each edge. Badge: 🟢 Safe / 🟡 X% from edge / 🔴 Out of range.
+
+Badge em `ScoutPoolDetail.tsx` e `ScoutActivePools.tsx`:
+- 🟢 **Safe** — X% da borda
+- 🟡 **Approaching Edge** — Y% da borda (dentro do buffer)
+- 🔴 **Out of Range** — saiu do range
 
 ---
 
 ## Feature 3 — AutoExit TWAP Anti-Wick
 
-### Purpose
-Prevent spurious "out of range" alerts triggered by momentary price spikes (wicks). Inspired by Revert's TWAP oracle check before AutoExit.
+### Backend — mudanças em `alert.service.ts` e `memory-store.service.ts`
 
-### Location
-- `alert.service.ts` — wraps the OUT_OF_RANGE trigger
-- `ScoutSettings.tsx` — configurable confirmation window
-
-### Backend Logic
-
-Add to `MemoryStore`: `priceOutTimestamp: Map<poolId, timestamp>`
-
+**Adicionar a `MemoryStore`:**
 ```typescript
-// In alert.service.ts — before sending OUT_OF_RANGE alert:
-function shouldSendAlert(poolId: string, confirmWindowMs: number): boolean {
-  const outSince = memoryStore.getPriceOutTimestamp(poolId);
-  if (!outSince) {
-    memoryStore.setPriceOutTimestamp(poolId, Date.now());
-    return false; // start the clock, don't alert yet
-  }
-  const elapsed = Date.now() - outSince;
-  if (elapsed >= confirmWindowMs) {
-    memoryStore.clearPriceOutTimestamp(poolId); // reset after alerting
-    return true;
-  }
-  return false; // still in confirmation window
-}
+// Timestamps de quando cada pool saiu do range
+private priceOutTimestamps: Map<string, number> = new Map();
 
-// Reset timestamp when price returns to range:
-// memoryStore.clearPriceOutTimestamp(poolId)
+getPriceOutTimestamp(poolId: string): number | undefined
+setPriceOutTimestamp(poolId: string, ts: number): void
+clearPriceOutTimestamp(poolId: string): void
 ```
 
-**Confirmation window options (configurable per alert in Settings):**
-- 2 min, 5 min (default), 10 min, 15 min
+**Lógica anti-wick em `alert.service.ts`:**
+```typescript
+async function shouldSendRangeExitAlert(
+  poolId: string,
+  confirmWindowMs: number  // de settings: 2/5/10/15 min × 60000
+): Promise<boolean> {
+  const outSince = memoryStore.getPriceOutTimestamp(poolId);
+  const now = Date.now();
 
-### Settings UI
-In `ScoutSettings.tsx`, add to the alert configuration section:
-> "Aguardar [dropdown: 2min / 5min / 10min / 15min] antes de alertar saída de range (evita alertas por wicks)"
+  if (!outSince) {
+    memoryStore.setPriceOutTimestamp(poolId, now);
+    logService.info('ALERT', `Possível saída de range detectada — aguardando confirmação`, { poolId });
+    return false; // inicia o clock, não alerta ainda
+  }
 
-Stored in existing `settings` table via `/api/settings/alerts/wick-confirm-minutes`.
+  if (now - outSince >= confirmWindowMs) {
+    memoryStore.clearPriceOutTimestamp(poolId);
+    return true; // confirmado — alertar
+  }
+  return false; // ainda no window de confirmação
+}
+
+// Chamar quando preço VOLTA ao range (reset):
+function onPriceReturnedToRange(poolId: string): void {
+  memoryStore.clearPriceOutTimestamp(poolId);
+  logService.info('ALERT', `Preço retornou ao range — wick descartado`, { poolId });
+}
+```
+
+### Settings
+
+Armazenado via `AppConfig` existente (campo chave `alert.wickConfirmMinutes`):
+```
+PUT /api/settings/alerts
+body: { wickConfirmMinutes: 2 | 5 | 10 | 15 }
+```
+
+### Frontend — `ScoutSettings.tsx`
+
+Nova opção na seção de alertas:
+```
+"Aguardar [2min ▾] antes de alertar saída de range
+ Evita notificações por wicks/spikes temporários"
+```
+Options: 2 min / 5 min (padrão) / 10 min / 15 min
 
 ---
 
-## Feature 4 — Backtesting with Real On-Chain Data (TheGraph)
+## Feature 4 — Backtesting com Dados Reais (TheGraph)
 
-### Purpose
-Replace synthetic GBM price simulation in backtester with real historical poolHourData from TheGraph — producing credible, evidence-based performance estimates.
+### Clarificação de Data Points
 
-### Location
-- New service: `backtest-real.service.ts`
-- New endpoint: `GET /api/backtest-real/:chain/:address`
-- New tab in `Simulation.tsx`: "Backtest Real" alongside existing synthetic
+TheGraph retorna `poolHourData` (dados horários). Limites por período:
+- 7 dias → **168 entries** (7 × 24h)
+- 30 dias → **720 entries** (30 × 24h) → requer 2 queries paginadas (max 1000/query)
+- 90 dias → **2160 entries** → requer 3 queries paginadas
 
-### Backend Service
+Query TheGraph atual em `thegraph.adapter.ts` usa `poolHourData(first: 25)` — atualizar para `first: 1000` com paginação via `skip`.
+
+### Backend — novo `backtest-real.service.ts`
 
 ```typescript
 interface RealBacktestParams {
@@ -166,17 +216,18 @@ interface RealBacktestParams {
   rangeLower: number;
   rangeUpper: number;
   capital: number;
-  days: number; // 7 | 14 | 30 | 90
+  days: 7 | 14 | 30 | 90;
 }
 
 interface RealBacktestResult {
   source: 'thegraph' | 'unavailable';
-  dataPoints: number;          // hours of real data used
-  apr: number;                 // annualized from real fees
-  ilPercent: number;           // real IL from price path
-  feesEarned: number;          // USD from real volume data
-  timeInRangePct: number;      // % of hourly candles where price in range
-  pnlPercent: number;          // fees - IL
+  dataPoints: number;           // horas de dados usados
+  periodDays: number;
+  apr: number;                  // APR anualizado dos dados reais
+  ilPercent: number;            // IL real baseado no path de preço
+  feesEarned: number;           // USD de fees reais (do volume on-chain)
+  timeInRangePct: number;       // % de candles com preço dentro do range
+  pnlPercent: number;           // fees - IL
   priceStart: number;
   priceEnd: number;
   priceMin: number;
@@ -188,211 +239,191 @@ interface RealBacktestResult {
     feesAccum: number;
     ilAccum: number;
   }>;
-  vsGbm?: {                    // comparison with synthetic result
-    aprDiff: number;
-    ilDiff: number;
-  };
+  vsGbm?: { aprDiff: number; ilDiff: number }; // comparação com sintético
 }
 ```
 
-**Algorithm:**
-1. Fetch `poolHourData` from TheGraph (up to 90 entries = 90 days hourly)
-2. For each hour: determine if price was in range, accrue fees proportionally
-3. Calculate IL using real start/end prices via V3 formula
-4. Annualize results
+**Algoritmo:**
+1. Buscar `poolHourData` via TheGraph com paginação (até `days × 24` entries)
+2. Para cada hora: verificar se `token0Price` está dentro de `[rangeLower, rangeUpper]`
+3. Acumular fees proporcionalmente: `feeHour = volumeUSD * feeTier * inRange`
+4. Calcular IL ao final: usar `calcIL(priceStart, priceEnd, rangeLower, rangeUpper)` existente
+5. Anualizar: `apr = (feesEarned / capital) / (dataPoints / 8760) × 100`
 
-**Fallback:** If TheGraph unavailable or returns <7 data points → return `source: 'unavailable'`, frontend falls back to existing GBM tab.
+**Fallback:** Se TheGraph indisponível ou `dataPoints < 24` → `source: 'unavailable'`
 
-### Frontend
-New tab "📊 Backtest Real" in `Simulation.tsx` alongside existing "Monte Carlo":
-- Shows comparison table (real vs synthetic GBM)
-- Timeline chart: price path + in-range bands
-- Data quality badge: "N horas de dados reais" or "TheGraph indisponível — usando simulação"
+**Novo endpoint:** `GET /api/backtest-real/:chain/:address?days=7&lower=X&upper=Y&capital=Z`
+
+### Frontend — nova tab em `Simulation.tsx`
+
+Tab "📊 Backtest Real" ao lado de "Monte Carlo":
+- Tabela comparativa: Real vs Sintético (APR, IL, timeInRange)
+- Mini chart: path de preço com zonas in-range / out-range coloridas
+- Badge de qualidade: "N horas de dados reais (TheGraph)" ou "TheGraph indisponível — usando simulação GBM"
 
 ---
 
 ## Feature 5 — Lending Simulator (Nova Página `/lending`)
 
-### Purpose
-Educational simulator showing what would happen if user used their LP position as collateral in a lending protocol (modeled after Revert Lend parameters).
+### Fórmulas Corretas (v2)
 
-### Route
-`/lending` — new page `LendingSimulator.tsx`
+```
+// Dados base
+ltvUsed = borrowAmount / collateralValue       // ex: 0.55 = 55%
+ltvMax  = baseado no score da pool (ver abaixo)
 
-### Backend
-**New function in `calc.service.ts`:** `calcLendingPosition(params)`
+// Health Factor: razão entre capacidade de borrow e borrow atual
+healthFactor = ltvMax / ltvUsed
+// HF > 1 = saudável; HF = 1 = limiar de liquidação; HF < 1 = liquidado
+
+// Preço de liquidação: preço ao qual collateral cobre exatamente o borrow
+// Derivação: collateral_liq * ltvMax = borrowAmount
+//            collateral_liq / collateral = P_liq / P_entry
+//            → P_liq = P_entry * (ltvUsed / ltvMax)
+liquidationPrice = entryPrice * (ltvUsed / ltvMax)
+
+// % de queda que dispara liquidação
+liquidationDropPct = (1 - ltvUsed / ltvMax) * 100
+
+// Net APR com alavancagem (CORRETO)
+// Total investido = capital + borrowAmount (tudo vai para a pool)
+// Ganhos = (capital + borrowAmount) * poolApr
+// Custo = borrowAmount * interestRate
+// Lucro líquido / capital:
+netApr = poolApr + (poolApr - interestRate) * (borrowAmount / capital)
+// Intuição: APR base + boost de alavancagem (apenas se poolApr > interestRate)
+```
+
+**Validações obrigatórias:**
+```
+borrowAmount > 0                           → erro se violado
+borrowAmount <= collateralValue * ltvMax   → erro "excede limite de LTV"
+ltvUsed < ltvMax                           → warning "próximo de liquidação"
+healthFactor < 1.2                         → badge CRITICAL
+```
+
+**LTV máximo por tier (baseline ajustável pelo usuário):**
+| Score da pool | LTV máx base |
+|---|---|
+| ≥ 75 (blue-chip) | 70% |
+| 50–74 (normal) | 55% |
+| < 50 (volátil) | 35% |
+
+**Novo endpoint:** `POST /api/calc/lending`
+
+### Frontend — `LendingSimulator.tsx` (nova página `/lending`)
+
+Layout:
+1. **Seletor de pool** (search autocomplete com pools existentes)
+2. **Sliders ajustáveis pelo usuário:**
+   - LTV % (0–ltvMax, step 5%)
+   - Taxa de juros anual % (0–30%, step 0.5%)
+3. **Input:** valor a tomar emprestado (USD)
+4. **Painel de resultados:**
+   - Health Factor com cor: verde > 2.0, amarelo 1.2–2.0, vermelho < 1.2, crítico < 1.0
+   - Preço de liquidação + "queda de X% do preço atual"
+   - Net APR com alavancagem
+   - Custo de juros anual (USD)
+5. **Tabela de 3 cenários automáticos** (conservador/moderado/agressivo)
+6. **Disclaimer:** "Simulação educacional. Valores baseados em parâmetros do protocolo Revert Lend. Não constitui oferta de crédito."
+
+---
+
+## Feature 6 — Lending Risk Panel no Pool Detail
+
+### Frontend — novo componente `LendingRiskPanel.tsx`
+
+Calculado client-side com dados já carregados pelo pool detail (sem novo endpoint):
 
 ```typescript
-interface LendingSimulatorParams {
-  poolId: string;
-  capital: number;           // collateral value in USD
-  poolScore: number;         // 0-100 (determines base LTV tier)
-  poolVolatilityAnn: number; // annual volatility decimal
-  ltvManual: number;         // user-set LTV % (0-95)
-  interestRateManual: number;// user-set annual interest rate %
-  borrowAmount: number;      // how much user wants to borrow (USD)
-}
-
-interface LendingSimulatorResult {
-  ltvMax: number;            // protocol max (based on pool risk)
-  ltvUsed: number;           // user's chosen LTV
-  borrowCapacity: number;    // max USD user can borrow
-  healthFactor: number;      // collateral / (borrow / ltvMax)
-  liquidationPrice: number;  // pool price at which position gets liquidated
-  liquidationDropPct: number;// % price drop that triggers liquidation
-  interestCostAnnual: number;// USD/year in interest
-  netApr: number;            // poolAPR - interestRate + leverage boost
-  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-  scenarios: Array<{
-    ltvPct: number;
-    healthFactor: number;
-    liquidationPrice: number;
-    netApr: number;
-  }>;
-}
+// 3 cenários automáticos:
+const scenarios = [
+  { label: 'Conservador', ltvPct: ltvMax * 0.5 },
+  { label: 'Moderado',    ltvPct: ltvMax * 0.75 },
+  { label: 'Agressivo',   ltvPct: ltvMax * 0.95 },
+].map(s => ({
+  ...s,
+  healthFactor: ltvMax / s.ltvPct,
+  liquidationDropPct: (1 - s.ltvPct / ltvMax) * 100,
+  liquidationPrice: currentPrice * (s.ltvPct / ltvMax),
+}));
 ```
 
-**LTV tiers (protocol baseline, overridable by user):**
-- Score ≥ 75 (blue-chip): base LTV 70%
-- Score 50-74: base LTV 55%
-- Score < 50 (volatile): base LTV 35%
-
-**Formula:**
-```
-healthFactor = (collateral * ltvMax) / borrowAmount
-liquidationPrice = entryPrice * (1 - (healthFactor - 1) / healthFactor)
-netApr = poolApr - interestRate + (borrowAmount / capital) * poolApr
-```
-
-**New endpoint:** `POST /api/calc/lending`
-
-### Frontend UI (`LendingSimulator.tsx`)
-1. Pool selector (search existing pools)
-2. Two sliders: LTV % and Interest Rate %
-3. Borrow amount input
-4. Results panel:
-   - Health Factor (color-coded: green >2.0, yellow 1.2-2.0, red <1.2)
-   - Liquidation price + % drop from current price
-   - Net APR with leverage
-   - 3-scenario comparison table (conservative/moderate/aggressive LTV)
-5. Disclaimer: "Simulação educacional. Não representa oferta de crédito."
+UI: tabela compacta com 3 colunas (cenário, health factor, preço de liquidação).
+Collapsível, fechado por padrão. Link "Simular em detalhes →" para `/lending?pool=...`.
 
 ---
 
-## Feature 6 — Lending Risk Panel in Pool Detail
+## Navigation
 
-### Purpose
-Show at-a-glance lending risk metrics directly in `ScoutPoolDetail.tsx` for users considering using the position as collateral.
-
-### Location
-New collapsible section in `ScoutPoolDetail.tsx` below the Projections card.
-
-### Frontend Component (`LendingRiskPanel.tsx`)
-
-Compact panel showing three preset scenarios automatically calculated from pool data:
-
-| Cenário | LTV | Health Factor | Liquidação em |
-|---|---|---|---|
-| Conservador | 35% | 2.86 | -65% |
-| Moderado | 55% | 1.82 | -45% |
-| Agressivo | 70% | 1.43 | -30% |
-
-- Color-coded health factors
-- Risk badge per scenario
-- Link: "Simular em detalhes →" → `/lending?pool=...`
-- Collapses by default, expands on click
-
-### Backend
-Reuses `calcLendingPosition()` from Feature 5 with preset LTV values.
-No new endpoint — computed client-side using pool data already loaded.
-
----
-
-## Navigation Update
-
-Add `/lending` to the sidebar navigation in the layout component:
-- Icon: `Landmark` (Lucide)
+Adicionar `/lending` ao sidebar no grupo "Operações" (junto com Simulation):
+- Ícone: `Landmark` (Lucide)
 - Label: "Lending Sim"
-- Position: after Simulation in the nav
 
 ---
 
-## Data Flow Summary
+## Arquivos a Criar (Novos)
 
-```
-User action                  → Backend                    → Frontend
-─────────────────────────────────────────────────────────────────────
-Simulation page loads        → POST /api/calc/auto-compound → AutoCompound widget
-Simulation "Backtest Real"   → GET /api/backtest-real/...  → Real backtest tab
-Pool detail loads            → calcLending (client-side)   → LendingRiskPanel
-/lending page loads          → POST /api/calc/lending      → Full simulator
-Alert fires (range exit)     → alert.service buffer+TWAP   → Telegram/UI
-Settings save                → PUT /api/settings/...       → TWAP confirm window
-```
-
----
-
-## Files to Create (New)
-
-| File | Type | Purpose |
+| Arquivo | Tipo | Purpose |
 |---|---|---|
-| `backend/src/services/backtest-real.service.ts` | Service | TheGraph real backtest |
-| `frontend/src/pages/LendingSimulator.tsx` | Page | /lending page |
-| `frontend/src/components/common/LendingRiskPanel.tsx` | Component | Pool detail widget |
+| `backend/src/services/backtest-real.service.ts` | Service | Backtest via TheGraph |
+| `frontend/src/pages/LendingSimulator.tsx` | Page | `/lending` |
+| `frontend/src/components/common/LendingRiskPanel.tsx` | Component | Widget pool detail |
 | `frontend/src/components/common/AutoCompoundWidget.tsx` | Component | Compound calculator |
 
-## Files to Modify (Existing)
+## Arquivos a Modificar (Existentes)
 
-| File | Change |
+| Arquivo | Mudança |
 |---|---|
-| `backend/src/services/calc.service.ts` | Add `calcAutoCompound()` + `calcLendingPosition()` |
-| `backend/src/services/alert.service.ts` | Add buffer zone + TWAP anti-wick |
-| `backend/src/services/memory-store.service.ts` | Add price-out timestamp tracking |
-| `backend/src/routes/index.ts` | Add 3 new endpoints |
-| `frontend/src/pages/Simulation.tsx` | Add AutoCompound widget + Real Backtest tab |
-| `frontend/src/pages/ScoutPoolDetail.tsx` | Add LendingRiskPanel |
-| `frontend/src/pages/ScoutSettings.tsx` | Add TWAP confirm window setting |
-| `frontend/src/components/layout/Sidebar.tsx` | Add /lending nav item |
-| `pool-intelligence-pro/backend/prisma/schema.prisma` | No change needed (uses existing settings table) |
+| `backend/src/services/calc.service.ts` | Adicionar `calcOptimalCompound()` e `calcLendingPosition()` |
+| `backend/src/services/alert.service.ts` | Adicionar `getRangeZone()` + anti-wick |
+| `backend/src/services/memory-store.service.ts` | Adicionar price-out timestamps |
+| `backend/src/routes/index.ts` | 3 novos endpoints |
+| `frontend/src/pages/Simulation.tsx` | Widget AutoCompound + tab Backtest Real |
+| `frontend/src/pages/ScoutPoolDetail.tsx` | LendingRiskPanel |
+| `frontend/src/pages/ScoutSettings.tsx` | Config TWAP window |
+| `frontend/src/App.tsx` (ou router) | Rota `/lending` |
+| `frontend/src/components/layout/Sidebar.tsx` | Nav item lending |
 
 ---
 
-## Non-Goals (Explicitly Out of Scope)
+## Plano de Implementação (Waves Paralelas)
 
-- Smart contracts or on-chain execution
-- Real lending protocol integration (no actual borrowing)
-- Liquidator bot (on-chain, requires capital + private keys)
-- Wallet connection for reading real positions
-- Automated compounding execution
+**Wave 1 — Backend (3 tarefas independentes em paralelo):**
+- A: `calcOptimalCompound()` + `calcLendingPosition()` em `calc.service.ts`
+- B: `backtest-real.service.ts` + query TheGraph paginada
+- C: `getRangeZone()` + TWAP anti-wick em `alert.service.ts` + MemoryStore
 
----
+**Wave 2 — Frontend (4 tarefas independentes em paralelo, após Wave 1):**
+- D: `AutoCompoundWidget.tsx` + integração em `Simulation.tsx`
+- E: `LendingSimulator.tsx` (nova página)
+- F: `LendingRiskPanel.tsx` + integração em `ScoutPoolDetail.tsx`
+- G: Settings TWAP + sidebar + rota `/lending` em App.tsx
 
-## Success Criteria
-
-1. `calcAutoCompound()` returns correct compound frequency (validated against manual calculation)
-2. Alert buffer zone prevents alerts during normal price oscillation within buffer
-3. TWAP anti-wick ignores spikes <configured window, confirms real exits
-4. Real backtest uses actual TheGraph data with graceful fallback to GBM
-5. Lending simulator health factor ≥ 1.0 with conservative LTV, liquidation price makes mathematical sense
-6. All 4 new/modified pages build without TypeScript errors
-7. Existing tests (360) continue passing
-
----
-
-## Implementation Order (Parallel Waves)
-
-**Wave 1 (parallel):**
-- A: Backend — `calcAutoCompound()` + `calcLendingPosition()` in calc.service.ts
-- B: Backend — `backtest-real.service.ts` (TheGraph integration)
-- C: Backend — alert.service buffer + TWAP + memory-store changes
-
-**Wave 2 (parallel, after Wave 1):**
-- D: Frontend — `AutoCompoundWidget.tsx` + Simulation.tsx integration
-- E: Frontend — `LendingSimulator.tsx` (new page)
-- F: Frontend — `LendingRiskPanel.tsx` + ScoutPoolDetail integration
-- G: Frontend — ScoutSettings TWAP config + Sidebar nav
-
-**Wave 3:**
-- Routes integration (endpoints for auto-compound + lending + backtest-real)
-- Build verification + tests
+**Wave 3 — Integração:**
+- Endpoints em `routes/index.ts`
+- Build verification (frontend + backend TS)
+- Testes das fórmulas críticas
 - Commit + push
+
+---
+
+## Critérios de Sucesso
+
+1. `calcOptimalCompound()`: para capital=$1000, APR=40%, timeInRange=70%, gas=$3 → intervalo ≈ 10.7 dias
+2. Liquidation price: para ltvUsed=55%, ltvMax=70%, entryPrice=$100 → $78.57
+3. Net APR com alavancagem: capital=$100, borrow=$100, poolApr=50%, interest=10% → 90%
+4. Backtest real usa `poolHourData` TheGraph com paginação correta
+5. Anti-wick: spike de 3min não gera alerta com janela de 5min
+6. Build limpo sem erros TypeScript
+7. 360 testes existentes continuam passando
+
+---
+
+## Não-Goals (Fora de Escopo)
+
+- Smart contracts ou execução on-chain
+- Integração real com protocolo de lending (sem borrowing real)
+- Liquidator bot
+- Conexão de wallet
+- Compound automático executado pelo sistema
