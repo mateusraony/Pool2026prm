@@ -23,6 +23,7 @@ const PoolComparePage = lazy(() => import('./pages/PoolCompare'));
 const PoolAnalyticsPage = lazy(() => import('./pages/PoolAnalytics'));
 const PortfolioPage = lazy(() => import('./pages/Portfolio'));
 const WalletTrackerPage = lazy(() => import('./pages/WalletTracker'));
+const LendingSimulator = lazy(() => import('./pages/LendingSimulator'));
 
 function PageLoader() {
   return (
@@ -104,6 +105,7 @@ export default function App() {
           <Route path="radar" element={<LazyPage><RadarPage /></LazyPage>} />
           <Route path="simulation" element={<Navigate to="/pools" replace />} />
           <Route path="simulation/:chain/:address" element={<LazyPage><SimulationPage /></LazyPage>} />
+          <Route path="lending" element={<LazyPage><LendingSimulator /></LazyPage>} />
           <Route path="alerts" element={<LazyPage><AlertsPage /></LazyPage>} />
           <Route path="compare" element={<LazyPage><PoolComparePage /></LazyPage>} />
           <Route path="analytics/:chain/:address" element={<LazyPage><PoolAnalyticsPage /></LazyPage>} />

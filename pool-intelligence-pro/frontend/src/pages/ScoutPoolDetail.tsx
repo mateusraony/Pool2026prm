@@ -13,6 +13,7 @@ import { ConfBadge } from '@/components/common/ConfBadge';
 import { AIInsightsCard } from '@/components/AIInsightsCard';
 import { TokenCorrelation } from '@/components/common/TokenCorrelation';
 import { DeepAnalysisPanel } from '@/components/common/DeepAnalysisPanel';
+import { LendingRiskPanel } from '@/components/common/LendingRiskPanel';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -396,6 +397,19 @@ export default function ScoutPoolDetail() {
       {chain && address && (
         <div className="mb-6">
           <DeepAnalysisPanel chain={chain} address={address} />
+        </div>
+      )}
+
+      {/* Lending Risk Panel */}
+      {pool?.currentPrice && pool.currentPrice > 0 && (
+        <div className="mb-6">
+          <LendingRiskPanel
+            currentPrice={liveData?.price ?? pool.currentPrice}
+            poolScore={liveData?.healthScore ?? pool.score ?? 50}
+            poolApr={pool.apr ?? 0}
+            chain={pool.chain ?? chain ?? ''}
+            poolAddress={pool.poolAddress}
+          />
         </div>
       )}
 

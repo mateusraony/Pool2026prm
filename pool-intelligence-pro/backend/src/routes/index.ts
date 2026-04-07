@@ -18,6 +18,7 @@ import integrationsRouter from './integrations.routes.js';
 import aiInsightsRouter from './ai-insights.routes.js';
 import pushRouter from './push.routes.js';
 import walletRouter from './wallet.routes.js';
+import calcRouter from './calc.routes.js';
 import { macroCalendarService } from '../services/macro-calendar.service.js';
 import { marketRegimeService } from '../services/market-regime.service.js';
 import { memoryStore } from '../services/memory-store.service.js';
@@ -72,6 +73,7 @@ router.use(integrationsRouter);
 router.use(aiInsightsRouter);
 router.use(pushRouter);
 router.use(walletRouter);
+router.use('/calc', calcRouter);
 
 // ============================================
 // MACRO CALENDAR ROUTES

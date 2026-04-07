@@ -7,6 +7,89 @@ import { memoryStore } from './memory-store.service.js';
 import { getPrisma } from '../routes/prisma.js';
 import { Prisma } from '@prisma/client';
 
+export type RangeZoneStatus = 'SAFE' | 'DANGER_ZONE' | 'OUT_OF_RANGE';
+
+/**
+ * Determina a zona do preço em relação ao range configurado.
+ * Inspirado no AutoRange.sol do Revert Finance (lowerTickLimit/upperTickLimit buffer).
+ * Buffer = 15% da largura do range de cada lado.
+ */
+export function getRangeZone(
+  currentPrice: number,
+  lower: number,
+  upper: number
+): { status: RangeZoneStatus; distToEdgePct: number } {
+  if (lower <= 0 || upper <= 0 || lower >= upper || currentPrice <= 0) {
+    return { status: 'SAFE', distToEdgePct: 100 };
+  }
+
+  if (currentPrice < lower || currentPrice > upper) {
+    return { status: 'OUT_OF_RANGE', distToEdgePct: 0 };
+  }
+
+  const rangeWidth = upper - lower;
+  const buffer = rangeWidth * 0.15; // 15% de cada borda
+  const distLower = currentPrice - lower;
+  const distUpper = upper - currentPrice;
+  const minDist = Math.min(distLower, distUpper);
+  const distToEdgePct = (minDist / rangeWidth) * 100;
+
+  if (minDist < buffer) {
+    return { status: 'DANGER_ZONE', distToEdgePct: Math.round(distToEdgePct * 10) / 10 };
+  }
+  return { status: 'SAFE', distToEdgePct: Math.round(distToEdgePct * 10) / 10 };
+}
+
+/**
+ * Verifica se deve enviar alerta de saída de range considerando janela de confirmação.
+ * Previne alertas por wicks/spikes temporários (TWAP anti-wick).
+ * Inspirado no AutoExit.sol do Revert Finance (validação TWAP antes de execução).
+ *
+ * @param poolId - ID único da pool
+ * @param confirmWindowMs - janela de confirmação em ms (120000=2min, 300000=5min, etc.)
+ * @returns true se deve alertar, false se ainda está no window ou é wick
+ */
+export function shouldSendRangeExitAlert(
+  poolId: string,
+  confirmWindowMs: number = 300_000 // 5 minutos padrão
+): boolean {
+  const outSince = memoryStore.getPriceOutTimestamp(poolId);
+  const now = Date.now();
+
+  if (!outSince) {
+    memoryStore.setPriceOutTimestamp(poolId, now);
+    logService.info('ALERT', 'Range exit detectado — aguardando confirmação anti-wick', {
+      poolId,
+      confirmWindowMin: Math.round(confirmWindowMs / 60000),
+    });
+    return false;
+  }
+
+  const elapsed = now - outSince;
+  if (elapsed >= confirmWindowMs) {
+    memoryStore.clearPriceOutTimestamp(poolId);
+    logService.info('ALERT', 'Range exit confirmado — enviando alerta', { poolId, elapsedMin: Math.round(elapsed / 60000) });
+    return true;
+  }
+
+  logService.info('ALERT', 'Range exit aguardando confirmação', {
+    poolId,
+    elapsedSec: Math.round(elapsed / 1000),
+    remainingSec: Math.round((confirmWindowMs - elapsed) / 1000),
+  });
+  return false;
+}
+
+/**
+ * Reseta o timestamp de saída quando o preço volta ao range (descarta wick).
+ */
+export function onPriceReturnedToRange(poolId: string): void {
+  if (memoryStore.getPriceOutTimestamp(poolId)) {
+    memoryStore.clearPriceOutTimestamp(poolId);
+    logService.info('ALERT', 'Preço retornou ao range — wick descartado', { poolId });
+  }
+}
+
 interface AlertRule {
   type: AlertType;
   poolId?: string;
