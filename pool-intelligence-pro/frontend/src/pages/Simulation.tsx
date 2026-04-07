@@ -176,7 +176,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
     if (serverCalc) {
       const selected = serverCalc.ranges[mode] || serverCalc.selected;
       const timeInRange = Math.round((1 - (selected?.probOutOfRange ?? 0.3)) * 100);
-      const feesPercent = capital > 0 && serverCalc.feeEstimate
+      const feesPercent = capital > 0 && serverCalc.feeEstimate && isFinite(serverCalc.feeEstimate.expectedFees7d)
         ? (serverCalc.feeEstimate.expectedFees7d / capital) * 100
         : 0;
       // ilRiskScore é probabilidade de sair do range (0..1), NÃO percentual de IL
@@ -399,9 +399,9 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
                 <input
                   type="number"
                   value={capital}
-                  onChange={(e) => { const n = parseFloat(e.target.value); if (!isNaN(n) && n >= 0) setCapital(n); else if (e.target.value === '' || e.target.value === '0') setCapital(0); }}
+                  onChange={(e) => { const n = parseFloat(e.target.value); if (!isNaN(n) && n >= 1) setCapital(n); }}
                   className="input text-2xl font-bold flex-1"
-                  min={0}
+                  min={1}
                 />
               </div>
               <div className="flex gap-2 mt-2">
@@ -541,7 +541,7 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
             </div>
 
             <div className="text-center text-xs text-muted-foreground bg-muted/50 rounded-lg p-2">
-              Retorno = Fees ({metrics.feesPercent.toFixed(2)}%) - IL ({metrics.ilPercent.toFixed(2)}%) - Gas ({((metrics.gasEstimate / capital) * 100).toFixed(2)}%)
+              Retorno = Fees ({metrics.feesPercent.toFixed(2)}%) - IL ({metrics.ilPercent.toFixed(2)}%) - Gas ({capital > 0 ? ((metrics.gasEstimate / capital) * 100).toFixed(2) : '0.00'}%)
             </div>
 
             {metrics.gasEstimate / capital > 0.1 && (

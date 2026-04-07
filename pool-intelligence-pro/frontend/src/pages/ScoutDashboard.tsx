@@ -160,7 +160,7 @@ export default function ScoutDashboard() {
       return {
         ...base,
         capital: pos.capital,
-        capitalPercent: (pos.capital / config.totalBanca) * 100,
+        capitalPercent: config.totalBanca > 0 ? (pos.capital / config.totalBanca) * 100 : 0,
         entryDate: pos.createdAt,
         pnl: pnlPercent,
         feesAccrued,
@@ -183,7 +183,7 @@ export default function ScoutDashboard() {
     });
     return Object.entries(exposure).map(([network, capital]) => ({
       network,
-      percent: (capital / config.totalBanca) * 100,
+      percent: config.totalBanca > 0 ? (capital / config.totalBanca) * 100 : 0,
     }));
   }, [activePools]);
 
@@ -344,7 +344,7 @@ export default function ScoutDashboard() {
         <StatCard
           label="Capital Alocado"
           value={formatCurrency(totalCapitalDeployed)}
-          change={totalCapitalDeployed > 0 ? ((totalCapitalDeployed / config.totalBanca) * 100) : 0}
+          change={totalCapitalDeployed > 0 && config.totalBanca > 0 ? ((totalCapitalDeployed / config.totalBanca) * 100) : 0}
           icon={<Activity className="h-5 w-5" />}
         />
         <StatCard
