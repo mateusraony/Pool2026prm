@@ -2004,6 +2004,181 @@ export function calcMultiPeriodRanges(params: {
   };
 }
 
+export interface OptimalCompoundResult {
+  dailyFees: number;
+  feesAccruedEstimate: number;
+  breakEvenDays: number;
+  optimalIntervalDays: number; // Infinity se dailyFees <= 0
+  aprSimple: number;
+  aprCompounded: number;
+  aprBoostPct: number;
+  shouldCompoundNow: boolean;
+  nextCompoundInDays: number;
+}
+
+/**
+ * Calcula o intervalo ótimo de auto-compound usando a fórmula sqrt(2g/f)
+ * onde g = custo de gas e f = fees/dia.
+ * Referência: modelo de Revert Finance compoundor-js.
+ */
+export function calcOptimalCompound(params: {
+  capital: number;
+  apr: number;           // % anual (ex: 42 para 42%)
+  timeInRangePct: number; // 0–100
+  gasEstimate: number;   // USD por compound tx
+  daysElapsed?: number;  // dias desde abertura (opcional)
+}): OptimalCompoundResult {
+  const { capital, apr, timeInRangePct, gasEstimate, daysElapsed = 0 } = params;
+
+  const aprSimple = Math.max(0, apr);
+  const dailyFees = (aprSimple / 100 / 365) * capital * (Math.min(100, Math.max(0, timeInRangePct)) / 100);
+
+  // Guard: dailyFees = 0 → sem compound possível
+  if (dailyFees <= 0 || capital <= 0) {
+    return {
+      dailyFees: 0,
+      feesAccruedEstimate: 0,
+      breakEvenDays: Infinity,
+      optimalIntervalDays: Infinity,
+      aprSimple,
+      aprCompounded: 0,
+      aprBoostPct: 0,
+      shouldCompoundNow: false,
+      nextCompoundInDays: Infinity,
+    };
+  }
+
+  const breakEvenDays = gasEstimate / dailyFees;
+  const optimalIntervalDays = Math.sqrt((2 * gasEstimate) / dailyFees);
+
+  // APY com compound no intervalo ótimo
+  const dailyRate = dailyFees / capital;
+  const aprCompoundedDecimal = Math.pow(1 + dailyRate, 365) - 1;
+  const aprCompounded = aprCompoundedDecimal * 100;
+  const aprBoostPct = Math.max(0, aprCompounded - aprSimple);
+
+  const feesAccruedEstimate = dailyFees * daysElapsed;
+  const shouldCompoundNow = feesAccruedEstimate >= gasEstimate * 3;
+  const nextCompoundInDays = optimalIntervalDays > 0
+    ? optimalIntervalDays - (daysElapsed % optimalIntervalDays)
+    : Infinity;
+
+  return {
+    dailyFees: Math.round(dailyFees * 10000) / 10000,
+    feesAccruedEstimate: Math.round(feesAccruedEstimate * 100) / 100,
+    breakEvenDays: Math.round(breakEvenDays * 10) / 10,
+    optimalIntervalDays: Math.round(optimalIntervalDays * 10) / 10,
+    aprSimple,
+    aprCompounded: Math.round(aprCompounded * 100) / 100,
+    aprBoostPct: Math.round(aprBoostPct * 100) / 100,
+    shouldCompoundNow,
+    nextCompoundInDays: Math.round(nextCompoundInDays * 10) / 10,
+  };
+}
+
+export interface LendingPositionResult {
+  ltvMax: number;              // % máximo do protocolo (baseado no score)
+  ltvUsed: number;             // % efetivamente usado
+  healthFactor: number;        // ltvMax / ltvUsed; Infinity se borrowAmount = 0
+  liquidationPrice: number;    // entryPrice * (ltvUsed / ltvMax)
+  liquidationDropPct: number;  // (1 - ltvUsed/ltvMax) * 100
+  netApr: number;              // poolApr + (poolApr - interestRate) * (borrow/capital)
+  interestCostAnnual: number;  // borrowAmount * interestRate / 100
+  borrowCapacity: number;      // capital * ltvMax / 100
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  scenarios: Array<{
+    label: string;
+    ltvPct: number;
+    healthFactor: number;
+    liquidationDropPct: number;
+    liquidationPrice: number;
+  }>;
+}
+
+/**
+ * Simula uma posição de lending usando LP como colateral.
+ * Baseado nos parâmetros do protocolo Revert Lend (simulação educacional).
+ *
+ * Fórmulas:
+ *   healthFactor = ltvMax / ltvUsed
+ *   liquidationPrice = entryPrice * (ltvUsed / ltvMax)
+ *   netApr = poolApr + (poolApr - interestRate) * (borrowAmount / capital)
+ */
+export function calcLendingPosition(params: {
+  capital: number;
+  entryPrice: number;
+  poolScore: number;
+  poolApr: number;           // % anual
+  ltvManual: number;         // % escolhido pelo usuário (0–ltvMax)
+  interestRateManual: number;// % anual
+  borrowAmount: number;      // USD
+}): LendingPositionResult {
+  const { capital, entryPrice, poolScore, poolApr, ltvManual, interestRateManual, borrowAmount } = params;
+
+  // LTV máximo baseado no score
+  const ltvMax = poolScore >= 75 ? 70 : poolScore >= 50 ? 55 : 35;
+
+  // LTV efetivo = min(manual, max) / 100
+  const ltvUsedPct = Math.min(Math.max(0, ltvManual), ltvMax);
+  const borrowCapacity = capital * ltvMax / 100;
+
+  // Health factor: Infinity se não há borrow
+  const ltvUsed = capital > 0 ? borrowAmount / capital : 0;
+  const ltvUsedPctEffective = ltvUsed * 100;
+  const healthFactor = ltvUsedPctEffective > 0
+    ? ltvMax / ltvUsedPctEffective
+    : Infinity;
+
+  // Preço de liquidação
+  const liquidationPrice = ltvUsedPctEffective > 0
+    ? entryPrice * (ltvUsedPctEffective / ltvMax)
+    : 0;
+  const liquidationDropPct = ltvUsedPctEffective > 0
+    ? (1 - ltvUsedPctEffective / ltvMax) * 100
+    : 100;
+
+  // Net APR com alavancagem
+  const netApr = poolApr + (poolApr - interestRateManual) * (borrowAmount / capital);
+  const interestCostAnnual = borrowAmount * interestRateManual / 100;
+
+  // Risk level
+  const riskLevel =
+    healthFactor < 1.0 ? 'CRITICAL' :
+    healthFactor < 1.2 ? 'HIGH' :
+    healthFactor < 2.0 ? 'MEDIUM' : 'LOW';
+
+  // 3 cenários automáticos
+  const scenarioDefs = [
+    { label: 'Conservador', ltvFraction: 0.5 },
+    { label: 'Moderado', ltvFraction: 0.75 },
+    { label: 'Agressivo', ltvFraction: 0.95 },
+  ];
+  const scenarios = scenarioDefs.map(s => {
+    const sLtvPct = ltvMax * s.ltvFraction;
+    const sHF = sLtvPct > 0 ? ltvMax / sLtvPct : Infinity;
+    return {
+      label: s.label,
+      ltvPct: Math.round(sLtvPct * 10) / 10,
+      healthFactor: Math.round(sHF * 100) / 100,
+      liquidationDropPct: Math.round((1 - sLtvPct / ltvMax) * 100 * 10) / 10,
+      liquidationPrice: Math.round(entryPrice * (sLtvPct / ltvMax) * 100) / 100,
+    };
+  });
+
+  return {
+    ltvMax,
+    ltvUsed: Math.round(ltvUsedPctEffective * 10) / 10,
+    healthFactor: isFinite(healthFactor) ? Math.round(healthFactor * 100) / 100 : 999,
+    liquidationPrice: Math.round(liquidationPrice * 100) / 100,
+    liquidationDropPct: Math.round(liquidationDropPct * 10) / 10,
+    netApr: Math.round(netApr * 100) / 100,
+    interestCostAnnual: Math.round(interestCostAnnual * 100) / 100,
+    borrowCapacity: Math.round(borrowCapacity * 100) / 100,
+    riskLevel,
+    scenarios,
+  };
+}
+
 const calcService = {
   calcAprFee,
   calcVolatilityAnn,
@@ -2030,6 +2205,8 @@ const calcService = {
   calcGasBreakeven,
   calcHealthFactor,
   calcMultiPeriodRanges,
+  calcOptimalCompound,
+  calcLendingPosition,
 };
 
 export { calcService };

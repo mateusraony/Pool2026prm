@@ -45,6 +45,21 @@ class MemoryStore {
   private static TVL_MAX_SNAPSHOTS = 48; // ~24h of snapshots at 30min radar interval
 
   // Estatísticas internas
+  // Price-out timestamps para TWAP anti-wick (Feature 3)
+  private priceOutTimestamps: Map<string, number> = new Map();
+
+  getPriceOutTimestamp(poolId: string): number | undefined {
+    return this.priceOutTimestamps.get(poolId);
+  }
+
+  setPriceOutTimestamp(poolId: string, ts: number): void {
+    this.priceOutTimestamps.set(poolId, ts);
+  }
+
+  clearPriceOutTimestamp(poolId: string): void {
+    this.priceOutTimestamps.delete(poolId);
+  }
+
   private stats = { reads: 0, hits: 0, misses: 0, writes: 0 };
 
   // ─── Pools ────────────────────────────────────────────────────────────────

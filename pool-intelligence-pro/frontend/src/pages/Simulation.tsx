@@ -5,6 +5,7 @@ import { TrendingUp, TrendingDown, Clock, Fuel, DollarSign, AlertTriangle, Arrow
 import { fetchPool, fetchPools, createRangePosition, fetchRangePositions, deleteRangePosition, calcRange, fetchOhlcv, fetchLiquidityDistribution, Pool, Score } from '../api/client';
 import { feeTierToBps, feeTierToPercent } from '../data/constants';
 import { UniswapRangeChart } from '@/components/charts/UniswapRangeChart';
+import { AutoCompoundWidget } from '@/components/common/AutoCompoundWidget';
 import clsx from 'clsx';
 
 type Period = '7D' | '30D' | 'YTD';
@@ -700,6 +701,15 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
           apr={metrics.apr}
         />
       )}
+
+      {/* Auto-Compound Strategy */}
+      <AutoCompoundWidget
+        apr={score?.breakdown?.return?.aprEstimate ?? pool.apr ?? 0}
+        timeInRangePct={metrics.timeInRange}
+        capital={capital}
+        gasEstimate={metrics.gasEstimate}
+        chain={pool.chain}
+      />
     </div>
   );
 }

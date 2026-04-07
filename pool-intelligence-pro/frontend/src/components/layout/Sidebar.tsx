@@ -20,6 +20,7 @@ import {
   GitCompareArrows,
   PieChart,
   Wallet,
+  Landmark,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/hooks/useNotifications';
@@ -48,6 +49,7 @@ const navSections = [
     items: [
       { path: '/active', icon: CircleDot, label: 'Pools Ativas' },
       { path: '/simulation', icon: Ruler, label: 'Simulacao' },
+      { path: '/lending', icon: Landmark, label: 'Lending Sim' },
     ],
   },
   {

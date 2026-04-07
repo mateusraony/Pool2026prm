@@ -93,6 +93,11 @@ export default function ScoutSettings() {
   const [chatIdInput, setChatIdInput] = useState('');
   const [telegramSaving, setTelegramSaving] = useState(false);
 
+  // TWAP anti-wick confirmation time
+  const [wickConfirmMinutes, setWickConfirmMinutes] = useState<number>(
+    () => parseInt(localStorage.getItem('wickConfirmMinutes') || '5')
+  );
+
   // Notification settings
   const [notifSettings, setNotifSettings] = useState<NotificationSettings | null>(null);
   const [localNotifChanges, setLocalNotifChanges] = useState<Partial<NotificationSettings> | null>(null);
@@ -765,6 +770,33 @@ export default function ScoutSettings() {
                 />
               </div>
             ))}
+          </div>
+
+          {/* TWAP Anti-Wick — tempo de confirmação de saída de range */}
+          <div className="mt-4 pt-4 border-t border-border">
+            <div className="flex items-center justify-between py-3 px-2 rounded-lg hover:bg-secondary/30 transition-colors">
+              <div className="flex-1 min-w-0 mr-4">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <p className="text-sm font-medium">Confirmacao anti-wick</p>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5 ml-6">Aguardar antes de alertar saida de range (evita spikes temporarios)</p>
+              </div>
+              <select
+                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring w-28"
+                value={wickConfirmMinutes}
+                onChange={e => {
+                  const val = parseInt(e.target.value);
+                  setWickConfirmMinutes(val);
+                  localStorage.setItem('wickConfirmMinutes', String(val));
+                }}
+              >
+                <option value={2}>2 min</option>
+                <option value={5}>5 min</option>
+                <option value={10}>10 min</option>
+                <option value={15}>15 min</option>
+              </select>
+            </div>
           </div>
         </div>
 
