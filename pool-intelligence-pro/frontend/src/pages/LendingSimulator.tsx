@@ -105,14 +105,15 @@ const VERDICT_STYLE = {
 // ─── Benchmark Chart ──────────────────────────────────────────────────────────
 
 function BenchmarkChart({ position, benchmarks }: { position: CalcResult; benchmarks?: BenchmarksData }) {
-  const data = [
-    { name: 'Sua Pool', value: Math.max(0, position.monthlyAPR), raw: position.monthlyAPR, isPool: true },
-    { name: 'CDI',      value: benchmarks?.cdi?.monthlyPct ?? 1.07,      isPool: false },
-    { name: 'Poupança', value: benchmarks?.poupanca?.monthlyPct ?? 0.75, isPool: false },
-    { name: 'S&P 500',  value: benchmarks?.sp500?.monthlyPct ?? 0.79,    isPool: false },
-    { name: 'Ouro',     value: benchmarks?.gold?.monthlyPct ?? 0.64,     isPool: false },
-  ];
   const cdiMonthly = benchmarks?.cdi?.monthlyPct ?? 1.07;
+  const poolRaw = position.monthlyAPR;
+  const data: { name: string; value: number; raw: number; isPool: boolean }[] = [
+    { name: 'Sua Pool', value: Math.max(0, poolRaw), raw: poolRaw,                              isPool: true  },
+    { name: 'CDI',      value: benchmarks?.cdi?.monthlyPct ?? 1.07,      raw: 0,                isPool: false },
+    { name: 'Poupança', value: benchmarks?.poupanca?.monthlyPct ?? 0.75, raw: 0,                isPool: false },
+    { name: 'S&P 500',  value: benchmarks?.sp500?.monthlyPct ?? 0.79,    raw: 0,                isPool: false },
+    { name: 'Ouro',     value: benchmarks?.gold?.monthlyPct ?? 0.64,     raw: 0,                isPool: false },
+  ];
   const max = Math.max(...data.map(d => d.value), 0.1);
 
   return (
