@@ -641,11 +641,17 @@ export default function MyLpPositions() {
       {showForm && (
         <NewPositionForm onSave={handleSave} onCancel={() => setShowForm(false)} benchmarks={benchmarks} />
       )}
-      {createMutation.isError && (
-        <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2 flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4" /> Erro ao salvar. Verifique a conexão com o servidor.
-        </div>
-      )}
+      {createMutation.isError && (() => {
+        const err = createMutation.error as { response?: { data?: { error?: string; code?: string } } };
+        const msg = err?.response?.data?.error ?? 'Erro ao salvar. Verifique a conexão com o servidor.';
+        const code = err?.response?.data?.code;
+        return (
+          <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{msg}{code && code !== 'INTERNAL_ERROR' ? ` (${code})` : ''}</span>
+          </div>
+        );
+      })()}
 
       {/* Positions */}
       {loadingPos ? (
