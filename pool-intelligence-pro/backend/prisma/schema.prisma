@@ -552,6 +552,31 @@ model AppConfig {
 }
 
 // ============================================
+// LP POSITION TRACKER (Pool Performance)
+// ============================================
+
+model LpPosition {
+  id            String   @id @default(cuid())
+  token0        String                        // ex: ETH
+  token1        String                        // ex: USDC
+  token0Usd     Float                         // valor inicial token0 em USDT
+  token1Usd     Float                         // valor inicial token1 em USDT
+  feesEarned    Float    @default(0)          // fees acumuladas em USDT
+  feeTier       Float                         // 0.01, 0.05, 0.3 ou 1 (percentual)
+  startDate     DateTime                      // data de entrada na pool
+  protocol      String?                       // ex: Uniswap v3
+  chain         String?                       // ethereum, arbitrum, base, polygon
+  poolLink      String?                       // URL ou endereço da pool
+  walletAddress String?                       // wallet do usuário
+  notes         String?                       // notas livres
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([startDate])
+  @@index([chain])
+}
+
+// ============================================
 // POSITION HISTORY (timeline of LP actions)
 // ============================================
 

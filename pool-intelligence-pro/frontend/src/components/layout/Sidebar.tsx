@@ -49,7 +49,7 @@ const navSections = [
     items: [
       { path: '/active', icon: CircleDot, label: 'Pools Ativas' },
       { path: '/simulation', icon: Ruler, label: 'Simulacao' },
-      { path: '/lending', icon: Landmark, label: 'Lending Sim' },
+      { path: '/lending', icon: Landmark, label: 'Minhas Posições' },
     ],
   },
   {
