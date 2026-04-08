@@ -1224,3 +1224,74 @@ export async function fetchDeepAnalysis(
 }
 
 export { api as apiClient };
+
+// ─── Benchmarks (tempo real: BCB + Yahoo Finance) ─────────────────────────────
+
+export interface BenchmarkEntry {
+  name: string;
+  monthlyPct: number;
+  annualPct: number;
+  source: string;
+  sourceUrl: string;
+  fetchedAt: string;
+  isCache: boolean;
+}
+
+export interface BenchmarksData {
+  cdi: BenchmarkEntry;
+  poupanca: BenchmarkEntry;
+  sp500: BenchmarkEntry;
+  gold: BenchmarkEntry;
+  fetchedAt: string;
+  allFetched: boolean;
+  cached?: boolean;
+}
+
+export async function fetchBenchmarks(): Promise<BenchmarksData> {
+  const { data } = await api.get('/benchmarks');
+  return data.data as BenchmarksData;
+}
+
+// ─── LP Position Tracker (Supabase via backend) ───────────────────────────────
+
+export interface LpPosition {
+  id: string;
+  token0: string;
+  token1: string;
+  token0Usd: number;
+  token1Usd: number;
+  feesEarned: number;
+  feeTier: number;
+  startDate: string;
+  protocol: string | null;
+  chain: string | null;
+  poolLink: string | null;
+  walletAddress: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function fetchLpPositions(): Promise<LpPosition[]> {
+  const { data } = await api.get('/lp-positions');
+  return data.data as LpPosition[];
+}
+
+export async function createLpPosition(
+  body: Omit<LpPosition, 'id' | 'createdAt' | 'updatedAt'>,
+): Promise<LpPosition> {
+  const { data } = await api.post('/lp-positions', body);
+  return data.data as LpPosition;
+}
+
+export async function updateLpPosition(
+  id: string,
+  updates: Partial<Pick<LpPosition, 'feesEarned' | 'notes' | 'poolLink' | 'walletAddress' | 'protocol' | 'chain'>>,
+): Promise<LpPosition> {
+  const { data } = await api.patch(`/lp-positions/${id}`, updates);
+  return data.data as LpPosition;
+}
+
+export async function deleteLpPosition(id: string): Promise<void> {
+  await api.delete(`/lp-positions/${id}`);
+}

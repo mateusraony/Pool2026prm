@@ -19,6 +19,8 @@ import aiInsightsRouter from './ai-insights.routes.js';
 import pushRouter from './push.routes.js';
 import walletRouter from './wallet.routes.js';
 import calcRouter from './calc.routes.js';
+import lpPositionsRouter from './lp-positions.routes.js';
+import benchmarksRouter from './benchmarks.routes.js';
 import { macroCalendarService } from '../services/macro-calendar.service.js';
 import { marketRegimeService } from '../services/market-regime.service.js';
 import { memoryStore } from '../services/memory-store.service.js';
@@ -74,6 +76,8 @@ router.use(aiInsightsRouter);
 router.use(pushRouter);
 router.use(walletRouter);
 router.use('/calc', calcRouter);
+router.use(lpPositionsRouter);
+router.use(benchmarksRouter);
 
 // ============================================
 // MACRO CALENDAR ROUTES
