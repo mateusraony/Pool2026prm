@@ -8,7 +8,7 @@
     "build:frontend": "if [ -d ../frontend ] && [ ! -f public/index.html ]; then echo '[BUILD] Building frontend...' && cd ../frontend && NODE_ENV=development npm install --include=dev && npm run build && cd ../backend && rm -rf public && cp -r ../frontend/dist public && echo '[BUILD] Frontend built OK -> backend/public'; else echo '[BUILD] Skipped (public/index.html exists or no ../frontend)'; fi",
     "build": "npm run build:frontend && npx prisma generate && tsc -p tsconfig.build.json",
     "db:sync": "DIRECT_URL=\"$DATABASE_URL\" prisma db push || echo '[WARN] db:sync: prisma db push falhou — schema pode já estar aplicado ou DB indisponível'",
-    "start": "npm run db:sync && node dist/index.js",
+    "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:push": "prisma db push",
