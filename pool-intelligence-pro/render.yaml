@@ -5,15 +5,18 @@
 # voce precisa configurar no dashboard do Render:
 #
 # OPCAO A (recomendada): Root Directory = pool-intelligence-pro/backend
-#   Build Command: npm install && npm run build
-#   Start Command: npm start
+#   Build Command: npm install && npm run build && npm run db:sync
+#   Start Command: node dist/index.js
 #
 # OPCAO B: Root Directory = pool-intelligence-pro
-#   Build Command: npm run install:all && npm run build
-#   Start Command: npm start
+#   Build Command: npm run install:all && npm run build && cd backend && npm run db:sync
+#   Start Command: node pool-intelligence-pro/backend/dist/index.js
 #
 # Em AMBOS os casos, o backend auto-detecta e builda o frontend.
 # NAO precisa de VITE_API_URL — DELETE essa env var se existir!
+#
+# NOTA: prisma db push fica no BUILD (nao no START) para evitar
+# bloqueio na deteccao de porta pelo Render (port scan timeout).
 # ============================================
 
 services:
@@ -23,8 +26,8 @@ services:
     region: oregon
     plan: free
     rootDir: pool-intelligence-pro/backend
-    buildCommand: npm ci && npm run build
-    startCommand: npm start
+    buildCommand: npm ci && npm run build && npm run db:sync
+    startCommand: node dist/index.js
     envVars:
       - key: NODE_ENV
         value: production
