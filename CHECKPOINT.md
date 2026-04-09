@@ -1,6 +1,6 @@
 # CHECKPOINT - Pool Intelligence Pro
 
-## Última Atualização: 2026-04-07 (Sessão 7)
+## Última Atualização: 2026-04-09 (Sessão 8)
 
 ---
 
@@ -10,12 +10,135 @@
 |------------|-----------|----------|
 | tsc frontend | ✅ | 0 erros |
 | tsc backend | ✅ | 0 erros |
-| build frontend | ✅ | Vite ~10s — Simulation 48KB (calculadora incluída) |
+| build frontend | ✅ | Vite ~12s — LendingSimulator 27.5KB |
 | build backend | ✅ | OK |
 | backend tests | ✅ | 14 files, 360/360 passando |
 | **total testes** | ✅ | **360 (100%)** |
 
 ---
+
+## Sessão 8 — Correção de 5 Bugs na Página Minhas Posições
+
+### Branch atual
+
+`claude/fix-calc-formulas-t9NvR` — **6 commits acima da main**  
+Commit `785eaf0` — prontos para PR/merge.
+
+### O que foi corrigido nesta sessão
+
+#### Bug 1 — "Erro ao listar posições" (500 P2021)
+| Arquivo | Mudança |
+|---------|---------|
+| `lp-positions.routes.ts` | GET retorna `{ success: true, data: [] }` (200) quando tabela não existe (P2021/P2022) em vez de 500 |
+
+#### Bug 2 — Poupança com cálculo errado
+| Arquivo | Mudança |
+|---------|---------|
+| `benchmarks.routes.ts` | Poupança monthly agora usa `annualToMonthly(CDI*0.70)` (composto correto) em vez de divisão simples; anual derivado por composição quando Selic ≤ 8.5% |
+
+#### Bug 3 — APR/APY/dias com imprecisão
+| Arquivo | Mudança |
+|---------|---------|
+| `LendingSimulator.tsx` | `exactDaysBetween()` com dias decimais reais + `365/12` d/mês (30.4167) em vez de `Math.floor` + 30 |
+| `LendingSimulator.tsx` | Adicionado `annualAPR` (simples = monthlyAPR×12) ao `CalcResult`; exibido lado a lado com APY composto com labels explicativos |
+
+#### Bug 4 — Erros sumiam da tela
+| Arquivo | Mudança |
+|---------|---------|
+| `LendingSimulator.tsx` | `saveError`, `deleteError`, `updateError` em `useState` local — persistem até clicar no X; `onError` captura msg/code da resposta |
+
+#### Bug 5 — Fee Tier não atualizava preview
+| Arquivo | Mudança |
+|---------|---------|
+| `LendingSimulator.tsx` | `form.feeTier` adicionado às deps do `useMemo`; badge "Fee Tier X% (informativo — APR calculado das fees reais)" no preview |
+
+### Frase de checkpoint
+
+> Sessão 8 em 09/04/2026 — 5 bugs corrigidos na página Minhas Posições: P2021 graceful, poupança composta, APR decimal+365/12, erros persistentes com dismiss, fee tier no preview. Build ✅, 360 testes ✅.
+
+---
+
+## Sessão 7 — Features Revert Finance + Calculadora de Rendimento + Pool Performance Tracker
+
+### O que foi feito nesta sessão
+
+#### Parte 1 — Features inspiradas no Revert Finance
+
+| Área | Feature | Arquivo(s) |
+|------|---------|-----------|
+| Backend | `calcOptimalCompound()` — intervalo ótimo com `sqrt(2*gas/dailyFees)` | `calc.service.ts` |
+| Backend | `calcLendingPosition()` — liquidation price, netApr com leverage | `calc.service.ts` |
+| Backend | `backtest-real.service.ts` — dados reais TheGraph, IL + fees | `backtest-real.service.ts` |
+| Backend | `getRangeZone()` / TWAP anti-wick configurável | `alert.service.ts` |
+| Backend | `/api/calc/optimal-compound`, `/api/calc/lending`, `/api/backtest-real/:chain/:address` | `calc.routes.ts` |
+| Frontend | `AutoCompoundWidget`, `LendingSimulator`, `LendingRiskPanel` | novos components |
+
+#### Parte 2 — Pool Performance Tracker (Minhas Posições)
+
+| Área | Feature | Arquivo(s) |
+|------|---------|-----------|
+| Backend | `LpPosition` model no schema Prisma | `schema.prisma` |
+| Backend | CRUD `/api/lp-positions` | `lp-positions.routes.ts` |
+| Backend | `/api/benchmarks` — CDI (BCB), S&P500, Gold (Yahoo Finance), Poupança | `benchmarks.routes.ts` |
+| Backend | `errorUtils.ts` — extração Prisma P-codes + logging estruturado | `errorUtils.ts` |
+| Frontend | `MyLpPositions` page — registro livre, APR/APY, benchmarks live | `LendingSimulator.tsx` |
+| Frontend | `BenchmarkChart` — comparativo mensal pool vs CDI/S&P500/Gold/Poupança | `LendingSimulator.tsx` |
+
+#### Parte 3 — PoolYieldCalculator + Python CLI
+
+| Área | Feature | Arquivo(s) |
+|------|---------|-----------|
+| Frontend | `PoolYieldCalculator` — inputs, APR/APY, tabela bruto→líquido, histórico localStorage | `PoolYieldCalculator.tsx` |
+| Python | `pool_yield_calc.py` — CLI args, interativo, batch JSON, ANSI colorido | `scripts/pool_yield_calc.py` |
+
+---
+
+## Sessão 6 — Correções de Fórmulas + OHLCV + Deploy
+
+| Correção | Arquivo |
+|---------|---------|
+| Monte Carlo sem viés, range lognormal | `calc.service.ts` |
+| OHLCV com endereço real GeckoTerminal | `geckoterminal.adapter.ts` |
+| Circuit breaker 404/429 | `circuit-breaker` |
+| `prisma db push` no build | `package.json` |
+
+PRs mergeados: #79, #80, #81
+
+---
+
+## Sessão 5 — Recomendações + Simulação Uniswap
+
+| Mudança | Arquivo |
+|---------|---------|
+| TTL 5min→30min, fallback suspects | `memory-store.service.ts`, `recommendation.service.ts` |
+| Volume bars + UniswapRangeChart | `UniswapRangeChart.tsx`, `Simulation.tsx` |
+
+---
+
+## Auditoria Profunda — 21/21 Issues Corrigidas (Sessões 2-3)
+
+CRITICOS (6/6 ✅) · ALTOS (8/8 ✅) · MÉDIOS (7/7 ✅)
+
+---
+
+## Ações Pendentes
+
+1. 🟡 **Criar PR** — Branch `claude/fix-calc-formulas-t9NvR` tem 6 commits prontos (sessões 7 + 8).
+2. 🟡 **Verificar deploy Render** — Confirmar que `DIRECT_URL="$DATABASE_URL"` em `db:sync` resolveu erros P1001.
+3. 🟡 **Testar Minhas Posições** — Após deploy, verificar que tabela `LpPosition` é criada e CRUD funciona.
+4. 🟡 **Rotacionar senha Supabase** — Credenciais foram compartilhadas em sessão anterior.
+5. 🟡 **PR #3** — Branch antiga de fevereiro. Decidir: fechar sem merge.
+
+---
+
+## Como Continuar
+
+1. Leia este `CHECKPOINT.md`
+2. `git log --oneline -10` para ver últimos commits
+3. Branch: `claude/fix-calc-formulas-t9NvR` (6 commits acima da main)
+4. Próximo passo: criar PR com commits das sessões 7 + 8
+5. Python script: `python3 scripts/pool_yield_calc.py --initial 5000 --yield 180 --period 30`
+
 
 ## Sessão 7 — Features Revert Finance + Calculadora de Rendimento + Python Script
 
