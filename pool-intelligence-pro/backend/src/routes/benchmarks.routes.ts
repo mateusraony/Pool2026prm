@@ -118,13 +118,15 @@ async function fetchAllBenchmarks(): Promise<BenchmarksResult> {
     logService.warn('SYSTEM', 'Benchmark Gold: usando fallback', { reason: (results[2] as PromiseRejectedResult).reason?.message });
   }
 
-  // Poupança derivada do CDI
-  const poupancaAnnual = cdiAnnual > 8.5
-    ? cdiAnnual * 0.70
-    : cdiAnnual + 0.5 * 12; // mensal + 0.5% → anual
+  // Poupança derivada do CDI (regra vigente no Brasil)
+  // Selic > 8.5%/ano: 70% do CDI ao ano (TR + 70% da Selic)
+  // Selic ≤ 8.5%/ano: Selic/12 + 0.5% ao mês (TR + 0.5%)
   const poupancaMonthly = cdiAnnual > 8.5
-    ? cdiAnnual * 0.70 / 12
-    : cdiAnnual / 12 + 0.5;
+    ? annualToMonthly(cdiAnnual * 0.70)   // composto correto: 70% da Selic anual → mensal
+    : cdiAnnual / 12 + 0.5;              // Selic/12 + 0.5% ao mês (nominal)
+  const poupancaAnnual = cdiAnnual > 8.5
+    ? Math.round(cdiAnnual * 0.70 * 100) / 100                                    // 70% do CDI anual
+    : Math.round(((1 + poupancaMonthly / 100) ** 12 - 1) * 100 * 100) / 100;    // composto anual
 
   return {
     cdi: {

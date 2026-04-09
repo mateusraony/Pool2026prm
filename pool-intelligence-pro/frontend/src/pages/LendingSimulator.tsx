@@ -39,18 +39,19 @@ const CHAINS = ['ethereum', 'arbitrum', 'base', 'polygon', 'optimism'];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function daysBetween(startDate: string): number {
-  const start = new Date(startDate);
-  const now = new Date();
-  return Math.max(1, Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+/** Retorna dias exatos (decimal) para cálculos de APR precisos */
+function exactDaysBetween(startDate: string): number {
+  const msInDay = 1000 * 60 * 60 * 24;
+  return Math.max(0.5, (Date.now() - new Date(startDate).getTime()) / msInDay);
 }
 
 interface CalcResult {
   totalInvested: number;
   profitPct: number;
   monthlyAPR: number;
-  annualAPY: number;
-  days: number;
+  annualAPR: number;   // APR simples anualizado (monthlyAPR × 12)
+  annualAPY: number;   // APY composto anual ((1 + monthlyAPR/100)^12 - 1)
+  days: number;        // dias inteiros (para exibição)
   verdict: 'EXCELLENT' | 'ABOVE' | 'BELOW' | 'NEGATIVE';
   verdictLabel: string;
   aiText: string;
@@ -60,10 +61,14 @@ function calcPosition(pos: {
   token0Usd: number; token1Usd: number; feesEarned: number; startDate: string;
 }, benchmarks?: BenchmarksData): CalcResult {
   const totalInvested = pos.token0Usd + pos.token1Usd;
-  const days = daysBetween(pos.startDate);
+  // Usar dias decimais exatos para cálculo (evita distorção com posições < 1 dia)
+  const exactDays = exactDaysBetween(pos.startDate);
+  const days = Math.max(1, Math.ceil(exactDays)); // inteiro para exibição
   const profitPct = totalInvested > 0 ? (pos.feesEarned / totalInvested) * 100 : 0;
-  const monthlyAPR = (profitPct / days) * 30;
-  const annualAPY = (Math.pow(1 + monthlyAPR / 100, 12) - 1) * 100;
+  // 365/12 = 30.4167 dias/mês (mais preciso que 30)
+  const monthlyAPR = (profitPct / exactDays) * (365 / 12);
+  const annualAPR = monthlyAPR * 12; // simples anualizado
+  const annualAPY = (Math.pow(1 + monthlyAPR / 100, 12) - 1) * 100; // composto
 
   const cdiMonthly = benchmarks?.cdi?.monthlyPct ?? 1.07;
   let verdict: CalcResult['verdict'];
@@ -92,7 +97,7 @@ function calcPosition(pos: {
     aiText = 'Fees insuficientes para este período. Verifique se a pool está ativa e dentro do range de preço.';
   }
 
-  return { totalInvested, profitPct, monthlyAPR, annualAPY, days, verdict, verdictLabel, aiText };
+  return { totalInvested, profitPct, monthlyAPR, annualAPR, annualAPY, days, verdict, verdictLabel, aiText };
 }
 
 const VERDICT_STYLE = {
@@ -258,14 +263,17 @@ function PositionCard({ position, benchmarks, onDelete, onUpdateFees }: {
             <div className="stat-card">
               <div className="stat-label">APR Mensal</div>
               <div className={clsx('stat-value', s.color)}>{calc.monthlyAPR.toFixed(2)}%</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">{calc.annualAPR.toFixed(1)}%/ano simples</div>
             </div>
             <div className="stat-card">
               <div className="stat-label">APY Anual</div>
               <div className="stat-value text-primary-400">{calc.annualAPY.toFixed(1)}%</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">composto (reinvestindo)</div>
             </div>
             <div className="stat-card">
-              <div className="stat-label">Entrada</div>
-              <div className="stat-value text-sm">{new Date(position.startDate).toLocaleDateString('pt-BR')}</div>
+              <div className="stat-label">Dias Ativos</div>
+              <div className="stat-value">{calc.days}d</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">{new Date(position.startDate).toLocaleDateString('pt-BR')}</div>
             </div>
           </div>
           <VerdictBadge calc={calc} />
@@ -322,7 +330,10 @@ function NewPositionForm({ onSave, onCancel, benchmarks }: {
     const fees = parseFloat(form.feesEarned) || 0;
     if ((t0 + t1) <= 0 || !form.startDate) return null;
     return calcPosition({ token0Usd: t0, token1Usd: t1, feesEarned: fees, startDate: form.startDate }, benchmarks);
-  }, [form.token0Usd, form.token1Usd, form.feesEarned, form.startDate, benchmarks]);
+    // form.feeTier incluído nas deps para manter o preview reativo; não afeta o cálculo de APR
+    // (APR é calculado das fees reais que o usuário informa, não do tier nominal)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.token0Usd, form.token1Usd, form.feesEarned, form.startDate, form.feeTier, benchmarks]);
 
   const set = (field: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [field]: e.target.value }));
@@ -441,19 +452,30 @@ function NewPositionForm({ onSave, onCancel, benchmarks }: {
         {/* Preview em tempo real */}
         {preview && (
           <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-3">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Preview</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Preview</p>
+              <span className="text-[10px] text-muted-foreground bg-muted/60 border border-border/50 px-2 py-0.5 rounded-full">
+                Fee Tier {form.feeTier}% (informativo — APR calculado das fees reais)
+              </span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="stat-card">
                 <div className="stat-label">APR Mensal</div>
                 <div className={clsx('stat-value', VERDICT_STYLE[preview.verdict].color)}>{preview.monthlyAPR.toFixed(2)}%</div>
               </div>
               <div className="stat-card">
+                <div className="stat-label">APR Anual</div>
+                <div className="stat-value text-foreground/80">{preview.annualAPR.toFixed(1)}%</div>
+                <div className="text-[10px] text-muted-foreground">simples</div>
+              </div>
+              <div className="stat-card">
                 <div className="stat-label">APY Anual</div>
                 <div className="stat-value text-primary-400">{preview.annualAPY.toFixed(1)}%</div>
+                <div className="text-[10px] text-muted-foreground">composto</div>
               </div>
               <div className="stat-card">
                 <div className="stat-label">Dias Ativos</div>
-                <div className="stat-value">{preview.days}</div>
+                <div className="stat-value">{preview.days}d</div>
               </div>
             </div>
             <VerdictBadge calc={preview} />
@@ -485,6 +507,10 @@ function NewPositionForm({ onSave, onCancel, benchmarks }: {
 export default function MyLpPositions() {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  // Erros persistentes — não somem ao digitar; usuário fecha manualmente
+  const [saveError, setSaveError] = useState<{ msg: string; code?: string } | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
   const { data: benchmarks, isLoading: loadingBench, error: benchError, refetch: refetchBench, isFetching: fetchingBench } = useQuery({
     queryKey: ['benchmarks'],
@@ -493,25 +519,44 @@ export default function MyLpPositions() {
     retry: 2,
   });
 
-  const { data: positions = [], isLoading: loadingPos } = useQuery({
+  const { data: positions = [], isLoading: loadingPos, error: posError } = useQuery({
     queryKey: ['lp-positions'],
     queryFn: fetchLpPositions,
     staleTime: 30_000,
+    retry: 1,
   });
 
   const createMutation = useMutation({
     mutationFn: createLpPosition,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['lp-positions'] }); setShowForm(false); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lp-positions'] });
+      setShowForm(false);
+      setSaveError(null);
+    },
+    onError: (error: unknown) => {
+      const e = error as { response?: { data?: { error?: string; code?: string } } };
+      const msg = e?.response?.data?.error ?? 'Erro ao salvar. Verifique a conexão com o servidor.';
+      const code = e?.response?.data?.code;
+      setSaveError({ msg, code });
+    },
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, feesEarned }: { id: string; feesEarned: number }) => updateLpPosition(id, { feesEarned }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['lp-positions'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['lp-positions'] }); setUpdateError(null); },
+    onError: (error: unknown) => {
+      const e = error as { response?: { data?: { error?: string } } };
+      setUpdateError(e?.response?.data?.error ?? 'Erro ao atualizar fees.');
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: deleteLpPosition,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['lp-positions'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['lp-positions'] }); setDeleteError(null); },
+    onError: (error: unknown) => {
+      const e = error as { response?: { data?: { error?: string } } };
+      setDeleteError(e?.response?.data?.error ?? 'Erro ao remover posição.');
+    },
   });
 
   const handleSave = useCallback((data: Omit<LpPosition, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -637,21 +682,51 @@ export default function MyLpPositions() {
         </div>
       )}
 
+      {/* Erros persistentes — ficam na tela até o usuário fechar */}
+      {posError && (
+        <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-medium">Erro ao carregar posições</p>
+            <p className="text-xs text-red-300/80 mt-0.5">
+              {(posError as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Verifique a conexão com o servidor.'}
+            </p>
+          </div>
+        </div>
+      )}
+      {saveError && (
+        <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-medium">Erro ao salvar posição</p>
+            <p className="text-xs text-red-300/80 mt-0.5">
+              {saveError.msg}{saveError.code && saveError.code !== 'INTERNAL_ERROR' ? ` (${saveError.code})` : ''}
+            </p>
+          </div>
+          <button onClick={() => setSaveError(null)} className="shrink-0 p-1 rounded hover:bg-red-500/20 transition-colors cursor-pointer" aria-label="Fechar erro">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+      {deleteError && (
+        <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span className="flex-1">{deleteError}</span>
+          <button onClick={() => setDeleteError(null)} className="shrink-0 p-1 rounded hover:bg-red-500/20 transition-colors cursor-pointer"><X className="w-3.5 h-3.5" /></button>
+        </div>
+      )}
+      {updateError && (
+        <div className="text-sm text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span className="flex-1">{updateError}</span>
+          <button onClick={() => setUpdateError(null)} className="shrink-0 p-1 rounded hover:bg-amber-500/20 transition-colors cursor-pointer"><X className="w-3.5 h-3.5" /></button>
+        </div>
+      )}
+
       {/* Form */}
       {showForm && (
-        <NewPositionForm onSave={handleSave} onCancel={() => setShowForm(false)} benchmarks={benchmarks} />
+        <NewPositionForm onSave={handleSave} onCancel={() => { setShowForm(false); setSaveError(null); }} benchmarks={benchmarks} />
       )}
-      {createMutation.isError && (() => {
-        const err = createMutation.error as { response?: { data?: { error?: string; code?: string } } };
-        const msg = err?.response?.data?.error ?? 'Erro ao salvar. Verifique a conexão com o servidor.';
-        const code = err?.response?.data?.code;
-        return (
-          <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            <span>{msg}{code && code !== 'INTERNAL_ERROR' ? ` (${code})` : ''}</span>
-          </div>
-        );
-      })()}
 
       {/* Positions */}
       {loadingPos ? (

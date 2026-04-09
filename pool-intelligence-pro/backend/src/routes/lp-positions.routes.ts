@@ -21,6 +21,17 @@ router.get('/lp-positions', async (_req, res) => {
     return res.json({ success: true, data: positions, timestamp: new Date() });
   } catch (error) {
     const e = extractError(error);
+    // P2021 = tabela ainda não existe no banco → retorna vazio em vez de erro 500
+    // Isso ocorre quando prisma db push ainda não foi executado (ex: primeiro deploy)
+    if (e.code === 'P2021' || e.code === 'P2022') {
+      logService.warn('SYSTEM', `GET /lp-positions: tabela não existe (${e.code}) — retornando array vazio`);
+      return res.json({
+        success: true,
+        data: [],
+        warning: 'Tabela de posições não encontrada no banco. Execute: prisma db push',
+        timestamp: new Date(),
+      });
+    }
     logService.error('SYSTEM', `GET /lp-positions falhou [${e.code}]`, { detail: e.detail });
     return res.status(500).json({ success: false, ...errorResponse(error, 'Erro ao listar posições') });
   }
