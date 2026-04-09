@@ -292,6 +292,15 @@ server.listen(PORT, () => {
     logService.error('BOOT', 'Failed to initialize jobs', { error: err instanceof Error ? err.message : String(err) });
   });
 
+  // Garantir que tabelas opcionais existam (ex: LpPosition)
+  // Usa $executeRaw IF NOT EXISTS — funciona pelo pooler Supabase (6543)
+  // prisma db push falha no pooler; esta abordagem contorna o problema
+  import('./services/ensure-tables.service.js').then(({ ensureApplicationTables }) => {
+    ensureApplicationTables();
+  }).catch((err: unknown) => {
+    logService.warn('BOOT', 'ensureApplicationTables import failed', { error: err instanceof Error ? err.message : String(err) });
+  });
+
   // ============================================
   // KEEP-ALIVE: Prevent Render free tier from sleeping (every 13 min via cron)
   // ============================================

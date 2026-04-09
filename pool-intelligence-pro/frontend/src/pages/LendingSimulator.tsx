@@ -405,10 +405,14 @@ function NewPositionForm({ onSave, onCancel, benchmarks }: {
             <input className={inputCls} type="number" min={0} step={0.01} placeholder="0" value={form.feesEarned} onChange={set('feesEarned')} />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground">Fee Tier da Pool</label>
+            <label className="text-xs text-muted-foreground flex items-center gap-1">
+              Fee Tier da Pool
+              <span title="Informa o tier da pool (0.01% a 1%). Não altera o APR calculado — o APR vem das fees reais que você informa acima." className="text-muted-foreground/60 cursor-help">ⓘ</span>
+            </label>
             <select className={inputCls} value={form.feeTier} onChange={e => setForm(f => ({ ...f, feeTier: parseFloat(e.target.value) }))}>
               {FEE_TIERS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
+            <p className="text-[10px] text-muted-foreground/70">Metadado — APR calculado das fees reais acima</p>
           </div>
           <div className="space-y-1.5">
             <label className="text-xs text-muted-foreground">Data de Entrada na Pool</label>
@@ -508,9 +512,10 @@ export default function MyLpPositions() {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   // Erros persistentes — não somem ao digitar; usuário fecha manualmente
-  const [saveError, setSaveError] = useState<{ msg: string; code?: string } | null>(null);
+  const [saveError, setSaveError] = useState<{ msg: string; code?: string; retryable?: boolean } | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [retryCountdown, setRetryCountdown] = useState(0);
 
   const { data: benchmarks, isLoading: loadingBench, error: benchError, refetch: refetchBench, isFetching: fetchingBench } = useQuery({
     queryKey: ['benchmarks'],
@@ -519,7 +524,7 @@ export default function MyLpPositions() {
     retry: 2,
   });
 
-  const { data: positions = [], isLoading: loadingPos, error: posError } = useQuery({
+  const { data: positions = [], isLoading: loadingPos, error: posError, refetch: refetchPositions } = useQuery({
     queryKey: ['lp-positions'],
     queryFn: fetchLpPositions,
     staleTime: 30_000,
@@ -534,10 +539,22 @@ export default function MyLpPositions() {
       setSaveError(null);
     },
     onError: (error: unknown) => {
-      const e = error as { response?: { data?: { error?: string; code?: string } } };
-      const msg = e?.response?.data?.error ?? 'Erro ao salvar. Verifique a conexão com o servidor.';
+      const e = error as { response?: { data?: { error?: string; code?: string; retryAfter?: number }; status?: number } };
       const code = e?.response?.data?.code;
-      setSaveError({ msg, code });
+      const msg = e?.response?.data?.error ?? 'Erro ao salvar. Verifique a conexão com o servidor.';
+      const isTableNotReady = code === 'TABLE_NOT_READY' || e?.response?.status === 503;
+      setSaveError({ msg, code, retryable: isTableNotReady });
+      if (isTableNotReady) {
+        // Inicia countdown de retry automático
+        const secs = e?.response?.data?.retryAfter ?? 15;
+        setRetryCountdown(secs);
+        const interval = setInterval(() => {
+          setRetryCountdown(prev => {
+            if (prev <= 1) { clearInterval(interval); return 0; }
+            return prev - 1;
+          });
+        }, 1000);
+      }
     },
   });
 
@@ -692,18 +709,42 @@ export default function MyLpPositions() {
               {(posError as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Verifique a conexão com o servidor.'}
             </p>
           </div>
+          <button onClick={() => refetchPositions()} className="shrink-0 text-xs px-2 py-1 rounded border border-red-500/30 hover:bg-red-500/20 transition-colors cursor-pointer">
+            Tentar novamente
+          </button>
         </div>
       )}
       {saveError && (
-        <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 flex items-start gap-2">
+        <div className={clsx(
+          'text-sm rounded-lg px-4 py-3 flex items-start gap-2',
+          saveError.retryable
+            ? 'text-amber-400 bg-amber-500/10 border border-amber-500/30'
+            : 'text-red-400 bg-red-500/10 border border-red-500/30',
+        )}>
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <div className="flex-1">
-            <p className="font-medium">Erro ao salvar posição</p>
-            <p className="text-xs text-red-300/80 mt-0.5">
-              {saveError.msg}{saveError.code && saveError.code !== 'INTERNAL_ERROR' ? ` (${saveError.code})` : ''}
+            <p className="font-medium">
+              {saveError.retryable ? 'Banco configurando — aguarde' : 'Erro ao salvar posição'}
             </p>
+            <p className="text-xs mt-0.5 opacity-80">
+              {saveError.msg}
+              {!saveError.retryable && saveError.code && saveError.code !== 'INTERNAL_ERROR' && ` (${saveError.code})`}
+            </p>
+            {saveError.retryable && retryCountdown > 0 && (
+              <p className="text-[11px] mt-1 opacity-70">
+                Banco inicializando... tente novamente em {retryCountdown}s
+              </p>
+            )}
           </div>
-          <button onClick={() => setSaveError(null)} className="shrink-0 p-1 rounded hover:bg-red-500/20 transition-colors cursor-pointer" aria-label="Fechar erro">
+          {saveError.retryable && retryCountdown === 0 && (
+            <button
+              onClick={() => { setSaveError(null); }}
+              className="shrink-0 text-xs px-2 py-1 rounded border border-amber-500/30 hover:bg-amber-500/20 transition-colors cursor-pointer"
+            >
+              Tentar novamente
+            </button>
+          )}
+          <button onClick={() => { setSaveError(null); setRetryCountdown(0); }} className="shrink-0 p-1 rounded hover:bg-white/10 transition-colors cursor-pointer" aria-label="Fechar">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>

@@ -5,12 +5,23 @@
  * PATCH  /api/lp-positions/:id     — atualiza (fees, notas, etc.)
  * DELETE /api/lp-positions/:id     — remove
  */
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import { getPrisma } from './prisma.js';
 import { logService } from '../services/log.service.js';
 import { extractError, errorResponse } from '../utils/errorUtils.js';
 
 const router = Router();
+
+/** Resposta padronizada quando a tabela ainda não existe (P2021/P2022) */
+function respondTableNotReady(res: Response, op: string) {
+  logService.warn('SYSTEM', `${op}: tabela LpPosition não existe — CREATE TABLE em andamento (aguardar ~15s)`);
+  return res.status(503).json({
+    success: false,
+    error: 'Banco de dados sendo configurado. Aguarde alguns segundos e tente novamente.',
+    code: 'TABLE_NOT_READY',
+    retryAfter: 15,
+  });
+}
 
 // GET /api/lp-positions
 router.get('/lp-positions', async (_req, res) => {
@@ -79,6 +90,7 @@ router.post('/lp-positions', async (req, res) => {
     return res.status(201).json({ success: true, data: position, timestamp: new Date() });
   } catch (error) {
     const e = extractError(error);
+    if (e.code === 'P2021' || e.code === 'P2022') return respondTableNotReady(res, 'POST /lp-positions');
     logService.error('SYSTEM', `POST /lp-positions falhou [${e.code}]`, { detail: e.detail, body: req.body });
     return res.status(500).json({ success: false, ...errorResponse(error, 'Erro ao criar posição') });
   }
@@ -111,6 +123,7 @@ router.patch('/lp-positions/:id', async (req, res) => {
     return res.json({ success: true, data: updated, timestamp: new Date() });
   } catch (error) {
     const e = extractError(error);
+    if (e.code === 'P2021' || e.code === 'P2022') return respondTableNotReady(res, `PATCH /lp-positions/${req.params.id}`);
     logService.error('SYSTEM', `PATCH /lp-positions/${req.params.id} falhou [${e.code}]`, { detail: e.detail });
     return res.status(500).json({ success: false, ...errorResponse(error, 'Erro ao atualizar posição') });
   }
@@ -134,6 +147,7 @@ router.delete('/lp-positions/:id', async (req, res) => {
     return res.json({ success: true, message: 'Posição removida', timestamp: new Date() });
   } catch (error) {
     const e = extractError(error);
+    if (e.code === 'P2021' || e.code === 'P2022') return respondTableNotReady(res, `DELETE /lp-positions/${req.params.id}`);
     logService.error('SYSTEM', `DELETE /lp-positions/${req.params.id} falhou [${e.code}]`, { detail: e.detail });
     return res.status(500).json({ success: false, ...errorResponse(error, 'Erro ao remover posição') });
   }
