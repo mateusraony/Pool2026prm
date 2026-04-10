@@ -50,7 +50,7 @@ router.get('/pools', async (req, res) => {
       let theGraphUnified = cacheService.get<UnifiedPool[]>(theGraphKey).data;
       if (!theGraphUnified && !cacheService.get(`thegraph_fetching_${chain || 'all'}`).data) {
         cacheService.set(`thegraph_fetching_${chain || 'all'}`, true, 60);
-        const chainsToFetch = chain ? [chain as string] : ['ethereum', 'arbitrum', 'base'];
+        const chainsToFetch = chain ? [chain as string] : config.defaults.chains;
         Promise.all(chainsToFetch.map(c => theGraphAdapter.getPools(c, 50))).then(results => {
           const allPools = results.flat();
           const unified = allPools.map(p => poolIntelligenceService.enrichToUnifiedPool(p, { updatedAt: new Date() }));
