@@ -150,12 +150,14 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
 
   const priceHistoryData = useMemo(() => {
     if (!ohlcvData?.candles) return [];
-    return ohlcvData.candles.map((c: any) => ({ timestamp: c.timestamp * 1000, price: c.close }));
+    // Timestamps from backend are already in milliseconds (GeckoTerminal seconds → ms conversion done server-side)
+    return ohlcvData.candles.map((c: any) => ({ timestamp: c.timestamp, price: c.close }));
   }, [ohlcvData]);
 
   const volumeHistoryData = useMemo(() => {
     if (!ohlcvData?.candles) return [];
-    return ohlcvData.candles.map((c: any) => ({ timestamp: c.timestamp * 1000, volume: c.volume ?? 0 }));
+    // Timestamps from backend are already in milliseconds
+    return ohlcvData.candles.map((c: any) => ({ timestamp: c.timestamp, volume: c.volume ?? 0 }));
   }, [ohlcvData]);
 
   // Color based on current mode
