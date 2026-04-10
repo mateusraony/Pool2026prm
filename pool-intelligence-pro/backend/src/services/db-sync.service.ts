@@ -46,6 +46,10 @@ class DbSyncService {
             tvl: pool.tvlUSD || 0,
             volume24h: pool.volume24hUSD || 0,
             fees24h: pool.fees24hUSD || 0,
+            volatility24h: pool.volatilityAnn ?? null,
+            volatility7d: pool.volatilityAnn ?? null,
+            priceChange24h: pool.priceChange24h ?? null,
+            dataQuality: pool.healthScore != null && pool.healthScore > 0 ? 'GOOD' : 'STALE',
             lastUpdated: new Date(),
           },
         });
@@ -65,6 +69,11 @@ class DbSyncService {
               volume24h: pool.volume24hUSD || 0,
               fees24h: pool.fees24hUSD || 0,
               aprFee: pool.aprFee ?? null,
+              volume1h: pool.volume1hUSD ?? null,
+              fees1h: pool.fees1hUSD ?? null,
+              aprAdjusted: pool.aprAdjusted ?? null,
+              volatilityAnn: pool.volatilityAnn ?? null,
+              healthScore: pool.healthScore ?? null,
             },
           });
         }

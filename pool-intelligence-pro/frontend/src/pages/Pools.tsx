@@ -341,6 +341,8 @@ export default function PoolsPage() {
   const [minHealth, setMinHealth] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [pendingFavId, setPendingFavId] = useState<string | null>(null);
+  const [pendingAdd, setPendingAdd] = useState<Set<string>>(new Set());
+  const [pendingRemove, setPendingRemove] = useState<Set<string>>(new Set());
 
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['unified-pools', chainFilter, bluechipOnly, poolTypeFilter, minTVL, minHealth],
@@ -369,15 +371,26 @@ export default function PoolsPage() {
   const { data: tokens = [] } = useQuery({ queryKey: ['tokens'], queryFn: fetchTokens, staleTime: 300000 });
 
   const favSet = useMemo(() => {
-    if (!favorites || !Array.isArray(favorites)) return new Set<string>();
-    return new Set(favorites.filter(f => f?.poolId).map(f => f.poolId));
-  }, [favorites]);
+    const base = new Set<string>(
+      Array.isArray(favorites) ? favorites.filter(f => f?.poolId).map(f => f.poolId) : []
+    );
+    pendingAdd.forEach(id => base.add(id));
+    pendingRemove.forEach(id => base.delete(id));
+    return base;
+  }, [favorites, pendingAdd, pendingRemove]);
 
   const handleToggleFav = useCallback(async (pool: UnifiedPool) => {
     if (!pool?.id) return;
     setPendingFavId(pool.id);
+    const isFav = favSet.has(pool.id);
+    // Optimistic update: reflect change immediately in UI
+    if (isFav) {
+      setPendingRemove(prev => new Set([...prev, pool.id]));
+    } else {
+      setPendingAdd(prev => new Set([...prev, pool.id]));
+    }
     try {
-      if (favSet.has(pool.id)) {
+      if (isFav) {
         await removeFavorite(pool.id);
       } else {
         await addFavorite({
@@ -391,9 +404,21 @@ export default function PoolsPage() {
       }
       await queryClient.invalidateQueries({ queryKey: ['favorites'] });
     } catch (e) {
+      // Rollback optimistic update on error
+      if (isFav) {
+        setPendingRemove(prev => { const s = new Set(prev); s.delete(pool.id); return s; });
+      } else {
+        setPendingAdd(prev => { const s = new Set(prev); s.delete(pool.id); return s; });
+      }
       if (import.meta.env.DEV) console.error('Toggle favorite error:', e);
     } finally {
       setPendingFavId(null);
+      // Clear optimistic state — real data from refetch takes over
+      if (isFav) {
+        setPendingRemove(prev => { const s = new Set(prev); s.delete(pool.id); return s; });
+      } else {
+        setPendingAdd(prev => { const s = new Set(prev); s.delete(pool.id); return s; });
+      }
     }
   }, [favSet, queryClient]);
 

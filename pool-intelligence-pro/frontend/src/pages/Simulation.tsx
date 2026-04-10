@@ -451,16 +451,61 @@ function FullSimulation({ pool, score }: { pool: Pool; score: Score }) {
               </div>
             </div>
 
-            {customRange && (
-              <div className="bg-warning-500/10 border border-warning-500/30 rounded-lg p-3 text-sm">
+            {/* Range Summary — sempre visivel para mostrar os valores ativos */}
+            {!priceUnavailable && (
+              <div className="rounded-lg border border-border/60 bg-muted/40 p-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-warning-400">Range personalizado ativo</span>
-                  <button
-                    onClick={() => setCustomRange(null)}
-                    className="text-xs bg-muted/70 px-2 py-1 rounded hover:bg-muted-foreground/40"
-                  >
-                    Resetar
-                  </button>
+                  <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Range Ativo</span>
+                  {customRange && (
+                    <button
+                      onClick={() => setCustomRange(null)}
+                      className="text-xs bg-muted/70 px-2 py-1 rounded hover:bg-muted-foreground/40 text-warning-400"
+                    >
+                      Resetar
+                    </button>
+                  )}
+                  {customRange && (
+                    <span className="text-xs text-warning-400 font-medium">Personalizado</span>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="bg-danger-500/10 rounded p-2">
+                    <div className="text-[10px] text-muted-foreground mb-0.5">Limite Inferior</div>
+                    <div className="font-mono font-bold text-danger-400 text-sm">
+                      {rangeLower >= 1000 ? '$' + (rangeLower / 1000).toFixed(2) + 'K'
+                        : rangeLower >= 1 ? '$' + rangeLower.toFixed(2)
+                        : rangeLower >= 0.0001 ? '$' + rangeLower.toFixed(6)
+                        : '$' + rangeLower.toExponential(2)}
+                    </div>
+                  </div>
+                  <div className="bg-primary-500/10 rounded p-2">
+                    <div className="text-[10px] text-muted-foreground mb-0.5">Preco Atual</div>
+                    <div className="font-mono font-bold text-primary-400 text-sm">
+                      {currentPrice >= 1000 ? '$' + (currentPrice / 1000).toFixed(2) + 'K'
+                        : currentPrice >= 1 ? '$' + currentPrice.toFixed(2)
+                        : currentPrice >= 0.0001 ? '$' + currentPrice.toFixed(6)
+                        : '$' + currentPrice.toExponential(2)}
+                    </div>
+                    <div className={clsx(
+                      'text-[9px] font-medium mt-0.5',
+                      currentPrice >= rangeLower && currentPrice <= rangeUpper ? 'text-success-400' : 'text-danger-400'
+                    )}>
+                      {currentPrice >= rangeLower && currentPrice <= rangeUpper ? 'no range' : 'fora do range'}
+                    </div>
+                  </div>
+                  <div className="bg-success-500/10 rounded p-2">
+                    <div className="text-[10px] text-muted-foreground mb-0.5">Limite Superior</div>
+                    <div className="font-mono font-bold text-success-400 text-sm">
+                      {rangeUpper >= 1000 ? '$' + (rangeUpper / 1000).toFixed(2) + 'K'
+                        : rangeUpper >= 1 ? '$' + rangeUpper.toFixed(2)
+                        : rangeUpper >= 0.0001 ? '$' + rangeUpper.toFixed(6)
+                        : '$' + rangeUpper.toExponential(2)}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-[10px] text-muted-foreground/70 text-center">
+                  Amplitude: {metrics.rangeWidth.toFixed(1)}% do preco atual
+                  {customRange ? ' · Ajuste arrastando as bordas do grafico' : ` · Modo ${config.label}`}
                 </div>
               </div>
             )}
