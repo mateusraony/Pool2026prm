@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -c \"import sys,json\\nd=json.load(sys.stdin)\\ncmd=d.get('tool_input',{}).get('command','')\\nif 'git commit' in cmd:\\n    print('AUDITORIA OBRIGATÓRIA: execute /audit-review antes de commitar. O commit foi bloqueado.')\\n    sys.exit(1)\\nelse:\\n    sys.exit(0)\""
+            "command": "python3 -c \"import sys,json; d=json.load(sys.stdin); cmd=d.get('tool_input',{}).get('command',''); blocked='git commit' in cmd; blocked and print('AUDITORIA OBRIGATÓRIA: execute /audit-review antes de commitar. O commit foi bloqueado.'); sys.exit(1 if blocked else 0)\""
           }
         ]
       }

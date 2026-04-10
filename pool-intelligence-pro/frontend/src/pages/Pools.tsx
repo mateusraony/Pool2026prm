@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ChevronUp, ChevronDown, ChevronsUpDown, Star, StarOff, Loader2,
   RefreshCw, Filter, Search, Shield, Zap, BarChart2, AlertTriangle, ExternalLink,
+  ChevronRight, BookOpen,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { fetchUnifiedPools, fetchTokens, fetchFavorites, addFavorite, removeFavorite, UnifiedPool } from '../api/client';
@@ -113,7 +114,11 @@ function PoolRow({ pool, isFav, isLoadingFav, onToggleFav, onClick }: {
             <div className="flex items-center gap-1.5 font-medium text-sm">
               <span>{pool.baseToken || '?'}/{pool.quoteToken || '?'}</span>
               {pool.bluechip && <span className="text-xs text-blue-400">★</span>}
-              {warnings.length > 0 && <AlertTriangle className="w-3 h-3 text-yellow-500" />}
+              {warnings.length > 0 && (
+                <span title={warnings.join(' · ')} className="cursor-help">
+                  <AlertTriangle className="w-3 h-3 text-yellow-500" />
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-1 mt-0.5">
               <span className={clsx('text-[10px] px-1.5 py-0 rounded', modeColor)}>{poolType}</span>
@@ -206,7 +211,11 @@ function PoolMobileCard({ pool, isFav, isLoadingFav, onToggleFav, onClick }: {
             <p className="font-semibold text-sm truncate">
               {pool.baseToken}/{pool.quoteToken}
               {pool.bluechip && <span className="ml-1 text-blue-400 text-xs">★</span>}
-              {warnings.length > 0 && <AlertTriangle className="inline w-3 h-3 ml-1 text-yellow-500" />}
+              {warnings.length > 0 && (
+                <span title={warnings.join(' · ')} className="cursor-help">
+                  <AlertTriangle className="inline w-3 h-3 ml-1 text-yellow-500" />
+                </span>
+              )}
             </p>
             <div className="flex items-center gap-1 mt-0.5">
               <span className={clsx('text-[10px] px-1.5 rounded', modeColor)}>{poolType}</span>
@@ -459,6 +468,8 @@ export default function PoolsPage() {
   const CHAINS = ['', 'ethereum', 'arbitrum', 'base', 'polygon', 'optimism'];
   const POOL_TYPES = ['', 'CL', 'V2', 'STABLE'];
 
+  const [showGuide, setShowGuide] = useState(false);
+
   return (
     <div className="p-4 lg:p-6 space-y-4">
       {/* Header */}
@@ -514,6 +525,50 @@ export default function PoolsPage() {
             }}
           />
         </div>
+      </div>
+
+      {/* Como usar — guia colapsável */}
+      <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
+        <button
+          onClick={() => setShowGuide(v => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm hover:bg-muted/30 transition-colors"
+        >
+          <span className="flex items-center gap-2 font-medium">
+            <BookOpen className="w-4 h-4 text-primary" />
+            Como usar o Pool Intelligence
+          </span>
+          <ChevronRight className={clsx('w-4 h-4 text-muted-foreground transition-transform', showGuide && 'rotate-90')} />
+        </button>
+        {showGuide && (
+          <div className="px-4 pb-4 border-t border-border/40 grid sm:grid-cols-2 gap-4 pt-4">
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Colunas da Tabela</h4>
+              <ul className="space-y-1.5 text-sm">
+                <li><span className="font-medium text-foreground">TVL</span> — Capital total depositado na pool. Pools acima de $500K são mais seguras.</li>
+                <li><span className="font-medium text-foreground">APR</span> — Retorno anual estimado com base nas fees observadas.</li>
+                <li><span className="font-medium text-yellow-400">APR Ajust.</span> — APR descontado pela volatilidade e risco de IL (perda impermanente). Mais realista.</li>
+                <li><span className="font-medium text-foreground">Vol. 1h</span> — Volume da última hora. Alto volume = mais fees geradas.</li>
+                <li><span className="font-medium text-foreground">Fees 1h</span> — Fees brutas geradas na última hora.</li>
+                <li><span className="font-medium text-foreground">Volat.</span> — Volatilidade anualizada do par. Acima de 80% = risco alto de IL.</li>
+              </ul>
+            </div>
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Health Score & Indicadores</h4>
+              <ul className="space-y-1.5 text-sm">
+                <li><span className="inline-block px-1.5 rounded bg-green-500/20 text-green-400 font-bold text-xs mr-1">70+</span> Excelente — TVL alto, fees consistentes, baixa volatilidade.</li>
+                <li><span className="inline-block px-1.5 rounded bg-yellow-500/20 text-yellow-400 font-bold text-xs mr-1">45-69</span> Razoável — Monitorar. Pode ter volatilidade ou liquidez menor.</li>
+                <li><span className="inline-block px-1.5 rounded bg-red-500/20 text-red-400 font-bold text-xs mr-1">&lt;45</span> Cuidado — Risco elevado. Evite sem análise aprofundada.</li>
+                <li><span className="text-blue-400 text-xs font-medium">★ Blue-chip</span> — Ambos tokens são de alta capitalização (ex: ETH, BTC, USDC). Menor risco de desvalorização.</li>
+                <li><AlertTriangle className="inline w-3 h-3 text-yellow-500 mr-1" />Aviso — Pool tem alertas ativos. Passe o mouse para ver detalhes.</li>
+                <li><span className="font-medium text-foreground">Tipos:</span> <span className="text-purple-400">CL</span> = Concentrated Liquidity (Uniswap V3), <span className="text-blue-400">STABLE</span> = par estável, <span className="text-gray-400">V2</span> = pool clássica.</li>
+              </ul>
+            </div>
+            <div className="sm:col-span-2 bg-muted/30 rounded-lg p-3 text-sm">
+              <p className="font-medium mb-1">Fluxo recomendado:</p>
+              <p className="text-muted-foreground">1. Filtre por chain e tipo desejado → 2. Ordene por <span className="text-yellow-400">APR Ajust.</span> ou <span className="font-medium">Health Score</span> → 3. Clique na pool para ver simulador de range e análise técnica → 4. Adicione à watchlist e configure alertas.</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Search bar */}

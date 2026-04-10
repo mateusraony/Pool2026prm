@@ -8,8 +8,8 @@ import { ActivePoolCard } from '@/components/common/ActivePoolCard';
 import { PullToRefresh } from '@/components/common/PullToRefresh';
 import { LiveIndicator } from '@/components/common/LiveIndicator';
 import { useRiskConfig } from '@/hooks/useRiskConfig';
-import { fetchUnifiedPools, fetchRangePositions, fetchAlerts, fetchHealth, fetchRecommendations, fetchMarketConditions, API_BASE_URL } from '@/api/client';
-import type { RangePosition, Recommendation } from '@/api/client';
+import { fetchUnifiedPools, fetchRangePositions, fetchAlerts, fetchHealth, fetchRecommendations, fetchMarketConditions, fetchLpPositions, API_BASE_URL } from '@/api/client';
+import type { RangePosition, Recommendation, LpPosition } from '@/api/client';
 import { unifiedPoolToViewPool, legacyPoolToViewPool } from '@/data/adapters';
 import type { Pool, ActivePool } from '@/types/pool';
 import { alertTypeConfig, type AlertType } from '@/data/alert-events';
@@ -30,6 +30,7 @@ import {
   Droplets,
   MapPin,
   Star,
+  Landmark,
   type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -83,6 +84,13 @@ export default function ScoutDashboard() {
     queryFn: fetchMarketConditions,
     staleTime: 5 * 60 * 1000,
     refetchInterval: 5 * 60 * 1000,
+  });
+
+  const { data: lpPositions = [] } = useQuery<LpPosition[]>({
+    queryKey: ['lp-positions'],
+    queryFn: fetchLpPositions,
+    refetchInterval: 60000,
+    staleTime: 30000,
   });
 
   const pools = useMemo(() => {
@@ -190,6 +198,15 @@ export default function ScoutDashboard() {
   const totalPnl = activePools.reduce((acc, p) => acc + p.feesAccrued - p.ilActual, 0);
   const totalCapitalDeployed = activePools.reduce((acc, p) => acc + p.capital, 0);
   const topPool = pools[0] || null;
+
+  // LP Positions summary (Minhas Posições)
+  const lpStats = useMemo(() => {
+    if (lpPositions.length === 0) return null;
+    const totalInvested = lpPositions.reduce((acc, p) => acc + p.token0Usd + p.token1Usd, 0);
+    const totalFees = lpPositions.reduce((acc, p) => acc + p.feesEarned, 0);
+    const avgApr = totalInvested > 0 ? (totalFees / totalInvested) * 100 : 0;
+    return { count: lpPositions.length, totalInvested, totalFees, avgApr };
+  }, [lpPositions]);
   const canOperate = pools.some(p => p.score > 60);
   const isLoading = poolsLoading;
   const error = poolsError ? (poolsError instanceof Error ? poolsError.message : 'Erro ao conectar com a API') : null;
@@ -530,6 +547,48 @@ export default function ScoutDashboard() {
               )}
             </div>
           )}
+
+          {/* LP Positions Summary — Minhas Posições */}
+          <div className="glass-card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold flex items-center gap-2">
+                <Landmark className="h-4 w-4 text-primary" />
+                Minhas Posições LP
+              </h3>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/lending')} className="text-xs">
+                Ver todas <ArrowRight className="ml-1 h-3 w-3" />
+              </Button>
+            </div>
+            {lpStats ? (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg bg-secondary/50 p-2 text-center">
+                  <p className="text-xs text-muted-foreground">Posições</p>
+                  <p className="text-sm font-bold">{lpStats.count}</p>
+                </div>
+                <div className="rounded-lg bg-secondary/50 p-2 text-center">
+                  <p className="text-xs text-muted-foreground">Total Investido</p>
+                  <p className="text-sm font-mono font-medium">{formatCurrency(lpStats.totalInvested)}</p>
+                </div>
+                <div className="rounded-lg bg-secondary/50 p-2 text-center">
+                  <p className="text-xs text-muted-foreground">Fees Acumuladas</p>
+                  <p className="text-sm font-mono font-medium text-success">{formatCurrency(lpStats.totalFees)}</p>
+                </div>
+                <div className="rounded-lg bg-secondary/50 p-2 text-center">
+                  <p className="text-xs text-muted-foreground">APR Médio</p>
+                  <p className={`text-sm font-mono font-medium ${lpStats.avgApr > 0 ? 'text-success' : 'text-muted-foreground'}`}>
+                    {lpStats.avgApr.toFixed(1)}%
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-3">
+                <p className="text-sm text-muted-foreground">Nenhuma posição registrada</p>
+                <Button variant="outline" size="sm" className="mt-2 text-xs" onClick={() => navigate('/lending')}>
+                  Adicionar posição
+                </Button>
+              </div>
+            )}
+          </div>
 
           {/* Network Exposure - from real positions */}
           <div className="glass-card p-4">
