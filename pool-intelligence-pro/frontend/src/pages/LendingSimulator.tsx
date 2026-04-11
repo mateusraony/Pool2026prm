@@ -10,12 +10,12 @@
  * - Persistência no Supabase via /api/lp-positions
  * - Monitoramento: lista de posições salvas com dias ativos e status
  */
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef, useId } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   LineChart, Landmark, Plus, Trash2, ExternalLink, RefreshCw,
   TrendingUp, TrendingDown, Minus, AlertTriangle, Star,
-  ChevronDown, ChevronUp, Pencil, Check, X, Info, Search,
+  ChevronDown, ChevronUp, Pencil, Check, X, Info, Search, Eye,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, ResponsiveContainer, ReferenceLine,
@@ -23,10 +23,11 @@ import {
 import clsx from 'clsx';
 import {
   fetchBenchmarks, fetchLpPositions, createLpPosition, updateLpPosition,
-  deleteLpPosition, fetchUnifiedPools,
+  deleteLpPosition, fetchUnifiedPools, fetchOhlcv,
   type BenchmarksData, type LpPosition, type UnifiedPool,
 } from '../api/client';
 import { feeTierToPercent } from '../data/constants';
+import { UniswapRangeChart } from '../components/charts/UniswapRangeChart';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -201,83 +202,371 @@ function EditFeesRow({ position, onSave, onCancel }: {
   );
 }
 
-// ─── Real-Time Price Section ──────────────────────────────────────────────────
+// ─── Price Formatter ─────────────────────────────────────────────────────────
 
-function RealTimePriceSection({ position }: { position: LpPosition }) {
-  if (!position.poolAddress || !position.chain) return null;
+function fmtP(p: number): string {
+  if (p >= 1_000_000) return `$${(p / 1_000_000).toFixed(2)}M`;
+  if (p >= 1_000)     return `$${(p / 1_000).toFixed(2)}K`;
+  if (p >= 1)         return `$${p.toFixed(4)}`;
+  if (p >= 0.0001)    return `$${p.toFixed(6)}`;
+  return `$${p.toExponential(3)}`;
+}
+
+// ─── Range Gauge ─────────────────────────────────────────────────────────────
+
+function RangeGauge({ currentPrice, rangeLower, rangeUpper }: {
+  currentPrice: number; rangeLower: number; rangeUpper: number;
+}) {
+  const uid = useId().replace(/:/g, '');
+  const inRange = currentPrice >= rangeLower && currentPrice <= rangeUpper;
+  const rangeSpan = rangeUpper - rangeLower;
+
+  // Position [0,1] within range (clamped for visual)
+  const rawPos = rangeSpan > 0 ? (currentPrice - rangeLower) / rangeSpan : 0.5;
+  const clampedPos = Math.max(0.01, Math.min(0.99, rawPos));
+
+  // % distance to each boundary (relative to current price)
+  const distToLower = currentPrice > 0 ? ((currentPrice - rangeLower) / currentPrice) * 100 : 0;
+  const distToUpper = currentPrice > 0 ? ((rangeUpper - currentPrice) / currentPrice) * 100 : 0;
+  const closestMargin = Math.min(distToLower, distToUpper);
+
+  let color = '#10b981';
+  let statusText = 'Em range — zona segura';
+  if (!inRange) {
+    color = '#ef4444';
+    statusText = currentPrice < rangeLower ? '↙ Abaixo do range' : '↗ Acima do range';
+  } else if (closestMargin < 8) {
+    color = '#f97316';
+    statusText = '⚠ Limite crítico iminente';
+  } else if (closestMargin < 18) {
+    color = '#f59e0b';
+    statusText = '~ Aproximando limite';
+  }
+
+  const POINTER_H = 14;
+  const BAR_H = 10;
+  const TOTAL_H = POINTER_H + 2 + BAR_H;
+  const px = clampedPos * 100;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-semibold" style={{ color }}>{statusText}</span>
+        <span className="font-mono text-foreground/70 text-[11px]">{fmtP(currentPrice)}</span>
+      </div>
+
+      <svg viewBox={`0 0 100 ${TOTAL_H}`} className="w-full overflow-visible" style={{ height: 36 }}>
+        <defs>
+          <linearGradient id={`rg-${uid}`} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%"   stopColor="#ef4444" stopOpacity="0.65" />
+            <stop offset="12%"  stopColor="#f97316" stopOpacity="0.55" />
+            <stop offset="28%"  stopColor="#10b981" stopOpacity="0.45" />
+            <stop offset="50%"  stopColor="#10b981" stopOpacity="0.55" />
+            <stop offset="72%"  stopColor="#10b981" stopOpacity="0.45" />
+            <stop offset="88%"  stopColor="#f97316" stopOpacity="0.55" />
+            <stop offset="100%" stopColor="#ef4444" stopOpacity="0.65" />
+          </linearGradient>
+        </defs>
+
+        {/* Track background */}
+        <rect x="0" y={POINTER_H + 2} width="100" height={BAR_H} rx="5" fill="rgba(255,255,255,0.07)" />
+        {/* Gradient fill */}
+        <rect x="0" y={POINTER_H + 2} width="100" height={BAR_H} rx="5" fill={`url(#rg-${uid})`} />
+        {/* Out-of-range red overlay */}
+        {!inRange && <rect x="0" y={POINTER_H + 2} width="100" height={BAR_H} rx="5" fill="rgba(239,68,68,0.18)" />}
+
+        {/* Boundary ticks */}
+        <line x1="0"   x2="0"   y1={POINTER_H - 1} y2={POINTER_H + 2 + BAR_H + 3} stroke={color} strokeWidth="1" strokeOpacity="0.6" />
+        <line x1="100" x2="100" y1={POINTER_H - 1} y2={POINTER_H + 2 + BAR_H + 3} stroke={color} strokeWidth="1" strokeOpacity="0.6" />
+
+        {/* Price pointer — triangle + stem + dot */}
+        <polygon points={`${px},${POINTER_H + 1} ${px - 3.5},0 ${px + 3.5},0`} fill={color} />
+        <line x1={px} x2={px} y1="0" y2={POINTER_H + 2} stroke={color} strokeWidth="1" />
+        <circle cx={px} cy={POINTER_H + 2 + BAR_H / 2} r="3.5" fill={color} style={{ filter: `drop-shadow(0 0 3px ${color})` }} />
+      </svg>
+
+      {/* Labels row */}
+      <div className="flex justify-between text-[10px]">
+        <div className="space-y-0.5">
+          <div className="font-mono text-muted-foreground/80">{fmtP(rangeLower)}</div>
+          {inRange && (
+            <div className={clsx('font-medium', distToLower < 8 ? 'text-red-400' : distToLower < 18 ? 'text-amber-400' : 'text-muted-foreground/60')}>
+              +{distToLower.toFixed(1)}% acima
+            </div>
+          )}
+        </div>
+        <div className="text-center text-muted-foreground/30 self-start pt-0.5">── range ──</div>
+        <div className="text-right space-y-0.5">
+          <div className="font-mono text-muted-foreground/80">{fmtP(rangeUpper)}</div>
+          {inRange && (
+            <div className={clsx('font-medium', distToUpper < 8 ? 'text-red-400' : distToUpper < 18 ? 'text-amber-400' : 'text-muted-foreground/60')}>
+              {distToUpper.toFixed(1)}% abaixo
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Range AI Decision ────────────────────────────────────────────────────────
+
+type RangeAction = 'HOLD' | 'WATCH' | 'REBALANCE' | 'EXIT';
+
+interface RangeDecision {
+  action: RangeAction;
+  label: string;
+  colorClass: string;
+  bgClass: string;
+  borderClass: string;
+  text: string;
+}
+
+function getRangeDecision({
+  currentPrice, rangeLower, rangeUpper, il, monthlyAPR, days, cdiMonthly,
+}: {
+  currentPrice: number | null; rangeLower: number | null; rangeUpper: number | null;
+  il: number | null; monthlyAPR: number; days: number; cdiMonthly: number;
+}): RangeDecision | null {
+  if (!currentPrice || !rangeLower || !rangeUpper) return null;
+  const inRange = currentPrice >= rangeLower && currentPrice <= rangeUpper;
+  const distToLower = currentPrice > 0 ? ((currentPrice - rangeLower) / currentPrice) * 100 : 0;
+  const distToUpper = currentPrice > 0 ? ((rangeUpper - currentPrice) / currentPrice) * 100 : 0;
+  const closest = Math.min(distToLower, distToUpper);
+  const ilAbs = il != null ? Math.abs(il) : 0;
+
+  if (!inRange) {
+    if (ilAbs > 5 || days > 5) {
+      return {
+        action: 'EXIT',
+        label: 'Sair / Reposicionar',
+        colorClass: 'text-red-400', bgClass: 'bg-red-500/10', borderClass: 'border-red-500/30',
+        text: `Posição fora do range${days > 5 ? ` há ${days} dias` : ''}${ilAbs > 5 ? ` com IL estimado de ${ilAbs.toFixed(1)}%` : ''}. Fees pausadas — considere fechar e abrir novo range centrado em ${fmtP(currentPrice)}.`,
+      };
+    }
+    return {
+      action: 'REBALANCE',
+      label: 'Rebalancear range',
+      colorClass: 'text-orange-400', bgClass: 'bg-orange-500/10', borderClass: 'border-orange-500/30',
+      text: `Preço (${fmtP(currentPrice)}) saiu do range — fees interrompidas. Reposicione o range para incluir o preço atual. Quanto antes, menor o custo de oportunidade.`,
+    };
+  }
+
+  if (closest < 8) {
+    const side = distToLower < distToUpper ? 'inferior' : 'superior';
+    return {
+      action: 'WATCH',
+      label: 'Limite crítico — atenção máxima',
+      colorClass: 'text-orange-400', bgClass: 'bg-orange-500/10', borderClass: 'border-orange-500/30',
+      text: `Apenas ${closest.toFixed(1)}% de margem para o limite ${side}. Configure um alerta de preço imediatamente. Se cruzar o limite, as fees param e o IL pode aumentar rapidamente.`,
+    };
+  }
+
+  if (closest < 18) {
+    return {
+      action: 'WATCH',
+      label: 'Monitorar',
+      colorClass: 'text-amber-400', bgClass: 'bg-amber-500/10', borderClass: 'border-amber-500/30',
+      text: `${closest.toFixed(1)}% de margem para o limite mais próximo. Em range mas vale acompanhar a tendência. APR atual: ${monthlyAPR.toFixed(2)}%/mês.`,
+    };
+  }
+
+  if (monthlyAPR >= cdiMonthly * 2) {
+    return {
+      action: 'HOLD',
+      label: 'Manter — Excelente posição',
+      colorClass: 'text-emerald-400', bgClass: 'bg-emerald-500/10', borderClass: 'border-emerald-500/30',
+      text: `Bem centrado com ${closest.toFixed(1)}% de margem. APR de ${monthlyAPR.toFixed(2)}%/mês = ${(monthlyAPR / cdiMonthly).toFixed(1)}× o CDI. Continue coletando fees — considere reinvestir para efeito composto.`,
+    };
+  }
+
+  if (monthlyAPR >= cdiMonthly) {
+    return {
+      action: 'HOLD',
+      label: 'Manter posição',
+      colorClass: 'text-emerald-400', bgClass: 'bg-emerald-500/10', borderClass: 'border-emerald-500/30',
+      text: `Em range com ${closest.toFixed(1)}% de margem. APR de ${monthlyAPR.toFixed(2)}%/mês supera o CDI (${cdiMonthly.toFixed(2)}%/mês). Posição saudável — continue monitorando.`,
+    };
+  }
+
+  return {
+    action: 'WATCH',
+    label: 'Monitorar rendimento',
+    colorClass: 'text-yellow-400', bgClass: 'bg-yellow-500/10', borderClass: 'border-yellow-500/30',
+    text: `Em range com ${closest.toFixed(1)}% de margem, mas APR de ${monthlyAPR.toFixed(2)}%/mês está abaixo do CDI (${cdiMonthly.toFixed(2)}%/mês). Verifique se o volume da pool está gerando fees suficientes.`,
+  };
+}
+
+const RANGE_ACTION_ICON: Record<RangeAction, React.ComponentType<{ className?: string }>> = {
+  HOLD:      Check,
+  WATCH:     Eye,
+  REBALANCE: RefreshCw,
+  EXIT:      AlertTriangle,
+};
+
+function RangeAICard({ decision }: { decision: RangeDecision }) {
+  const Icon = RANGE_ACTION_ICON[decision.action];
+  return (
+    <div className={clsx('rounded-xl border p-3 flex items-start gap-2.5', decision.bgClass, decision.borderClass)}>
+      <Icon className={clsx('w-4 h-4 shrink-0 mt-0.5', decision.colorClass)} />
+      <div className="flex-1 min-w-0">
+        <p className={clsx('font-bold text-sm', decision.colorClass)}>{decision.label}</p>
+        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{decision.text}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Position Pool Chart ──────────────────────────────────────────────────────
+
+function PositionPoolChart({ position }: { position: LpPosition }) {
+  if (!position.poolAddress || !position.chain || !position.rangeLower || !position.rangeUpper) return null;
+
+  const { data: ohlcvData, isLoading } = useQuery({
+    queryKey: ['pos-ohlcv', position.chain, position.poolAddress],
+    queryFn: () => fetchOhlcv(position.chain!, position.poolAddress!, 'hour', 48),
+    staleTime: 300_000,
+    retry: 1,
+  });
 
   const { data: poolData } = useQuery({
     queryKey: ['pool-realtime', position.chain, position.poolAddress],
     queryFn: () =>
       fetchUnifiedPools({ chain: position.chain ?? undefined, limit: 50 }).then(
-        r => r.pools?.find((p: UnifiedPool) => p.poolAddress?.toLowerCase() === position.poolAddress?.toLowerCase()) ?? null,
+        (r) => r.pools?.find((p: UnifiedPool) => p.poolAddress?.toLowerCase() === position.poolAddress?.toLowerCase()) ?? null,
       ),
-    refetchInterval: 30000,
-    staleTime: 15000,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
   });
 
-  const currentPrice = poolData?.price ?? null;
-  const entryPrice = position.entryPrice;
-  const rangeLower = position.rangeLower;
-  const rangeUpper = position.rangeUpper;
+  const currentPrice = poolData?.price ?? position.entryPrice ?? 0;
 
-  const inRange =
-    currentPrice != null && rangeLower != null && rangeUpper != null
-      ? currentPrice >= rangeLower && currentPrice <= rangeUpper
-      : null;
+  const priceHistory = useMemo(() => {
+    if (!ohlcvData?.candles) return [];
+    return (ohlcvData.candles as Array<{ timestamp: number; close: number }>).map((c) => ({
+      timestamp: c.timestamp < 1e12 ? c.timestamp * 1000 : c.timestamp,
+      price: c.close,
+    }));
+  }, [ohlcvData]);
 
-  const il =
-    currentPrice != null && entryPrice != null && entryPrice > 0
-      ? (() => {
-          const ratio = currentPrice / entryPrice;
-          return (2 * Math.sqrt(ratio) / (1 + ratio) - 1) * 100;
-        })()
-      : null;
+  const volumeData = useMemo(() => {
+    if (!ohlcvData?.candles) return [];
+    return (ohlcvData.candles as Array<{ timestamp: number; volume?: number }>).map((c) => ({
+      timestamp: c.timestamp < 1e12 ? c.timestamp * 1000 : c.timestamp,
+      volume: c.volume ?? 0,
+    }));
+  }, [ohlcvData]);
 
-  // Nothing useful to show
-  if (currentPrice == null && entryPrice == null && rangeLower == null && rangeUpper == null) return null;
+  if (currentPrice === 0) return null;
 
   return (
-    <div className="rounded-xl border border-border/60 bg-muted/20 p-3 space-y-2">
-      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Dados em Tempo Real</p>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+    <div className="rounded-xl border border-border/60 bg-card/30 p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+          Gráfico da Pool — últimas 48h
+        </p>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] bg-muted/60 text-muted-foreground px-2 py-0.5 rounded-full">
+            {position.token0}/{position.token1}
+          </span>
+          {isLoading && <span className="text-[10px] text-muted-foreground/60 animate-pulse">carregando...</span>}
+        </div>
+      </div>
+      <UniswapRangeChart
+        priceHistory={priceHistory}
+        currentPrice={currentPrice}
+        rangeLower={position.rangeLower}
+        rangeUpper={position.rangeUpper}
+        volumeData={volumeData.some(v => v.volume > 0) ? volumeData : undefined}
+        height={220}
+        accentColor="#FF37C7"
+      />
+    </div>
+  );
+}
+
+// ─── Real-Time Price Section ──────────────────────────────────────────────────
+
+function RealTimePriceSection({ position, calc, cdiMonthly }: {
+  position: LpPosition;
+  calc: { monthlyAPR: number; days: number };
+  cdiMonthly: number;
+}) {
+  const hasPool = !!(position.poolAddress && position.chain);
+
+  const { data: poolData } = useQuery({
+    queryKey: ['pool-realtime', position.chain, position.poolAddress],
+    queryFn: () =>
+      fetchUnifiedPools({ chain: position.chain ?? undefined, limit: 50 }).then(
+        (r) => r.pools?.find((p: UnifiedPool) => p.poolAddress?.toLowerCase() === position.poolAddress?.toLowerCase()) ?? null,
+      ),
+    enabled: hasPool,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
+
+  const currentPrice = poolData?.price ?? position.entryPrice ?? null;
+  const { rangeLower, rangeUpper, entryPrice } = position;
+
+  const il = useMemo(() => {
+    if (currentPrice == null || entryPrice == null || entryPrice <= 0) return null;
+    const ratio = currentPrice / entryPrice;
+    return (2 * Math.sqrt(ratio) / (1 + ratio) - 1) * 100;
+  }, [currentPrice, entryPrice]);
+
+  // Nothing to show
+  if (currentPrice == null && rangeLower == null && rangeUpper == null) return null;
+
+  const canShowGauge = currentPrice != null && rangeLower != null && rangeUpper != null && rangeLower < rangeUpper;
+  const decision = canShowGauge
+    ? getRangeDecision({ currentPrice, rangeLower, rangeUpper, il, monthlyAPR: calc.monthlyAPR, days: calc.days, cdiMonthly })
+    : null;
+
+  return (
+    <div className="space-y-3">
+      {/* Compact stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {currentPrice != null && (
           <div className="stat-card">
-            <div className="stat-label">Preco Atual</div>
-            <div className="stat-value font-mono text-sm">{currentPrice < 0.001 ? currentPrice.toExponential(4) : currentPrice.toFixed(6)}</div>
+            <div className="stat-label">Preço Atual</div>
+            <div className="stat-value font-mono text-sm">{fmtP(currentPrice)}</div>
+            {hasPool && <div className="text-[9px] text-emerald-500/60 mt-0.5">● live</div>}
           </div>
         )}
         {entryPrice != null && (
           <div className="stat-card">
-            <div className="stat-label">Preco de Entrada</div>
-            <div className="stat-value font-mono text-sm">{entryPrice < 0.001 ? entryPrice.toExponential(4) : entryPrice.toFixed(6)}</div>
+            <div className="stat-label">Entrada</div>
+            <div className="stat-value font-mono text-sm">{fmtP(entryPrice)}</div>
           </div>
         )}
-        {inRange != null && (
+        {canShowGauge && (
           <div className="stat-card">
             <div className="stat-label">Status</div>
-            <div className={clsx('stat-value text-sm font-bold', inRange ? 'text-emerald-400' : 'text-red-400')}>
-              {inRange ? 'Em Range' : 'Fora do Range'}
+            <div className={clsx('stat-value text-sm font-bold', currentPrice! >= rangeLower! && currentPrice! <= rangeUpper! ? 'text-emerald-400' : 'text-red-400')}>
+              {currentPrice! >= rangeLower! && currentPrice! <= rangeUpper! ? 'Em Range' : 'Fora do Range'}
             </div>
           </div>
         )}
         {il != null && (
           <div className="stat-card">
             <div className="stat-label">IL Estimado</div>
-            <div className={clsx('stat-value font-mono', il < -1 ? 'text-red-400' : 'text-amber-400')}>
+            <div className={clsx('stat-value font-mono', il < -2 ? 'text-red-400' : il < 0 ? 'text-amber-400' : 'text-emerald-400')}>
               {il.toFixed(2)}%
             </div>
           </div>
         )}
       </div>
-      {rangeLower != null && rangeUpper != null && (
-        <p className="text-xs text-muted-foreground">
-          Range:{' '}
-          <span className="font-mono">{rangeLower < 0.001 ? rangeLower.toExponential(4) : rangeLower.toFixed(6)}</span>
-          {' → '}
-          <span className="font-mono">{rangeUpper < 0.001 ? rangeUpper.toExponential(4) : rangeUpper.toFixed(6)}</span>
-        </p>
+
+      {/* Range Gauge */}
+      {canShowGauge && (
+        <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-3">Posição no Range</p>
+          <RangeGauge currentPrice={currentPrice!} rangeLower={rangeLower!} rangeUpper={rangeUpper!} />
+        </div>
       )}
+
+      {/* AI Decision Card */}
+      {decision && <RangeAICard decision={decision} />}
     </div>
   );
 }
@@ -359,7 +648,12 @@ function PositionCard({ position, benchmarks, onDelete, onUpdateFees }: {
               <div className="text-[10px] text-muted-foreground mt-0.5">{new Date(position.startDate).toLocaleDateString('pt-BR')}</div>
             </div>
           </div>
-          <RealTimePriceSection position={position} />
+          <RealTimePriceSection
+            position={position}
+            calc={calc}
+            cdiMonthly={benchmarks?.cdi?.monthlyPct ?? 1.07}
+          />
+          <PositionPoolChart position={position} />
           <VerdictBadge calc={calc} />
           <BenchmarkChart position={calc} benchmarks={benchmarks} />
           {(position.walletAddress || position.notes) && (
@@ -424,6 +718,18 @@ function NewPositionForm({ onSave, onCancel, benchmarks }: {
     queryFn: () => fetchUnifiedPools({ token: searchQuery, limit: 5 }),
     enabled: searchQuery.length > 2,
     staleTime: 30000,
+  });
+
+  // Live price for the selected pool — powers the real-time range gauge in preview
+  const { data: livePoolForGauge } = useQuery({
+    queryKey: ['form-gauge', form.chain, form.poolAddress],
+    queryFn: () =>
+      fetchUnifiedPools({ chain: form.chain || undefined, limit: 50 }).then(
+        (r) => r.pools?.find((p: UnifiedPool) => p.poolAddress?.toLowerCase() === form.poolAddress?.toLowerCase()) ?? null,
+      ),
+    enabled: !!form.poolAddress && !!form.chain,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
   });
 
   const handleSelectPool = useCallback((pool: UnifiedPool) => {
@@ -648,11 +954,40 @@ function NewPositionForm({ onSave, onCancel, benchmarks }: {
           </div>
         </details>
 
-        {/* Preview em tempo real */}
+        {/* Range gauge — live orientation while filling the form */}
+        {(() => {
+          const gaugePrice = (livePoolForGauge?.price ?? parseFloat(form.entryPrice)) || null;
+          const gaugeLower = parseFloat(form.rangeLower) || null;
+          const gaugeUpper = parseFloat(form.rangeUpper) || null;
+          const canShow = gaugePrice != null && gaugeLower != null && gaugeUpper != null && gaugeLower < gaugeUpper;
+          if (!canShow) return null;
+
+          const formEntryPrice = parseFloat(form.entryPrice) || null;
+          const formIL = gaugePrice && formEntryPrice && formEntryPrice > 0
+            ? (2 * Math.sqrt(gaugePrice / formEntryPrice) / (1 + gaugePrice / formEntryPrice) - 1) * 100
+            : null;
+          const decision = getRangeDecision({
+            currentPrice: gaugePrice, rangeLower: gaugeLower, rangeUpper: gaugeUpper,
+            il: formIL, monthlyAPR: preview?.monthlyAPR ?? 0,
+            days: preview?.days ?? 0, cdiMonthly: benchmarks?.cdi?.monthlyPct ?? 1.07,
+          });
+
+          return (
+            <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Análise do Range em Tempo Real
+              </p>
+              <RangeGauge currentPrice={gaugePrice} rangeLower={gaugeLower} rangeUpper={gaugeUpper} />
+              {decision && <RangeAICard decision={decision} />}
+            </div>
+          );
+        })()}
+
+        {/* Preview de performance */}
         {preview && (
           <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Preview</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Preview de Performance</p>
               <span className="text-[10px] text-muted-foreground bg-muted/60 border border-border/50 px-2 py-0.5 rounded-full">
                 Fee Tier {feeTierToPercent(form.feeTier).toFixed(2)}% (informativo — APR calculado das fees reais)
               </span>
