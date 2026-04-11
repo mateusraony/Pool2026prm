@@ -26,6 +26,7 @@ import {
   deleteLpPosition, fetchUnifiedPools,
   type BenchmarksData, type LpPosition, type UnifiedPool,
 } from '../api/client';
+import { feeTierToPercent } from '../data/constants';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -304,7 +305,7 @@ function PositionCard({ position, benchmarks, onDelete, onUpdateFees }: {
               <span className="font-bold text-base">{position.token0}/{position.token1}</span>
               {position.protocol && <span className="text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground">{position.protocol}</span>}
               {position.chain && <span className="text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground">{position.chain}</span>}
-              <span className="text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground">{position.feeTier}%</span>
+              <span className="text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground">{feeTierToPercent(position.feeTier).toFixed(2)}%</span>
               <span className={clsx('text-xs px-2 py-0.5 rounded-full font-semibold border', s.bg, s.color, s.border)}>
                 <Icon className="w-3 h-3 inline mr-1" />{calc.verdictLabel.split(' — ')[0]}
               </span>
@@ -531,7 +532,7 @@ function NewPositionForm({ onSave, onCancel, benchmarks }: {
                 >
                   <span className="font-medium">
                     {pool.token0?.symbol ?? pool.baseToken}/{pool.token1?.symbol ?? pool.quoteToken}
-                    <span className="ml-2 text-xs text-muted-foreground">{pool.feeTier}%</span>
+                    <span className="ml-2 text-xs text-muted-foreground">{feeTierToPercent(pool.feeTier).toFixed(2)}%</span>
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {pool.chain} · {pool.protocol}
@@ -653,7 +654,7 @@ function NewPositionForm({ onSave, onCancel, benchmarks }: {
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Preview</p>
               <span className="text-[10px] text-muted-foreground bg-muted/60 border border-border/50 px-2 py-0.5 rounded-full">
-                Fee Tier {form.feeTier}% (informativo — APR calculado das fees reais)
+                Fee Tier {feeTierToPercent(form.feeTier).toFixed(2)}% (informativo — APR calculado das fees reais)
               </span>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

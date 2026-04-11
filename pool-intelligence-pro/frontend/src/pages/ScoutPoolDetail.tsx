@@ -35,7 +35,7 @@ import { toast } from 'sonner';
 import { fetchPoolDetail, addFavorite, fetchOhlcv, fetchLiquidityDistribution, API_BASE_URL } from '@/api/client';
 import { PoolMetricsChart } from '@/components/charts/PoolMetricsChart';
 import { unifiedPoolToViewPool } from '@/data/adapters';
-import { networkColors, dexLogos } from '@/data/constants';
+import { networkColors, dexLogos, feeTierToPercent } from '@/data/constants';
 import { usePoolWebSocket } from '@/hooks/usePoolWebSocket';
 import type { Pool } from '@/types/pool';
 
@@ -149,7 +149,10 @@ export default function ScoutPoolDetail() {
   // Price history derived from OHLCV candles for UniswapRangeChart
   const priceHistory = useMemo(() => {
     if (!ohlcvData?.candles) return [];
-    return ohlcvData.candles.map((c: any) => ({ timestamp: c.timestamp, price: c.close }));
+    return ohlcvData.candles.map((c: any) => ({
+      timestamp: c.timestamp < 1e12 ? c.timestamp * 1000 : c.timestamp,
+      price: c.close,
+    }));
   }, [ohlcvData]);
 
   // Mutation: add to favorites
@@ -273,7 +276,7 @@ export default function ScoutPoolDetail() {
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-2xl font-bold">{pool.pair}</h2>
-                <Badge variant="outline">{pool.feeTier}%</Badge>
+                <Badge variant="outline">{feeTierToPercent(pool.feeTier).toFixed(2)}%</Badge>
               </div>
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-muted-foreground">{pool.dex}</span>

@@ -24,8 +24,15 @@ export function PoolMetricsChart({ chain, address }: Props) {
     );
   }
 
+  // Use date format when range spans multiple days, otherwise time
+  const firstTs = history[0]?.timestamp ?? 0;
+  const lastTs = history[history.length - 1]?.timestamp ?? 0;
+  const spansDays = (lastTs - firstTs) > 23 * 60 * 60 * 1000;
+
   const formatted = history.map(p => ({
-    time: new Date(p.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+    time: spansDays
+      ? new Date(p.timestamp).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+      : new Date(p.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
     TVL: Math.round(p.tvl / 1000), // em K$
     APR: Math.round(p.apr * 10) / 10,
     Score: p.score != null ? Math.round(p.score * 10) / 10 : null,
