@@ -17,7 +17,7 @@ import {
 import { cn, formatCurrency, formatPercent } from '@/lib/utils';
 import { fetchUnifiedPools } from '@/api/client';
 import { unifiedPoolToViewPool } from '@/data/adapters';
-import { networkColors, dexLogos } from '@/data/constants';
+import { networkColors, dexLogos, feeTierToPercent } from '@/data/constants';
 import { ExportButton } from '@/components/common/ExportButton';
 import { exportCSV, exportPrintReport, poolColumns } from '@/lib/export';
 import type { Pool } from '@/types/pool';
@@ -291,7 +291,7 @@ export default function PoolCompare() {
           />
           <MetricRow
             label="Fee Tier"
-            values={pools.map((p) => `${p.feeTier}%`)}
+            values={pools.map((p) => `${feeTierToPercent(p.feeTier).toFixed(2)}%`)}
           />
 
           {/* Liquidity section */}

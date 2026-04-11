@@ -3,7 +3,7 @@ import { cn, formatCurrency } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Settings, XCircle, TrendingUp, TrendingDown } from 'lucide-react';
-import { networkColors } from '@/data/constants';
+import { networkColors, feeTierToPercent } from '@/data/constants';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -62,7 +62,7 @@ export function ActivePoolCard({
               <div className="flex items-center gap-2">
                 <h3 className="font-display font-semibold text-[15px]">{pool.pair}</h3>
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
-                  {pool.feeTier}%
+                  {feeTierToPercent(pool.feeTier).toFixed(2)}%
                 </Badge>
               </div>
               <div className="flex items-center gap-2 mt-0.5">

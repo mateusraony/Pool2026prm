@@ -366,14 +366,48 @@ router.get('/pools-detail/:chain/:address', async (req, res) => {
   }
 });
 
-// GET /api/pools/:chain/:address/metrics-history — histórico de métricas (in-memory)
-router.get('/pools/:chain/:address/metrics-history', (req, res) => {
+// GET /api/pools/:chain/:address/metrics-history — histórico de métricas (DB + in-memory fallback)
+router.get('/pools/:chain/:address/metrics-history', async (req, res) => {
   try {
     const { chain, address } = req.params;
     const normalizedAddress = address?.toLowerCase();
     const poolId = `${chain}_${normalizedAddress}`;
+
+    // Try DB first: fetch last 30 days of daily snapshots
+    try {
+      const prisma = getPrisma();
+      const poolRecord = await prisma.poolCurrent.findFirst({
+        where: { externalId: poolId },
+        select: { id: true },
+      });
+
+      if (poolRecord) {
+        const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const snapshots = await prisma.poolSnapshot.findMany({
+          where: { poolId: poolRecord.id, timestamp: { gte: since } },
+          orderBy: { timestamp: 'asc' },
+          take: 200,
+        });
+
+        if (snapshots.length >= 2) {
+          const data = snapshots.map(s => ({
+            timestamp: s.timestamp.getTime(),
+            tvl: s.tvl,
+            apr: s.aprFee ?? (s.fees24h != null && s.tvl > 0 ? (s.fees24h / s.tvl) * 365 * 100 : 0),
+            score: null,
+            volume24h: s.volume24h,
+          }));
+          res.json({ success: true, data, count: data.length, source: 'db' });
+          return;
+        }
+      }
+    } catch (dbErr) {
+      logService.warn('POOLS', 'metrics-history DB query failed, falling back to memory', { error: dbErr });
+    }
+
+    // Fallback to in-memory
     const history = memoryStore.getMetricsHistory(poolId);
-    res.json({ success: true, data: history, count: history.length });
+    res.json({ success: true, data: history, count: history.length, source: 'memory' });
   } catch (error) {
     logService.error('POOLS', 'GET /metrics-history failed', { error });
     res.status(500).json({ success: false, error: 'Internal error' });
