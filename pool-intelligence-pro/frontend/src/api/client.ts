@@ -1268,6 +1268,10 @@ export interface LpPosition {
   poolLink: string | null;
   walletAddress: string | null;
   notes: string | null;
+  poolAddress: string | null;
+  entryPrice: number | null;
+  rangeLower: number | null;
+  rangeUpper: number | null;
   createdAt: string;
   updatedAt: string;
 }

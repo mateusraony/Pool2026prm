@@ -173,7 +173,7 @@ class PriceHistoryService {
 
       const ohlcvList = data?.data?.attributes?.ohlcv_list;
       if (!Array.isArray(ohlcvList) || ohlcvList.length === 0) {
-        logService.warn('POOLS', 'Empty OHLCV from GeckoTerminal, will use fallback', { chain, address, timeframe });
+        logService.info('PROVIDER', `GeckoTerminal: no OHLCV data for ${chain}/${address} (pool may not be indexed)`, { chain, address });
         return null; // Caller can use getOhlcvWithFallback
       }
 
@@ -238,6 +238,7 @@ class PriceHistoryService {
     const clampedLimit = Math.min(limit, MAX_LIMIT[timeframe]);
     const candles = generateSyntheticCandles(poolPrice, poolVolatility, timeframe, clampedLimit, poolVolume24h);
 
+    logService.warn('PROVIDER', `Using SYNTHETIC price history for ${chain}/${address} — no real data available`, { chain, address });
     logService.info('POOLS', `Synthetic OHLCV generated: ${candles.length} candles`, { chain, address, timeframe });
 
     return {

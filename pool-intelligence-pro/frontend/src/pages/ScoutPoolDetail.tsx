@@ -341,15 +341,55 @@ export default function ScoutPoolDetail() {
         </TabsList>
         <TabsContent value={selectedRange}>
           {pool && (
-            <UniswapRangeChart
-              priceHistory={priceHistory}
-              currentPrice={pool.currentPrice || 1}
-              rangeLower={pool.ranges[selectedRange as keyof typeof pool.ranges]?.min || 0}
-              rangeUpper={pool.ranges[selectedRange as keyof typeof pool.ranges]?.max || 0}
-              liquidityData={liqData?.bars?.map((b: any) => ({ price: b.price, liquidity: b.liquidity }))}
-              height={300}
-              accentColor={selectedRange === 'defensive' ? '#10b981' : selectedRange === 'aggressive' ? '#ef4444' : '#FF37C7'}
-            />
+            <>
+              <UniswapRangeChart
+                priceHistory={priceHistory}
+                currentPrice={pool.currentPrice || 1}
+                rangeLower={pool.ranges[selectedRange as keyof typeof pool.ranges]?.min || 0}
+                rangeUpper={pool.ranges[selectedRange as keyof typeof pool.ranges]?.max || 0}
+                liquidityData={liqData?.bars?.map((b: any) => ({ price: b.price, liquidity: b.liquidity }))}
+                height={300}
+                accentColor={selectedRange === 'defensive' ? '#10b981' : selectedRange === 'aggressive' ? '#ef4444' : '#FF37C7'}
+              />
+              {/* Range value summary — mostra os valores numericos do range selecionado */}
+              {(() => {
+                const rng = pool.ranges[selectedRange as keyof typeof pool.ranges];
+                const lower = rng?.min ?? 0;
+                const upper = rng?.max ?? 0;
+                const price = pool.currentPrice || 1;
+                const inRange = price >= lower && price <= upper;
+                const fmt = (v: number) =>
+                  v >= 1000 ? `$${(v / 1000).toFixed(2)}K`
+                  : v >= 1 ? `$${v.toFixed(2)}`
+                  : v >= 0.0001 ? `$${v.toFixed(6)}`
+                  : `$${v.toExponential(2)}`;
+                const widthPct = price > 0 && upper > lower ? (((upper - lower) / price) * 100).toFixed(1) : '—';
+                return lower > 0 && upper > 0 ? (
+                  <div className="mt-3 rounded-lg border border-border/60 bg-secondary/30 p-3 space-y-2">
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="bg-destructive/10 rounded p-2">
+                        <p className="text-[10px] text-muted-foreground mb-0.5">Limite Inferior</p>
+                        <p className="font-mono font-bold text-destructive text-sm">{fmt(lower)}</p>
+                      </div>
+                      <div className="bg-primary/10 rounded p-2">
+                        <p className="text-[10px] text-muted-foreground mb-0.5">Preco Atual</p>
+                        <p className="font-mono font-bold text-primary text-sm">{fmt(price)}</p>
+                        <p className={cn('text-[9px] font-medium mt-0.5', inRange ? 'text-green-500' : 'text-red-500')}>
+                          {inRange ? 'no range' : 'fora do range'}
+                        </p>
+                      </div>
+                      <div className="bg-green-500/10 rounded p-2">
+                        <p className="text-[10px] text-muted-foreground mb-0.5">Limite Superior</p>
+                        <p className="font-mono font-bold text-green-500 text-sm">{fmt(upper)}</p>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/70 text-center">
+                      Amplitude do range: {widthPct}% do preco atual
+                    </p>
+                  </div>
+                ) : null;
+              })()}
+            </>
           )}
         </TabsContent>
       </Tabs>

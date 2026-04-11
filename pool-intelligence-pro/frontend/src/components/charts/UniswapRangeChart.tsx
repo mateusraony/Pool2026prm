@@ -387,8 +387,26 @@ export function UniswapRangeChart({
         )}
 
         {/* ── Min/Max boundary lines ── */}
-        <line x1={0} x2={width} y1={rangeTopY} y2={rangeTopY} stroke={accentColor} strokeWidth={2} opacity={0.1} />
-        <line x1={0} x2={width} y1={rangeBotY} y2={rangeBotY} stroke={accentColor} strokeWidth={2} opacity={0.1} />
+        <line x1={0} x2={width} y1={rangeTopY} y2={rangeTopY} stroke={accentColor} strokeWidth={2} opacity={0.85} />
+        <line x1={0} x2={width} y1={rangeBotY} y2={rangeBotY} stroke={accentColor} strokeWidth={2} opacity={0.85} />
+
+        {/* ── Range price labels on left edge of chart ── */}
+        <text
+          x={8}
+          y={rangeTopY - 4}
+          textAnchor="start"
+          style={{ fill: accentColor, fontSize: 10, fontFamily: 'monospace', pointerEvents: 'none' }}
+        >
+          {formatPrice(rangeUpper)}
+        </text>
+        <text
+          x={8}
+          y={rangeBotY + 12}
+          textAnchor="start"
+          style={{ fill: accentColor, fontSize: 10, fontFamily: 'monospace', pointerEvents: 'none' }}
+        >
+          {formatPrice(rangeLower)}
+        </text>
 
         {/* ── Invisible drag targets for min/max ── */}
         {interactive && (

@@ -567,6 +567,10 @@ model LpPosition {
   protocol      String?                       // ex: Uniswap v3
   chain         String?                       // ethereum, arbitrum, base, polygon
   poolLink      String?                       // URL ou endereço da pool
+  poolAddress   String?                       // endereço do contrato da pool (0x...)
+  entryPrice    Float?                         // preço do par no momento da entrada
+  rangeLower    Float?                         // limite inferior do range de LP
+  rangeUpper    Float?                         // limite superior do range de LP
   walletAddress String?                       // wallet do usuário
   notes         String?                       // notas livres
   createdAt     DateTime @default(now())

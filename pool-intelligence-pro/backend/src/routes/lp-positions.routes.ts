@@ -54,6 +54,7 @@ router.post('/lp-positions', async (req, res) => {
     const {
       token0, token1, token0Usd, token1Usd, feesEarned,
       feeTier, startDate, protocol, chain, poolLink, walletAddress, notes,
+      poolAddress, entryPrice, rangeLower, rangeUpper,
     } = req.body;
 
     if (!token0 || !token1) {
@@ -83,6 +84,10 @@ router.post('/lp-positions', async (req, res) => {
         poolLink: poolLink ?? null,
         walletAddress: walletAddress ?? null,
         notes: notes ?? null,
+        poolAddress: poolAddress ?? null,
+        entryPrice: typeof entryPrice === 'number' ? entryPrice : null,
+        rangeLower: typeof rangeLower === 'number' ? rangeLower : null,
+        rangeUpper: typeof rangeUpper === 'number' ? rangeUpper : null,
       },
     });
 
@@ -100,7 +105,7 @@ router.post('/lp-positions', async (req, res) => {
 router.patch('/lp-positions/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { feesEarned, notes, poolLink, walletAddress, protocol, chain } = req.body;
+    const { feesEarned, notes, poolLink, walletAddress, protocol, chain, poolAddress, entryPrice, rangeLower, rangeUpper } = req.body;
 
     const existing = await getPrisma().lpPosition.findUnique({ where: { id } });
     if (!existing) {
@@ -116,6 +121,10 @@ router.patch('/lp-positions/:id', async (req, res) => {
         ...(walletAddress !== undefined ? { walletAddress } : {}),
         ...(protocol !== undefined ? { protocol } : {}),
         ...(chain !== undefined ? { chain } : {}),
+        ...(poolAddress !== undefined ? { poolAddress } : {}),
+        ...(typeof entryPrice === 'number' ? { entryPrice } : {}),
+        ...(typeof rangeLower === 'number' ? { rangeLower } : {}),
+        ...(typeof rangeUpper === 'number' ? { rangeUpper } : {}),
       },
     });
 

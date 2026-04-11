@@ -45,6 +45,12 @@ async function ensureLpPositionTable(): Promise<void> {
     )
   `;
 
+  // Adicionar colunas novas (idempotente — IF NOT EXISTS)
+  await prisma.$executeRaw`ALTER TABLE "LpPosition" ADD COLUMN IF NOT EXISTS "poolAddress" TEXT`;
+  await prisma.$executeRaw`ALTER TABLE "LpPosition" ADD COLUMN IF NOT EXISTS "entryPrice" DOUBLE PRECISION`;
+  await prisma.$executeRaw`ALTER TABLE "LpPosition" ADD COLUMN IF NOT EXISTS "rangeLower" DOUBLE PRECISION`;
+  await prisma.$executeRaw`ALTER TABLE "LpPosition" ADD COLUMN IF NOT EXISTS "rangeUpper" DOUBLE PRECISION`;
+
   // Índices declarados no schema (@@index)
   await prisma.$executeRaw`
     CREATE INDEX IF NOT EXISTS "LpPosition_startDate_idx" ON "LpPosition"("startDate")

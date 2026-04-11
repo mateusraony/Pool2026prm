@@ -58,6 +58,29 @@ export async function runDeepAnalysisJob(): Promise<{ analyzed: number; errors: 
       const analysis = computeDeepAnalysis(ohlcv.candles, tvl, chain, address, 'hour');
       if (analysis) {
         cacheService.set(cacheKey, analysis, 300);
+
+        // Persist technical indicators to DB
+        try {
+          const prisma = getPrisma();
+          const poolRecord = await prisma.poolCurrent.findFirst({
+            where: { externalId: poolId },
+            select: { id: true },
+          });
+          if (poolRecord) {
+            await prisma.poolCurrent.update({
+              where: { id: poolRecord.id },
+              data: {
+                rsi14: analysis.rsi?.value ?? null,
+                macdLine: analysis.macd?.macdLine ?? null,
+                macdSignal: analysis.macd?.signalLine ?? null,
+                macdHistogram: analysis.macd?.histogram ?? null,
+              },
+            });
+          }
+        } catch (dbErr: unknown) {
+          logService.warn('SYSTEM', 'Failed to persist deep analysis to DB', { poolId, error: String(dbErr) });
+        }
+
         analyzed++;
       }
     } catch (error: unknown) {

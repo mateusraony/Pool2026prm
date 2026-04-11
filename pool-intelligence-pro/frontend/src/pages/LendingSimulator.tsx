@@ -10,12 +10,12 @@
  * - Persistência no Supabase via /api/lp-positions
  * - Monitoramento: lista de posições salvas com dias ativos e status
  */
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   LineChart, Landmark, Plus, Trash2, ExternalLink, RefreshCw,
   TrendingUp, TrendingDown, Minus, AlertTriangle, Star,
-  ChevronDown, ChevronUp, Pencil, Check, X, Info,
+  ChevronDown, ChevronUp, Pencil, Check, X, Info, Search,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, ResponsiveContainer, ReferenceLine,
@@ -23,7 +23,8 @@ import {
 import clsx from 'clsx';
 import {
   fetchBenchmarks, fetchLpPositions, createLpPosition, updateLpPosition,
-  deleteLpPosition, type BenchmarksData, type LpPosition,
+  deleteLpPosition, fetchUnifiedPools,
+  type BenchmarksData, type LpPosition, type UnifiedPool,
 } from '../api/client';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -199,6 +200,87 @@ function EditFeesRow({ position, onSave, onCancel }: {
   );
 }
 
+// ─── Real-Time Price Section ──────────────────────────────────────────────────
+
+function RealTimePriceSection({ position }: { position: LpPosition }) {
+  if (!position.poolAddress || !position.chain) return null;
+
+  const { data: poolData } = useQuery({
+    queryKey: ['pool-realtime', position.chain, position.poolAddress],
+    queryFn: () =>
+      fetchUnifiedPools({ chain: position.chain ?? undefined, limit: 50 }).then(
+        r => r.pools?.find((p: UnifiedPool) => p.poolAddress?.toLowerCase() === position.poolAddress?.toLowerCase()) ?? null,
+      ),
+    refetchInterval: 30000,
+    staleTime: 15000,
+  });
+
+  const currentPrice = poolData?.price ?? null;
+  const entryPrice = position.entryPrice;
+  const rangeLower = position.rangeLower;
+  const rangeUpper = position.rangeUpper;
+
+  const inRange =
+    currentPrice != null && rangeLower != null && rangeUpper != null
+      ? currentPrice >= rangeLower && currentPrice <= rangeUpper
+      : null;
+
+  const il =
+    currentPrice != null && entryPrice != null && entryPrice > 0
+      ? (() => {
+          const ratio = currentPrice / entryPrice;
+          return (2 * Math.sqrt(ratio) / (1 + ratio) - 1) * 100;
+        })()
+      : null;
+
+  // Nothing useful to show
+  if (currentPrice == null && entryPrice == null && rangeLower == null && rangeUpper == null) return null;
+
+  return (
+    <div className="rounded-xl border border-border/60 bg-muted/20 p-3 space-y-2">
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Dados em Tempo Real</p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+        {currentPrice != null && (
+          <div className="stat-card">
+            <div className="stat-label">Preco Atual</div>
+            <div className="stat-value font-mono text-sm">{currentPrice < 0.001 ? currentPrice.toExponential(4) : currentPrice.toFixed(6)}</div>
+          </div>
+        )}
+        {entryPrice != null && (
+          <div className="stat-card">
+            <div className="stat-label">Preco de Entrada</div>
+            <div className="stat-value font-mono text-sm">{entryPrice < 0.001 ? entryPrice.toExponential(4) : entryPrice.toFixed(6)}</div>
+          </div>
+        )}
+        {inRange != null && (
+          <div className="stat-card">
+            <div className="stat-label">Status</div>
+            <div className={clsx('stat-value text-sm font-bold', inRange ? 'text-emerald-400' : 'text-red-400')}>
+              {inRange ? 'Em Range' : 'Fora do Range'}
+            </div>
+          </div>
+        )}
+        {il != null && (
+          <div className="stat-card">
+            <div className="stat-label">IL Estimado</div>
+            <div className={clsx('stat-value font-mono', il < -1 ? 'text-red-400' : 'text-amber-400')}>
+              {il.toFixed(2)}%
+            </div>
+          </div>
+        )}
+      </div>
+      {rangeLower != null && rangeUpper != null && (
+        <p className="text-xs text-muted-foreground">
+          Range:{' '}
+          <span className="font-mono">{rangeLower < 0.001 ? rangeLower.toExponential(4) : rangeLower.toFixed(6)}</span>
+          {' → '}
+          <span className="font-mono">{rangeUpper < 0.001 ? rangeUpper.toExponential(4) : rangeUpper.toFixed(6)}</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ─── Position Card ────────────────────────────────────────────────────────────
 
 function PositionCard({ position, benchmarks, onDelete, onUpdateFees }: {
@@ -276,6 +358,7 @@ function PositionCard({ position, benchmarks, onDelete, onUpdateFees }: {
               <div className="text-[10px] text-muted-foreground mt-0.5">{new Date(position.startDate).toLocaleDateString('pt-BR')}</div>
             </div>
           </div>
+          <RealTimePriceSection position={position} />
           <VerdictBadge calc={calc} />
           <BenchmarkChart position={calc} benchmarks={benchmarks} />
           {(position.walletAddress || position.notes) && (
@@ -307,6 +390,12 @@ interface FormState {
   feesEarned: string; feeTier: number;
   startDate: string; protocol: string; chain: string;
   poolLink: string; walletAddress: string; notes: string;
+  // new fields
+  poolAddress: string;
+  entryPrice: string;
+  rangeLower: string;
+  rangeUpper: string;
+  poolSearchQuery: string;
 }
 
 const EMPTY_FORM: FormState = {
@@ -314,6 +403,8 @@ const EMPTY_FORM: FormState = {
   feesEarned: '0', feeTier: 0.3,
   startDate: new Date().toISOString().slice(0, 10),
   protocol: '', chain: '', poolLink: '', walletAddress: '', notes: '',
+  poolAddress: '', entryPrice: '', rangeLower: '', rangeUpper: '',
+  poolSearchQuery: '',
 };
 
 function NewPositionForm({ onSave, onCancel, benchmarks }: {
@@ -323,6 +414,42 @@ function NewPositionForm({ onSave, onCancel, benchmarks }: {
 }) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [error, setError] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  const { data: searchResults } = useQuery({
+    queryKey: ['pool-search', searchQuery],
+    queryFn: () => fetchUnifiedPools({ token: searchQuery, limit: 5 }),
+    enabled: searchQuery.length > 2,
+    staleTime: 30000,
+  });
+
+  const handleSelectPool = useCallback((pool: UnifiedPool) => {
+    const chainExplorerBase: Record<string, string> = {
+      ethereum: 'https://app.uniswap.org/explore/pools/ethereum',
+      arbitrum:  'https://app.uniswap.org/explore/pools/arbitrum',
+      base:      'https://app.uniswap.org/explore/pools/base',
+      polygon:   'https://app.uniswap.org/explore/pools/polygon',
+      optimism:  'https://app.uniswap.org/explore/pools/optimism',
+    };
+    const autoLink = pool.poolAddress
+      ? `${chainExplorerBase[pool.chain] ?? ''}/${pool.poolAddress}`
+      : '';
+    setForm(f => ({
+      ...f,
+      token0: pool.token0?.symbol ?? pool.baseToken ?? '',
+      token1: pool.token1?.symbol ?? pool.quoteToken ?? '',
+      chain: pool.chain ?? '',
+      protocol: pool.protocol ?? '',
+      feeTier: pool.feeTier ?? f.feeTier,
+      poolAddress: pool.poolAddress ?? '',
+      entryPrice: pool.price != null ? String(pool.price) : f.entryPrice,
+      poolLink: f.poolLink || autoLink,
+    }));
+    setSearchQuery('');
+    setShowDropdown(false);
+  }, []);
 
   const preview = useMemo(() => {
     const t0 = parseFloat(form.token0Usd) || 0;
@@ -358,6 +485,10 @@ function NewPositionForm({ onSave, onCancel, benchmarks }: {
       poolLink: form.poolLink.trim() || null,
       walletAddress: form.walletAddress.trim() || null,
       notes: form.notes.trim() || null,
+      poolAddress: form.poolAddress.trim() || null,
+      entryPrice: parseFloat(form.entryPrice) || null,
+      rangeLower: parseFloat(form.rangeLower) || null,
+      rangeUpper: parseFloat(form.rangeUpper) || null,
     });
   }, [form, onSave]);
 
@@ -375,6 +506,49 @@ function NewPositionForm({ onSave, onCancel, benchmarks }: {
         </button>
       </div>
       <div className="card-body space-y-5">
+        {/* Pool Search */}
+        <div ref={searchRef} className="relative">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Buscar pool no sistema (opcional)</p>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <input
+              className="w-full rounded-lg bg-muted border border-border pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500"
+              placeholder="ex: ETH/USDC, WBTC, 0x..."
+              value={searchQuery}
+              onChange={e => { setSearchQuery(e.target.value); setShowDropdown(true); }}
+              onFocus={() => setShowDropdown(true)}
+              onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+            />
+          </div>
+          {showDropdown && searchResults && searchResults.pools.length > 0 && (
+            <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-card shadow-lg overflow-hidden">
+              {searchResults.pools.map(pool => (
+                <button
+                  key={pool.id}
+                  type="button"
+                  className="w-full flex items-center justify-between px-3 py-2.5 text-sm hover:bg-muted transition-colors cursor-pointer text-left"
+                  onMouseDown={() => handleSelectPool(pool)}
+                >
+                  <span className="font-medium">
+                    {pool.token0?.symbol ?? pool.baseToken}/{pool.token1?.symbol ?? pool.quoteToken}
+                    <span className="ml-2 text-xs text-muted-foreground">{pool.feeTier}%</span>
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {pool.chain} · {pool.protocol}
+                    {pool.price != null && <span className="ml-2 font-mono">${pool.price < 0.001 ? pool.price.toExponential(3) : pool.price.toFixed(4)}</span>}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          {showDropdown && searchQuery.length > 2 && searchResults && searchResults.pools.length === 0 && (
+            <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-card shadow-lg px-3 py-2.5 text-sm text-muted-foreground">
+              Nenhuma pool encontrada para "{searchQuery}"
+            </div>
+          )}
+          <p className="text-[10px] text-muted-foreground/70 mt-1">Selecione uma pool para auto-preencher tokens, chain, protocolo e preco de entrada</p>
+        </div>
+
         {/* Tokens */}
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Par de Tokens</p>
@@ -424,31 +598,51 @@ function NewPositionForm({ onSave, onCancel, benchmarks }: {
         <details className="group">
           <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors list-none flex items-center gap-1.5">
             <ChevronDown className="w-3.5 h-3.5 group-open:rotate-180 transition-transform" />
-            Informações opcionais — protocolo, chain, wallet, link da pool
+            Informações opcionais — protocolo, chain, wallet, link da pool, range e preco de entrada
           </summary>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="text-xs text-muted-foreground">Protocolo</label>
-              <input className={inputCls} placeholder="ex: Uniswap v3" value={form.protocol} onChange={set('protocol')} />
+          <div className="mt-3 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted-foreground">Protocolo</label>
+                <input className={inputCls} placeholder="ex: Uniswap v3" value={form.protocol} onChange={set('protocol')} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted-foreground">Chain</label>
+                <select className={inputCls} value={form.chain} onChange={set('chain')}>
+                  <option value="">Selecione...</option>
+                  {CHAINS.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5 col-span-2">
+                <label className="text-xs text-muted-foreground">Link da Pool ou Endereço de Contrato</label>
+                <input className={inputCls} placeholder="https://app.uniswap.org/... ou 0x..." value={form.poolLink} onChange={set('poolLink')} />
+              </div>
+              <div className="space-y-1.5 col-span-2">
+                <label className="text-xs text-muted-foreground">Endereço da Wallet (monitoramento)</label>
+                <input className={inputCls} placeholder="0x..." value={form.walletAddress} onChange={set('walletAddress')} />
+              </div>
+              <div className="space-y-1.5 col-span-2">
+                <label className="text-xs text-muted-foreground">Notas</label>
+                <textarea className={clsx(inputCls, 'resize-none')} rows={2} placeholder="Observações sobre esta posição..." value={form.notes} onChange={set('notes')} />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-xs text-muted-foreground">Chain</label>
-              <select className={inputCls} value={form.chain} onChange={set('chain')}>
-                <option value="">Selecione...</option>
-                {CHAINS.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1.5 col-span-2">
-              <label className="text-xs text-muted-foreground">Link da Pool ou Endereço de Contrato</label>
-              <input className={inputCls} placeholder="https://app.uniswap.org/... ou 0x..." value={form.poolLink} onChange={set('poolLink')} />
-            </div>
-            <div className="space-y-1.5 col-span-2">
-              <label className="text-xs text-muted-foreground">Endereço da Wallet (monitoramento)</label>
-              <input className={inputCls} placeholder="0x..." value={form.walletAddress} onChange={set('walletAddress')} />
-            </div>
-            <div className="space-y-1.5 col-span-2">
-              <label className="text-xs text-muted-foreground">Notas</label>
-              <textarea className={clsx(inputCls, 'resize-none')} rows={2} placeholder="Observações sobre esta posição..." value={form.notes} onChange={set('notes')} />
+            {/* Range + Entry Price */}
+            <div>
+              <p className="text-xs text-muted-foreground mb-2">Range de preco e entrada (para calculo de IL em tempo real)</p>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground">Range Inferior (preco)</label>
+                  <input className={inputCls} type="number" min={0} step="any" placeholder="ex: 1800" value={form.rangeLower} onChange={set('rangeLower')} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground">Range Superior (preco)</label>
+                  <input className={inputCls} type="number" min={0} step="any" placeholder="ex: 2200" value={form.rangeUpper} onChange={set('rangeUpper')} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground">Preco de Entrada</label>
+                  <input className={inputCls} type="number" min={0} step="any" placeholder="auto se buscado" value={form.entryPrice} onChange={set('entryPrice')} />
+                </div>
+              </div>
             </div>
           </div>
         </details>
